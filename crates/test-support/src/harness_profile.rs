@@ -47,12 +47,32 @@ pub enum LifecycleDialect {
 /// This crate intentionally stores a validated static id rather than importing
 /// `HarnessId`: production crates use test-support as a dev dependency, so a
 /// core or harnesses dependency here would create a package cycle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LayoutBase {
+    Home,
+    Codex,
+    Claude,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct AcceptanceLayoutSpec {
+    global_skill_base: LayoutBase,
+    global_mcp_base: LayoutBase,
+    global_skill: &'static str,
+    global_mcp: &'static str,
+    project_skill: &'static str,
+    project_mcp: &'static str,
+    mcp_initial: &'static [u8],
+    mcp_reloaded: &'static [u8],
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FakeHarnessProfile {
     id: &'static str,
     version_response: VersionResponse,
     lifecycle_dialect: LifecycleDialect,
     managed_projection: Option<ManagedProjectionProfile>,
+    layout: AcceptanceLayoutSpec,
 }
 
 impl FakeHarnessProfile {
@@ -65,6 +85,16 @@ impl FakeHarnessProfile {
             },
             lifecycle_dialect: LifecycleDialect::Codex,
             managed_projection: Some(ManagedProjectionProfile::codex()),
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Home,
+                global_mcp_base: LayoutBase::Codex,
+                global_skill: ".agents/skills/contract-skill",
+                global_mcp: "config.toml",
+                project_skill: ".agents/skills/contract-skill",
+                project_mcp: ".codex/config.toml",
+                mcp_initial: b"[mcp_servers.contract]\ncommand = \"contract-server\"\n",
+                mcp_reloaded: b"[mcp_servers.contract]\ncommand = \"contract-server-v2\"\n",
+            },
         }
     }
 
@@ -77,6 +107,18 @@ impl FakeHarnessProfile {
             },
             lifecycle_dialect: LifecycleDialect::Claude,
             managed_projection: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Claude,
+                global_mcp_base: LayoutBase::Claude,
+                global_skill: "skills/contract-skill",
+                global_mcp: "settings.json",
+                project_skill: ".claude/skills/contract-skill",
+                project_mcp: ".claude/settings.local.json",
+                mcp_initial:
+                    br#"{\"mcpServers\":{\"contract\":{\"command\":\"contract-server\"}}}"#,
+                mcp_reloaded:
+                    br#"{\"mcpServers\":{\"contract\":{\"command\":\"contract-server-v2\"}}}"#,
+            },
         }
     }
 
@@ -120,36 +162,28 @@ impl FakeHarnessProfile {
     fn layout(&self, machine: &IsolatedMachine) -> io::Result<AcceptanceLayout> {
         let project = machine.working_directory().join("acceptance-project");
         fs::create_dir_all(&project)?;
-        match self.id {
-            "codex" => Ok(AcceptanceLayout {
-                global: ScopeLayout {
-                    skill_root: machine.home().join(".agents/skills/contract-skill"),
-                    mcp_document: machine.codex_home().join("config.toml"),
-                },
-                project: ScopeLayout {
-                    skill_root: project.join(".agents/skills/contract-skill"),
-                    mcp_document: project.join(".codex/config.toml"),
-                },
-                mcp_initial: b"[mcp_servers.contract]\ncommand = \"contract-server\"\n",
-                mcp_reloaded: b"[mcp_servers.contract]\ncommand = \"contract-server-v2\"\n",
-            }),
-            "claude" => Ok(AcceptanceLayout {
-                global: ScopeLayout {
-                    skill_root: machine.claude_home().join("skills/contract-skill"),
-                    mcp_document: machine.claude_home().join("settings.json"),
-                },
-                project: ScopeLayout {
-                    skill_root: project.join(".claude/skills/contract-skill"),
-                    mcp_document: project.join(".claude/settings.local.json"),
-                },
-                mcp_initial: br#"{"mcpServers":{"contract":{"command":"contract-server"}}}"#,
-                mcp_reloaded: br#"{"mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
-            }),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "fake harness has no acceptance load-surface layout",
-            )),
-        }
+        let skill_base = match self.layout.global_skill_base {
+            LayoutBase::Home => machine.home(),
+            LayoutBase::Codex => machine.codex_home(),
+            LayoutBase::Claude => machine.claude_home(),
+        };
+        let mcp_base = match self.layout.global_mcp_base {
+            LayoutBase::Home => machine.home(),
+            LayoutBase::Codex => machine.codex_home(),
+            LayoutBase::Claude => machine.claude_home(),
+        };
+        Ok(AcceptanceLayout {
+            global: ScopeLayout {
+                skill_root: skill_base.join(self.layout.global_skill),
+                mcp_document: mcp_base.join(self.layout.global_mcp),
+            },
+            project: ScopeLayout {
+                skill_root: project.join(self.layout.project_skill),
+                mcp_document: project.join(self.layout.project_mcp),
+            },
+            mcp_initial: self.layout.mcp_initial,
+            mcp_reloaded: self.layout.mcp_reloaded,
+        })
     }
 }
 

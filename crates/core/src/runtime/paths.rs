@@ -52,6 +52,7 @@ pub struct PlatformPaths {
     global_agents: AbsolutePath,
     codex_home: AbsolutePath,
     claude_home: AbsolutePath,
+    kiro_home: AbsolutePath,
 }
 
 impl PlatformPaths {
@@ -74,6 +75,8 @@ impl PlatformPaths {
         let claude_home =
             optional_environment_path(environment, EnvironmentVariable::ClaudeConfigDir)?
                 .map_or_else(|| join(&home, ".claude", PathRole::ClaudeHome), Ok)?;
+        let kiro_home = optional_environment_path(environment, EnvironmentVariable::KiroHome)?
+            .map_or_else(|| join(&home, ".kiro", PathRole::KiroHome), Ok)?;
 
         Ok(Self {
             platform,
@@ -81,6 +84,7 @@ impl PlatformPaths {
             global_agents: join(&home, "AGENTS.md", PathRole::GlobalAgents)?,
             codex_home,
             claude_home,
+            kiro_home,
             home,
             config_home,
             cache_home,
@@ -119,6 +123,10 @@ impl PlatformPaths {
         &self.claude_home
     }
 
+    pub const fn kiro_home(&self) -> &AbsolutePath {
+        &self.kiro_home
+    }
+
     pub fn native_process_environment(
         &self,
         search_path: Option<OsString>,
@@ -148,6 +156,10 @@ impl PlatformPaths {
             (
                 OsString::from(EnvironmentVariable::ClaudeConfigDir.as_str()),
                 OsString::from(self.claude_home.as_str()),
+            ),
+            (
+                OsString::from(EnvironmentVariable::KiroHome.as_str()),
+                OsString::from(self.kiro_home.as_str()),
             ),
             (
                 OsString::from(EnvironmentVariable::Path.as_str()),
@@ -236,6 +248,7 @@ mod tests {
         assert_eq!(paths.global_agents().as_str(), "/home/nathan/AGENTS.md");
         assert_eq!(paths.codex_home().as_str(), "/home/nathan/.codex");
         assert_eq!(paths.claude_home().as_str(), "/opt/claude/nathan");
+        assert_eq!(paths.kiro_home().as_str(), "/home/nathan/.kiro");
     }
 
     #[test]
@@ -261,7 +274,8 @@ mod tests {
         let environment = TestEnvironment::default()
             .with(EnvironmentVariable::Home, "/home/nathan")
             .with(EnvironmentVariable::XdgConfigHome, "/var/config/nathan")
-            .with(EnvironmentVariable::CodexHome, "/opt/codex/nathan");
+            .with(EnvironmentVariable::CodexHome, "/opt/codex/nathan")
+            .with(EnvironmentVariable::KiroHome, "/opt/kiro/nathan");
         let paths = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
 
         assert_eq!(paths.codex_home().as_str(), "/opt/codex/nathan");
@@ -270,6 +284,7 @@ mod tests {
             "/var/config/nathan/skilltap"
         );
         assert_eq!(paths.global_agents().as_str(), "/home/nathan/AGENTS.md");
+        assert_eq!(paths.kiro_home().as_str(), "/opt/kiro/nathan");
     }
 
     #[test]
@@ -309,14 +324,15 @@ mod tests {
                 .with(EnvironmentVariable::XdgConfigHome, "/var/config/nathan")
                 .with(EnvironmentVariable::XdgCacheHome, "/var/cache/nathan")
                 .with(EnvironmentVariable::CodexHome, "/opt/codex/nathan")
-                .with(EnvironmentVariable::ClaudeConfigDir, "/opt/claude/nathan"),
+                .with(EnvironmentVariable::ClaudeConfigDir, "/opt/claude/nathan")
+                .with(EnvironmentVariable::KiroHome, "/opt/kiro/nathan"),
         )
         .unwrap();
 
         let environment = paths
             .native_process_environment(Some(OsString::from("/usr/local/bin:/usr/bin")))
             .unwrap();
-        assert_eq!(environment.len(), 6);
+        assert_eq!(environment.len(), 7);
         assert_eq!(environment[OsStr::new("HOME")], "/home/nathan");
         assert_eq!(
             environment[OsStr::new("XDG_CONFIG_HOME")],
@@ -331,6 +347,7 @@ mod tests {
             environment[OsStr::new("CLAUDE_CONFIG_DIR")],
             "/opt/claude/nathan"
         );
+        assert_eq!(environment[OsStr::new("KIRO_HOME")], "/opt/kiro/nathan");
         assert_eq!(environment[OsStr::new("PATH")], "/usr/local/bin:/usr/bin");
         assert!(matches!(
             paths.native_process_environment(None),

@@ -10,7 +10,7 @@ use skilltap_core::{
     },
     storage::{
         ConfigDocument, ConfigRepository, DocumentState, FileConfigRepository,
-        FileInventoryRepository, FileStateRepository,
+        FileInventoryRepository, FileStateRepository, HarnessBinary,
     },
 };
 use skilltap_harnesses::{TargetRegistry, detect_configured_installation};
@@ -748,6 +748,10 @@ fn execute_harness_change(
         if let Some(error) = config_membership_error(registry, &current) {
             return Outcome::new(command, ResultClass::Invalid).with_error(error);
         }
+        let default_binary = registry
+            .adapter(harness)
+            .and_then(|adapter| HarnessBinary::new(adapter.identity().default_binary).ok());
+        let binary = binary.or(default_binary.as_ref());
         let next = match current.with_harness_policy(harness, enabled, binary) {
             Ok(value) => value,
             Err(_) => {

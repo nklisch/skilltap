@@ -37,6 +37,7 @@ impl HarnessAdapter for ClaudeAdapter {
         TargetIdentity {
             id: HarnessId::new("claude").expect("static harness id is valid"),
             display_name: "Claude Code",
+            default_binary: "claude",
             distribution_surface: DistributionSurface::FirstPartyPlugin,
         }
     }

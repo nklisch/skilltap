@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-file-managed-contracts
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-file-managed
 depends_on: []
@@ -73,3 +73,60 @@ observe-only work must not be mislabeled complete.
 
 This is the foundation checkpoint. Gemini, OpenCode, and Kiro adapter stories
 depend on it; it does not register incomplete adapter placeholders.
+
+## Implementation discovery
+
+The prior partial diff had mixed the shared contract checkpoint with speculative
+Gemini, OpenCode, and Kiro adapter files. The exact native validation required
+for those adapters was not available in this isolated run: no current binaries,
+version output bytes, or source-direct mutation evidence were present. Their
+profiles therefore remain unclaimed, and none of those targets is exported or
+registered in `TargetRegistry::canonical()`.
+
+That missing evidence belongs to each target adapter story, not to the shared
+contract checkpoint. The shared contract can close independently because its
+scope, registry, probe, source-reader, operation, and fixture behavior are
+covered by existing Codex contracts, a global/project fake managed adapter, and
+bounded unit tests. Each target story retains the exact-version evidence gate
+before it may add an adapter export or canonical registry entry.
+
+## Implementation
+
+- Added validated `KIRO_HOME` resolution and explicit native-process
+  environment propagation in `PlatformPaths`, while keeping canonical global
+  instructions at `~/AGENTS.md`.
+- Added registry-owned `TargetIdentity::default_binary`; detection and harness
+  enablement now use it rather than assuming the target id is an executable.
+- Replaced the managed projection context's project-only root with the exact
+  concrete `Scope`, and routed both lifecycle paths through the same scope-aware
+  planner/executor. Codex remains project-only; the test adapter proves global
+  and project roots independently.
+- Added the bounded `EffectiveStateProbePort` contract and typed JSON status
+  decoder. Probe failures cannot become an empty healthy server set.
+- Added a typed no-surface control-plane operation for source-only marketplace
+  registration; empty plugin projections still fail at the executable boundary.
+- Made `FakeHarnessProfile` acceptance roots profile data for the validated
+  Codex/Claude fixtures rather than target-id branching.
+- Extracted the complete selected-source plugin reader into
+  `crates/harnesses/src/adapters/file_managed.rs` and reused it from Codex
+  without moving native destination or MCP encoding into the shared reader.
+- Repaired the test-only scope migration: `context_root` carries the inner
+  context lifetime and every former `context.project` access derives from
+  `context.scope`.
+
+The same feature's untracked draft files remain in the working tree for the
+next worker, but they are deliberately excluded from module exports and this
+checkpoint's commit: `gemini.rs`, `gemini_managed.rs`, `opencode.rs`,
+`opencode_managed.rs`, `kiro.rs`, and `kiro_managed.rs`.
+
+## Verification
+
+- `cargo check --workspace --tests` — passed.
+- `cargo test --workspace --all-targets` — 592 passed.
+- `cargo test -p skilltap-core source_only_marketplace_registration --lib` —
+  passed.
+- `cargo test -p skilltap-harnesses file_managed --lib` — 2 passed.
+- `cargo test -p skilltap --lib fake_managed_projection_uses_the_exact_global_and_project_scopes` — passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` —
+  passed, and `cargo fmt --all -- --check` plus `git diff --check` passed.
+  No target-specific profile is asserted by these shared tests.

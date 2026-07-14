@@ -218,6 +218,74 @@ pub fn faithful_file_operation_with_dependencies(
     )
 }
 
+/// Build a control-plane-only marketplace registration operation.
+///
+/// A managed target may need no native marketplace file: the explicit source
+/// is already represented by inventory/state and the target adapter has no
+/// documented marketplace registration surface. This is a typed no-op rather
+/// than an empty executable operation, while plugin projections still require
+/// at least one concrete managed surface.
+pub fn managed_source_registration_operation(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+) -> Result<Operation, crate::domain::OperationContractError> {
+    let component =
+        ComponentId::new("managed:source_registration").expect("static component id is valid");
+    let compatibility = CompatibilityResult::new(
+        target.clone(),
+        CompatibilityClass::Compatible,
+        TransferFidelity::Materializable,
+        [CompatibilityEvidence::new(
+            EvidenceCode::new("managed.source_registration")
+                .expect("static evidence code is valid"),
+            target.clone(),
+            [component.clone()],
+            EvidenceDetail::new(
+                "The selected marketplace source is recorded in skilltap state because this target has no native registration surface.",
+            )
+            .expect("static evidence detail is valid"),
+        )],
+        [MaterialConsequence::new(
+            ConsequenceCode::new("managed.control_plane_only")
+                .expect("static consequence code is valid"),
+            [component],
+            ConsequenceSummary::new(
+                "No native marketplace file is created; skilltap retains the source identity for managed plugin resolution.",
+            )
+            .expect("static consequence summary is valid"),
+        )],
+    )
+    .expect("control-plane registration has bounded compatibility evidence");
+    let semantics = OperationSemantics::new(
+        action,
+        resource.scope().clone(),
+        OperationReason::new(
+            EvidenceCode::new("managed.source_registration")
+                .expect("static evidence code is valid"),
+            EvidenceDetail::new(
+                "The explicit marketplace source is recorded in skilltap state; this target has no native marketplace registration surface.",
+            )
+            .expect("static evidence detail is valid"),
+        ),
+        compatibility,
+        Provenance::Materialized,
+        [],
+    );
+    Operation::new(
+        id,
+        target,
+        OperationSelector::Resource { resource },
+        semantics,
+        OperationClass::NoOp,
+        Reversibility::NotApplicable,
+        [],
+        AcknowledgmentRequirement::not_required(),
+        None,
+    )
+}
+
 /// Build a managed materialization operation that names every file or
 /// directory the adapter will touch.
 pub fn managed_materialization_operation(
@@ -238,7 +306,7 @@ pub fn managed_materialization_operation(
             target.clone(),
             [component.clone()],
             EvidenceDetail::new(
-                "The harness lacks a verified native project lifecycle command; skilltap will own the documented load-path representation.",
+                "The harness lacks a verified native lifecycle command for this scope; skilltap will own the documented load-path representation.",
             )
             .expect("static evidence detail is valid"),
         )],
@@ -247,7 +315,7 @@ pub fn managed_materialization_operation(
                 .expect("static consequence code is valid"),
             [component],
             ConsequenceSummary::new(
-                "The project representation is managed by skilltap rather than the harness lifecycle.",
+                "The scoped representation is managed by skilltap rather than the harness lifecycle.",
             )
             .expect("static consequence summary is valid"),
         )],
@@ -342,6 +410,23 @@ mod tests {
                 .path()
                 .is_some_and(|path| path.as_str().ends_with("/demo"))
         }));
+    }
+
+    #[test]
+    fn source_only_marketplace_registration_is_a_typed_control_plane_noop() {
+        let operation = managed_source_registration_operation(
+            OperationId::new("managed-source-registration").unwrap(),
+            HarnessId::new("managed").unwrap(),
+            ResourceKey::new(ResourceId::new("marketplace:local").unwrap(), Scope::Global),
+            OperationAction::MarketplaceRegister,
+        )
+        .unwrap();
+        assert_eq!(operation.class(), OperationClass::NoOp);
+        assert!(operation.affected_surfaces().is_empty());
+        assert_eq!(
+            operation.reason().code().as_str(),
+            "managed.source_registration"
+        );
     }
 
     #[test]

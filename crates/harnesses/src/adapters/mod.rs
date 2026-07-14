@@ -1,6 +1,7 @@
 mod claude;
 mod codex;
 mod codex_managed;
+mod file_managed;
 
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};

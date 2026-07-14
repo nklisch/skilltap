@@ -1,5 +1,5 @@
 use skilltap_core::{
-    domain::{AbsolutePath, HarnessId, ResourceKey, ResourceKind},
+    domain::{HarnessId, ResourceKey, ResourceKind, Scope},
     managed_projection::{ManagedProjectionError, ManagedProjectionPlan, ResolvedSourceCheckout},
     runtime::{ConfinedFileSystem, JsonLimits, PlatformPaths},
     storage::ManagedProjection,
@@ -33,7 +33,9 @@ pub enum ManagedProjectionInput<'a> {
 /// Inputs required to plan one operation on documented target surfaces.
 pub struct ManagedProjectionContext<'a> {
     pub target: &'a HarnessId,
-    pub project: &'a AbsolutePath,
+    /// The exact concrete scope being planned. Adapters derive their native
+    /// global/project roots from this value and `PlatformPaths`.
+    pub scope: &'a Scope,
     pub paths: &'a PlatformPaths,
     pub resource_key: &'a ResourceKey,
     pub resource_kind: ResourceKind,
@@ -65,8 +67,9 @@ mod tests {
 
     use skilltap_core::{
         domain::{
-            Fingerprint, FingerprintAlgorithm, GitCommit, NativeId, RelativeArtifactPath,
-            ResolvedRevision, ResourceId, Scope, Source, SourceKind, SourceLocator,
+            AbsolutePath, Fingerprint, FingerprintAlgorithm, GitCommit, NativeId,
+            RelativeArtifactPath, ResolvedRevision, ResourceId, Scope, Source, SourceKind,
+            SourceLocator,
         },
         managed_projection::{ManagedFileWrite, ResolvedSourceCheckout},
         runtime::{Environment, EnvironmentVariable, SupportedPlatform, SystemFileSystem},
@@ -168,7 +171,7 @@ mod tests {
         let planned_apply = port
             .plan(&ManagedProjectionContext {
                 target: &target,
-                project: &project,
+                scope: &Scope::Project(project.clone()),
                 paths: &paths,
                 resource_key: &resource_key,
                 resource_kind: ResourceKind::Plugin,
@@ -197,7 +200,7 @@ mod tests {
         let planned_remove = port
             .plan(&ManagedProjectionContext {
                 target: &target,
-                project: &project,
+                scope: &Scope::Project(project.clone()),
                 paths: &paths,
                 resource_key: &resource_key,
                 resource_kind: ResourceKind::Plugin,

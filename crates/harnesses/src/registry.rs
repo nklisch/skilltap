@@ -29,6 +29,10 @@ pub enum DistributionSurface {
 pub struct TargetIdentity {
     pub id: HarnessId,
     pub display_name: &'static str,
+    /// The executable name used when policy does not provide an explicit path.
+    /// It is adapter metadata rather than an assumption that id and binary are
+    /// interchangeable (for example, Kiro uses `kiro-cli`).
+    pub default_binary: &'static str,
     pub distribution_surface: DistributionSurface,
 }
 
@@ -126,14 +130,21 @@ pub trait HarnessAdapter: Sync {
         None
     }
 
+    /// Bounded effective MCP status probe, separate from declared-file
+    /// observation. The CLI owns executable resolution and process limits.
+    fn effective_state_probe(&self) -> Option<&dyn crate::EffectiveStateProbePort> {
+        None
+    }
+
     /// Root shown by `harness list` for this target's native state.
     fn native_root(&self, _paths: &PlatformPaths) -> Option<AbsolutePath> {
         None
     }
 
-    /// Whether project lifecycle falls back to skilltap-owned managed
-    /// projection when verified native lifecycle is unavailable.
-    fn managed_project_lifecycle(&self) -> bool {
+    /// Whether the adapter's managed projection is mutation-authorized for the
+    /// concrete scope. Adapters must opt in explicitly so an available
+    /// projection port cannot accidentally grant mutation authority.
+    fn supports_managed_projection(&self, _scope: CapabilityScope) -> bool {
         false
     }
 
@@ -285,6 +296,7 @@ mod tests {
             TargetIdentity {
                 id: HarnessId::new(self.id).expect("test harness id is valid"),
                 display_name: self.display_name,
+                default_binary: self.id,
                 distribution_surface: self.distribution_surface,
             }
         }

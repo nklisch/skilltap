@@ -26,6 +26,11 @@ mod plugin_graph;
 pub use plugin_graph::{ClaudePluginGraphReader, CodexPluginGraphReader};
 mod managed_codex_project;
 pub use managed_codex_project::{ManagedCodexCatalog, ManagedCodexCatalogError};
+mod effective_state;
+pub use effective_state::{
+    EffectiveMcpStatus, EffectiveProbeError, EffectiveProbeSpec, EffectiveServerHealth,
+    EffectiveStateProbePort, ProjectTrustHealth, ReloadSemantics, decode_json_status,
+};
 mod managed_projection;
 pub use managed_projection::{
     ManagedLifecycleKind, ManagedProjectionContext, ManagedProjectionInput, ManagedProjectionPort,
@@ -86,7 +91,7 @@ pub fn detect_installation(
     json_limits: JsonLimits,
 ) -> Result<HarnessInstallation, DetectionError> {
     let configured = ConfiguredBinary::path_lookup(
-        NativeId::new(adapter.identity().id.as_str())
+        NativeId::new(adapter.identity().default_binary)
             .map_err(|_| DetectionError::InvalidVersion)?,
     )
     .map_err(|_| DetectionError::InvalidVersion)?;
@@ -146,9 +151,11 @@ pub fn unreachable_installation(
     reason: UnreachableReason,
 ) -> HarnessInstallation {
     let id = adapter.identity().id;
-    let configured =
-        ConfiguredBinary::path_lookup(NativeId::new(id.as_str()).expect("registered harness id"))
-            .expect("registered harness id is a path name");
+    let configured = ConfiguredBinary::path_lookup(
+        NativeId::new(adapter.identity().default_binary)
+            .expect("registered harness default binary is valid"),
+    )
+    .expect("registered harness default binary is a path name");
     HarnessInstallation::new(id, configured, HarnessReachability::Unreachable { reason })
 }
 

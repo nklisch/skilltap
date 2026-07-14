@@ -561,24 +561,20 @@ impl StatusApplication<'_> {
                 );
             }
         };
-        if matches!(resource.scope(), Scope::Project(_))
-            && self
-                .registry
-                .adapter(target)
-                .is_some_and(|adapter| adapter.managed_project_lifecycle())
-        {
-            let Scope::Project(project) = resource.scope() else {
-                unreachable!("project scope was checked")
-            };
+        if self.registry.adapter(target).is_some_and(|adapter| {
+            adapter.supports_managed_projection(skilltap_core::domain::CapabilityScope::from(
+                resource.scope(),
+            ))
+        }) {
             let observed_at = timestamp;
-            match plan_managed_project_lifecycle(
+            match plan_managed_lifecycle(
                 self.registry,
                 target,
                 kind,
                 &request,
                 resource,
                 ManagedProjectPlanContext {
-                    project,
+                    scope: resource.scope(),
                     documents,
                     paths,
                     timestamp: observed_at,
@@ -1129,12 +1125,11 @@ impl StatusApplication<'_> {
                     .unwrap_or_default();
                 let mut native_route_selected = false;
                 for target_id in targets.iter() {
-                    if self
-                        .registry
-                        .adapter(target_id)
-                        .is_some_and(skilltap_harnesses::HarnessAdapter::managed_project_lifecycle)
-                        && let Scope::Project(project) = concrete_scope
-                    {
+                    if self.registry.adapter(target_id).is_some_and(|adapter| {
+                        adapter.supports_managed_projection(
+                            skilltap_core::domain::CapabilityScope::from(concrete_scope),
+                        )
+                    }) {
                         let desired_here = documents.inventory.as_ref().is_some_and(|inventory| {
                             inventory
                                 .resources()
@@ -1161,14 +1156,14 @@ impl StatusApplication<'_> {
                                 ));
                             }
                         };
-                        let planned = match plan_managed_project_lifecycle(
+                        let planned = match plan_managed_lifecycle(
                             self.registry,
                             target_id,
                             kind,
                             &request,
                             &resource,
                             ManagedProjectPlanContext {
-                                project,
+                                scope: concrete_scope,
                                 documents: &documents,
                                 paths: &paths,
                                 timestamp: observed_at,

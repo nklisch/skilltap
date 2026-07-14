@@ -6,19 +6,17 @@ use skilltap_core::{
     managed_projection::{
         ManagedFileWrite, ManagedPluginWrite, ManagedProjectionError, ManagedProjectionPlan,
     },
-    plugin_graph::{ComponentDeclaration, PluginGraphReader},
-    runtime::{
-        ConfinedFileSystem, ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest,
-        JsonLimits, SystemExternalTreeObserver,
-    },
+    plugin_graph::ComponentDeclaration,
+    runtime::{ConfinedFileSystem, ExternalTreeLimits, JsonLimits},
     storage::{ArtifactTree, ManagedProjection},
 };
 
 use crate::{
-    CodexPluginGraphReader,
     managed_codex_project::ManagedCodexCatalog,
     managed_projection::{ManagedProjectionContext, ManagedProjectionInput, ManagedProjectionPort},
 };
+
+use super::file_managed::read_complete_source_plugin;
 
 pub(crate) const CODEX_CATALOG_DESTINATIONS: &[&str] = &[
     ".agents/plugins/marketplace.json",
@@ -45,6 +43,12 @@ impl ManagedProjectionPort for CodexManagedProjection {
         &self,
         context: &ManagedProjectionContext<'_>,
     ) -> Result<ManagedProjectionPlan, ManagedProjectionError> {
+        if !matches!(context.scope, skilltap_core::domain::Scope::Project(_)) {
+            return Err(adapter_error(
+                "managed_project_scope_unsupported",
+                "The Codex managed projection currently supports project scope only.",
+            ));
+        }
         match context.resource_kind {
             skilltap_core::domain::ResourceKind::Marketplace => plan_marketplace(context),
             skilltap_core::domain::ResourceKind::Plugin => plan_plugin(context),
@@ -59,6 +63,7 @@ impl ManagedProjectionPort for CodexManagedProjection {
 fn plan_marketplace(
     context: &ManagedProjectionContext<'_>,
 ) -> Result<ManagedProjectionPlan, ManagedProjectionError> {
+    let project = project_scope(context)?;
     let destination = relative_path(
         CODEX_CATALOG_DESTINATIONS[0],
         "managed_project_path_invalid",
@@ -66,7 +71,7 @@ fn plan_marketplace(
     )?;
     let current = context
         .filesystem
-        .read_regular_bounded_no_follow(context.project, &destination, context.json_limits.bytes())
+        .read_regular_bounded_no_follow(&project, &destination, context.json_limits.bytes())
         .map_err(|_| {
             adapter_error(
                 "managed_project_catalog_unreadable",
@@ -94,7 +99,7 @@ fn plan_marketplace(
     Ok(ManagedProjectionPlan {
         trees: Vec::new(),
         files: vec![ManagedFileWrite {
-            root: context.project.clone(),
+            root: project.clone(),
             destination,
             expected: current.clone(),
             desired: desired.clone(),
@@ -108,6 +113,7 @@ fn plan_marketplace(
 fn plan_plugin(
     context: &ManagedProjectionContext<'_>,
 ) -> Result<ManagedProjectionPlan, ManagedProjectionError> {
+    let project = project_scope(context)?;
     let plugin = match &context.input {
         ManagedProjectionInput::Apply { checkout } => {
             let selector =
@@ -129,7 +135,7 @@ fn plan_plugin(
                     detail:
                         "The selected plugin source is not a contained local marketplace entry.",
                 })?;
-            Some(read_complete_codex_plugin(
+            Some(read_complete_source_plugin(
                 &plugin_root,
                 checkout.source(),
                 context.json_limits,
@@ -142,7 +148,7 @@ fn plan_plugin(
         (Some(&plugin.tree), plugin.declarations.as_slice())
     });
     plan_codex_component_projections(
-        context.project,
+        &project,
         context.filesystem,
         tree,
         declarations,
@@ -150,6 +156,18 @@ fn plan_plugin(
         removal,
         context.acknowledged,
     )
+}
+
+fn project_scope(
+    context: &ManagedProjectionContext<'_>,
+) -> Result<AbsolutePath, ManagedProjectionError> {
+    match context.scope {
+        skilltap_core::domain::Scope::Project(project) => Ok(project.clone()),
+        skilltap_core::domain::Scope::Global => Err(adapter_error(
+            "managed_project_scope_unsupported",
+            "The Codex managed projection currently supports project scope only.",
+        )),
+    }
 }
 
 fn read_codex_catalog_at_root(
@@ -602,55 +620,6 @@ fn json_to_toml(value: &serde_json::Value) -> Option<toml::Value> {
         ),
         serde_json::Value::Null => return None,
     })
-}
-
-fn read_complete_codex_plugin(
-    root: &AbsolutePath,
-    source: &skilltap_core::domain::Source,
-    json_limits: JsonLimits,
-) -> Result<CompleteCodexPlugin, ManagedProjectionError> {
-    let tree_limits =
-        ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
-            .expect("bounded plugin tree limits are valid");
-    let declarations = CodexPluginGraphReader::new(root.clone(), tree_limits, json_limits)
-        .read(source)
-        .map_err(|_| ManagedProjectionError::PluginMissing {
-            detail:
-                "The selected plugin does not contain a valid Codex manifest and complete component graph.",
-        })?;
-    let snapshot = SystemExternalTreeObserver
-        .observe(&ExternalTreeRequest::new(root.clone(), tree_limits))
-        .map_err(|_| ManagedProjectionError::PluginUnreadable {
-            detail: "The selected plugin tree could not be read safely.",
-        })?;
-    let mut files = Vec::new();
-    for entry in snapshot.entries() {
-        match entry.kind() {
-            skilltap_core::runtime::ExternalTreeEntryKind::Directory => {}
-            skilltap_core::runtime::ExternalTreeEntryKind::File => files.push((
-                entry.path().as_str().to_owned(),
-                ArtifactFile::new(
-                    entry.file_bytes().unwrap_or_default().to_vec(),
-                    entry.file_executable().unwrap_or(false),
-                ),
-            )),
-            skilltap_core::runtime::ExternalTreeEntryKind::Symlink => {
-                return Err(adapter_error(
-                    "managed_project_plugin_symlink",
-                    "Managed project plugins cannot contain symlinks.",
-                ));
-            }
-        }
-    }
-    let tree = ArtifactTree::new(files).map_err(|_| ManagedProjectionError::PluginMissing {
-        detail: "The selected plugin tree is invalid.",
-    })?;
-    Ok(CompleteCodexPlugin { tree, declarations })
-}
-
-struct CompleteCodexPlugin {
-    tree: ArtifactTree,
-    declarations: Vec<ComponentDeclaration>,
 }
 
 fn relative_path(

@@ -1350,7 +1350,7 @@ struct PlannedManagedProjectLifecycle {
 }
 
 struct ManagedProjectPlanContext<'a> {
-    project: &'a AbsolutePath,
+    scope: &'a Scope,
     documents: &'a StatusDocuments,
     paths: &'a PlatformPaths,
     timestamp: Timestamp,
@@ -1359,7 +1359,7 @@ struct ManagedProjectPlanContext<'a> {
     filesystem: &'a dyn ManagedProjectFileSystem,
 }
 
-fn plan_managed_project_lifecycle(
+fn plan_managed_lifecycle(
     registry: &skilltap_harnesses::TargetRegistry,
     target: &HarnessId,
     kind: NativeLifecycleKind,
@@ -1380,7 +1380,7 @@ fn plan_managed_project_lifecycle(
         )
     })?;
     let ManagedProjectPlanContext {
-        project,
+        scope,
         documents,
         paths,
         timestamp,
@@ -1393,12 +1393,7 @@ fn plan_managed_project_lifecycle(
         .as_ref()
         .and_then(|state| state.resources().get(resource.key()));
     let target_state = existing_state.and_then(|state| state.target(target));
-    let operation_id = lifecycle_operation_id(
-        kind,
-        target,
-        &Scope::Project(project.clone()),
-        resource.key(),
-    );
+    let operation_id = lifecycle_operation_id(kind, target, scope, resource.key());
     let prior_projections = target_state
         .map(|target| {
             target
@@ -1467,7 +1462,7 @@ fn plan_managed_project_lifecycle(
                             "The selected marketplace identifier is invalid.",
                         )
                     })?,
-                Scope::Project(project.clone()),
+                scope.clone(),
             );
             let marketplace_source = documents
                 .inventory
@@ -1494,7 +1489,7 @@ fn plan_managed_project_lifecycle(
         _ => {
             return Err(managed_project_error(
                 "managed_project_resource_invalid",
-                "Only project marketplace and plugin resources can use managed projection.",
+                "Only marketplace and plugin resources can use managed projection.",
             ));
         }
     };
@@ -1505,7 +1500,7 @@ fn plan_managed_project_lifecycle(
         });
     let native_request = NativeLifecycleRequest {
         action: request.native_action,
-        scope: Scope::Project(project.clone()),
+        scope: scope.clone(),
         name: request.native_name.clone(),
         source: request
             .source
@@ -1515,7 +1510,7 @@ fn plan_managed_project_lifecycle(
     let plan = port
         .plan(&ManagedProjectionContext {
             target,
-            project,
+            scope,
             paths,
             resource_key: resource.key(),
             resource_kind: resource.kind(),
@@ -1586,17 +1581,26 @@ fn plan_managed_project_lifecycle(
         ))
         .expect("validated projection path")
     }));
-    let operation = skilltap_core::lifecycle_operation::managed_materialization_operation(
-        operation_id,
-        target.clone(),
-        resource.key().clone(),
-        request.operation_action(),
-        surfaces,
-    )
+    let operation = if surfaces.is_empty() && resource.kind() == ResourceKind::Marketplace {
+        skilltap_core::lifecycle_operation::managed_source_registration_operation(
+            operation_id,
+            target.clone(),
+            resource.key().clone(),
+            request.operation_action(),
+        )
+    } else {
+        skilltap_core::lifecycle_operation::managed_materialization_operation(
+            operation_id,
+            target.clone(),
+            resource.key().clone(),
+            request.operation_action(),
+            surfaces,
+        )
+    }
     .map_err(|_| {
         managed_project_error(
             "operation_contract_invalid",
-            "The managed project operation could not be represented safely.",
+            "The managed lifecycle operation could not be represented safely.",
         )
     })?;
     let seed = if removal {

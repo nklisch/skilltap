@@ -40,6 +40,7 @@ impl HarnessAdapter for CodexAdapter {
         TargetIdentity {
             id: HarnessId::new("codex").expect("static harness id is valid"),
             display_name: "Codex",
+            default_binary: "codex",
             distribution_surface: DistributionSurface::FirstPartyPlugin,
         }
     }
@@ -98,8 +99,8 @@ impl HarnessAdapter for CodexAdapter {
         Some(paths.codex_home().clone())
     }
 
-    fn managed_project_lifecycle(&self) -> bool {
-        true
+    fn supports_managed_projection(&self, scope: CapabilityScope) -> bool {
+        scope == CapabilityScope::Project
     }
 
     fn bootstrap_next_action(&self) -> Option<&'static str> {

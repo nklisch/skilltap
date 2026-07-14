@@ -104,6 +104,7 @@ pub struct IsolatedMachine {
     cache_home: PathBuf,
     codex_home: PathBuf,
     claude_home: PathBuf,
+    kiro_home: PathBuf,
     working_directory: PathBuf,
 }
 
@@ -115,12 +116,14 @@ impl IsolatedMachine {
         let cache_home = root.join("cache");
         let codex_home = home.join(".codex");
         let claude_home = home.join(".claude");
+        let kiro_home = home.join(".kiro");
         let working_directory = root.join("work");
         fs::create_dir_all(&home)?;
         fs::create_dir_all(&configuration_home)?;
         fs::create_dir_all(&cache_home)?;
         fs::create_dir_all(&codex_home)?;
         fs::create_dir_all(&claude_home)?;
+        fs::create_dir_all(&kiro_home)?;
         fs::create_dir_all(&working_directory)?;
         Ok(Self {
             _root: root,
@@ -129,6 +132,7 @@ impl IsolatedMachine {
             cache_home,
             codex_home,
             claude_home,
+            kiro_home,
             working_directory,
         })
     }
@@ -153,6 +157,10 @@ impl IsolatedMachine {
         &self.claude_home
     }
 
+    pub fn kiro_home(&self) -> &Path {
+        &self.kiro_home
+    }
+
     pub fn working_directory(&self) -> &Path {
         &self.working_directory
     }
@@ -175,6 +183,7 @@ impl IsolatedMachine {
             .env("XDG_CACHE_HOME", &self.cache_home)
             .env("CODEX_HOME", &self.codex_home)
             .env("CLAUDE_CONFIG_DIR", &self.claude_home)
+            .env("KIRO_HOME", &self.kiro_home)
             .env_remove("SKILLTAP_HOME")
             .output()
     }
@@ -196,6 +205,7 @@ impl IsolatedMachine {
             .env("XDG_CACHE_HOME", &self.cache_home)
             .env("CODEX_HOME", &self.codex_home)
             .env("CLAUDE_CONFIG_DIR", &self.claude_home)
+            .env("KIRO_HOME", &self.kiro_home)
             .env("PATH", search_path)
             .env_remove("SKILLTAP_HOME")
             .output()
@@ -219,6 +229,7 @@ impl IsolatedMachine {
             .env("XDG_CACHE_HOME", &self.cache_home)
             .env("CODEX_HOME", &self.codex_home)
             .env("CLAUDE_CONFIG_DIR", &self.claude_home)
+            .env("KIRO_HOME", &self.kiro_home)
             .env_remove("SKILLTAP_HOME");
         for (name, value) in values {
             command.env(name, value);

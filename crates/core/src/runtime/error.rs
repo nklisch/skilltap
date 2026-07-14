@@ -20,6 +20,7 @@ pub enum EnvironmentVariable {
     XdgCacheHome,
     CodexHome,
     ClaudeConfigDir,
+    KiroHome,
     Path,
 }
 
@@ -31,6 +32,7 @@ impl EnvironmentVariable {
             Self::XdgCacheHome => "XDG_CACHE_HOME",
             Self::CodexHome => "CODEX_HOME",
             Self::ClaudeConfigDir => "CLAUDE_CONFIG_DIR",
+            Self::KiroHome => "KIRO_HOME",
             Self::Path => "PATH",
         }
     }
@@ -55,6 +57,7 @@ pub enum PathRole {
     GlobalAgents,
     CodexHome,
     ClaudeHome,
+    KiroHome,
 }
 
 impl fmt::Display for PathRole {
@@ -71,6 +74,7 @@ impl fmt::Display for PathRole {
             Self::GlobalAgents => "global AGENTS.md",
             Self::CodexHome => "Codex home",
             Self::ClaudeHome => "Claude home",
+            Self::KiroHome => "Kiro home",
         })
     }
 }

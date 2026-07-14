@@ -310,7 +310,9 @@ impl Environment for FixtureEnvironment {
             EnvironmentVariable::Home => Some(self.home.clone()),
             EnvironmentVariable::XdgConfigHome => Some(self.config.clone()),
             EnvironmentVariable::XdgCacheHome => Some(self.cache.clone()),
-            EnvironmentVariable::CodexHome | EnvironmentVariable::ClaudeConfigDir => None,
+            EnvironmentVariable::CodexHome
+            | EnvironmentVariable::ClaudeConfigDir
+            | EnvironmentVariable::KiroHome => None,
             EnvironmentVariable::Path => std::env::var_os("PATH"),
         }
     }
@@ -505,6 +507,13 @@ fn managed_scope(project: &Path) -> ScopeArgs {
     }
 }
 
+fn global_scope() -> ScopeArgs {
+    ScopeArgs {
+        project: None,
+        all_scopes: false,
+    }
+}
+
 fn codex_target() -> TargetArgs {
     TargetArgs {
         target: Some(skilltap_core::domain::TargetSelection::Only(
@@ -532,6 +541,7 @@ impl skilltap_harnesses::HarnessAdapter for FakeManagedAdapter {
         skilltap_harnesses::TargetIdentity {
             id: fake_target_id(),
             display_name: "Fake Managed",
+            default_binary: "fake-managed",
             distribution_surface: skilltap_harnesses::DistributionSurface::Managed,
         }
     }
@@ -578,7 +588,7 @@ impl skilltap_harnesses::HarnessAdapter for FakeManagedAdapter {
         Some(&FAKE_MANAGED_PROJECTION)
     }
 
-    fn managed_project_lifecycle(&self) -> bool {
+    fn supports_managed_projection(&self, _scope: skilltap_core::domain::CapabilityScope) -> bool {
         true
     }
 }
@@ -613,6 +623,13 @@ impl skilltap_harnesses::ManagedProjectionPort for FakeManagedProjection {
     }
 }
 
+fn context_root<'scope>(context: &ManagedProjectionContext<'scope>) -> &'scope AbsolutePath {
+    match context.scope {
+        Scope::Project(project) => project,
+        Scope::Global => context.paths.home(),
+    }
+}
+
 fn fake_marker(
     context: &ManagedProjectionContext<'_>,
     root: &AbsolutePath,
@@ -636,7 +653,7 @@ fn fake_marketplace_plan(
         RelativeArtifactPath::new(FAKE_MANAGED_PROFILE.catalog_destinations()[0]).unwrap();
     let current = context
         .filesystem
-        .read_regular_bounded_no_follow(context.project, &destination, 4096)
+        .read_regular_bounded_no_follow(context_root(context), &destination, 4096)
         .map_err(|_| fake_projection_error())?;
     let (desired, manifest) = match &context.input {
         ManagedProjectionInput::Apply { checkout } => {
@@ -647,7 +664,7 @@ fn fake_marketplace_plan(
     };
     Ok(skilltap_core::managed_projection::ManagedProjectionPlan {
         files: vec![ManagedFileWrite {
-            root: context.project.clone(),
+            root: context_root(context).clone(),
             destination,
             expected: current.clone(),
             desired: desired.clone(),
@@ -667,7 +684,7 @@ fn fake_plugin_plan(
 > {
     let skill_root = AbsolutePath::new(format!(
         "{}/{}",
-        context.project.as_str(),
+        context_root(context).as_str(),
         FAKE_MANAGED_PROFILE.skill_destination()
     ))
     .unwrap();
@@ -697,7 +714,7 @@ fn fake_plugin_plan(
         RelativeArtifactPath::new(FAKE_MANAGED_PROFILE.mcp_destination().unwrap()).unwrap();
     let current_mcp = context
         .filesystem
-        .read_regular_bounded_no_follow(context.project, &mcp_destination, 4096)
+        .read_regular_bounded_no_follow(context_root(context), &mcp_destination, 4096)
         .map_err(|_| fake_projection_error())?;
 
     let (desired_tree, desired_mcp, mut manifest) = match &context.input {
@@ -775,7 +792,7 @@ fn fake_plugin_plan(
             expected_identity: current_tree.map(|(identity, _)| identity),
         }],
         files: vec![ManagedFileWrite {
-            root: context.project.clone(),
+            root: context_root(context).clone(),
             destination: mcp_destination,
             expected: current_mcp,
             desired: desired_mcp,
@@ -931,9 +948,10 @@ fn execute_fake_managed_lifecycle(
     acknowledged: bool,
 ) -> Outcome {
     let filesystem = SystemFileSystem;
-    execute_fake_managed_lifecycle_with_filesystems(
+    execute_fake_managed_lifecycle_with_scope_and_filesystems(
         paths,
         project,
+        &managed_scope(project),
         &filesystem,
         &filesystem,
         ManagedLifecycleTestRequest {
@@ -945,9 +963,50 @@ fn execute_fake_managed_lifecycle(
     )
 }
 
+fn execute_fake_managed_lifecycle_global(
+    paths: &PlatformPaths,
+    project: &Path,
+    kind: NativeLifecycleKind,
+    source: Option<&str>,
+    name: Option<&str>,
+) -> Outcome {
+    let filesystem = SystemFileSystem;
+    execute_fake_managed_lifecycle_with_scope_and_filesystems(
+        paths,
+        project,
+        &global_scope(),
+        &filesystem,
+        &filesystem,
+        ManagedLifecycleTestRequest {
+            kind,
+            source,
+            name,
+            acknowledged: false,
+        },
+    )
+}
+
 fn execute_fake_managed_lifecycle_with_filesystems(
     paths: &PlatformPaths,
     project: &Path,
+    state_filesystem: &dyn FileSystem,
+    managed_filesystem: &dyn ManagedProjectFileSystem,
+    request: ManagedLifecycleTestRequest<'_>,
+) -> Outcome {
+    execute_fake_managed_lifecycle_with_scope_and_filesystems(
+        paths,
+        project,
+        &managed_scope(project),
+        state_filesystem,
+        managed_filesystem,
+        request,
+    )
+}
+
+fn execute_fake_managed_lifecycle_with_scope_and_filesystems(
+    paths: &PlatformPaths,
+    project: &Path,
+    requested_scope: &ScopeArgs,
     state_filesystem: &dyn FileSystem,
     managed_filesystem: &dyn ManagedProjectFileSystem,
     request: ManagedLifecycleTestRequest<'_>,
@@ -986,7 +1045,7 @@ fn execute_fake_managed_lifecycle_with_filesystems(
     .execute_native_lifecycle(
         "fake managed lifecycle test",
         kind,
-        &managed_scope(project),
+        requested_scope,
         &fake_target(),
         NativeLifecycleValues { source, name },
         acknowledged,
@@ -999,6 +1058,60 @@ fn assert_changed(outcome: &Outcome, expected: bool) {
         Some(&OutputValue::Boolean(expected)),
         "outcome: {outcome:?}"
     );
+}
+
+#[test]
+fn fake_managed_projection_uses_the_exact_global_and_project_scopes() {
+    let fixture = FakeManagedFixture::new("skilltap-fake-managed-scopes", &[]);
+
+    let global_add = execute_fake_managed_lifecycle_global(
+        &fixture.paths,
+        &fixture.project,
+        NativeLifecycleKind::MarketplaceAdd,
+        Some(fixture.source.to_str().unwrap()),
+        Some("team"),
+    );
+    assert_eq!(global_add.result, ResultClass::Completed, "{global_add:?}");
+    let global_install = execute_fake_managed_lifecycle_global(
+        &fixture.paths,
+        &fixture.project,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_eq!(
+        global_install.result,
+        ResultClass::Completed,
+        "{global_install:?}"
+    );
+    let global_root = Path::new(fixture.paths.home().as_str());
+    assert!(global_root.join(".fake/skills/demo/SKILL.md").is_file());
+    assert!(global_root.join(".fake/config.toml").is_file());
+
+    let project_add = fixture.add_marketplace();
+    assert_eq!(
+        project_add.result,
+        ResultClass::Completed,
+        "{project_add:?}"
+    );
+    let project_install = fixture.install_plugin(false);
+    assert_eq!(
+        project_install.result,
+        ResultClass::Completed,
+        "{project_install:?}"
+    );
+    assert!(fixture.project.join(".fake/skills/demo/SKILL.md").is_file());
+    assert!(fixture.project.join(".fake/config.toml").is_file());
+
+    let repeated = execute_fake_managed_lifecycle_global(
+        &fixture.paths,
+        &fixture.project,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_eq!(repeated.result, ResultClass::Completed, "{repeated:?}");
+    assert_changed(&repeated, false);
 }
 
 #[test]
