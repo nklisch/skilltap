@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-project-skill-links-filesystem
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-project-skill-links
 depends_on:
@@ -71,3 +71,25 @@ ownership, write inventory/state, or orchestrate a lifecycle.
 Depends on the validation/layout contract because link targets and adapter
 compatibility use those types. The lifecycle checkpoint consumes this story's
 runtime port and identity evidence.
+
+## Implementation notes
+
+- Added ephemeral `LinkIdentity` and `ConfinedEntryObservation` values and
+  exposed them through the runtime boundary without serialization.
+- Implemented descriptor-relative final-entry inspection, relative symlink
+  creation, and identity/target-checked removal with `O_NOFOLLOW`,
+  `AT_SYMLINK_NOFOLLOW`, bounded `readlinkat`, `symlinkat`, `unlinkat`, and
+  parent-directory durability.
+- Existing `ConfinedFileSystem` test doubles retain safe unsupported defaults;
+  the system implementation is the only mutation boundary until the lifecycle
+  checkpoint binds it to planned requests.
+- Extended `SkillProjectionPort` with conservative portable compatibility
+  evidence. Codex and Claude continue to own their native roots and inherit
+  the default until adapter-specific loadability evidence is attested.
+
+## Verification
+
+- `cargo test -p skilltap-core --all-targets` — 363 passed.
+- `cargo test -p skilltap-harnesses --all-targets` — 59 passed.
+- `cargo fmt --all -- --check` — passed.
+- `git diff --check` — passed.

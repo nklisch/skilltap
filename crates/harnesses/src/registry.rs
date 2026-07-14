@@ -5,6 +5,8 @@ use skilltap_core::{
         AbsolutePath, CapabilityProfileSelection, CapabilityScope, HarnessId, NativeVersion, Scope,
     },
     runtime::{ExternalTreeLimits, JsonLimits, ObservationRuntimeError, PlatformPaths},
+    skill::ValidatedSkillTree,
+    skill_compatibility::{AgentSkillValidation, SkillCompatibility},
 };
 
 use crate::{
@@ -174,6 +176,19 @@ pub trait InstructionBridgePort: Sync {
 /// Where skilltap projects a standalone skill for this target.
 pub trait SkillProjectionPort: Sync {
     fn destination(&self, paths: &PlatformPaths, scope: &Scope) -> Option<AbsolutePath>;
+
+    /// Conservative default evidence for a portable skill. Adapters override
+    /// this only when their attested loader semantics are stronger or narrower
+    /// than the shared Agent Skills contract.
+    fn compatibility(
+        &self,
+        target: &HarnessId,
+        skill: &ValidatedSkillTree,
+        validation: &AgentSkillValidation,
+    ) -> SkillCompatibility {
+        let _ = skill;
+        SkillCompatibility::portable(target.clone(), validation)
+    }
 }
 
 #[derive(Clone)]

@@ -2,13 +2,16 @@ use std::collections::BTreeMap;
 
 #[cfg(unix)]
 use std::{
-    ffi::CString,
+    ffi::{CString, OsString},
     fs::File,
     io::{self, Read, Write},
     os::fd::{AsRawFd, FromRawFd},
     path::Path,
     sync::atomic::{AtomicU64, Ordering},
 };
+
+#[cfg(unix)]
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
 
 use crate::{
     domain::{AbsolutePath, ArtifactFile, RelativeArtifactPath},
@@ -37,7 +40,7 @@ use tree_io::{read_tree_with, remove_open_tree_with, write_tree_with};
 use unix_support::{
     create_dir_at_verified, lock_exclusive, open_absolute_directory,
     open_absolute_directory_preserve_mode, open_dir_at, open_relative_directory,
-    open_relative_parent, require_directory, require_regular, stat_identity_at, unlink_at,
+    open_relative_parent, require_directory, require_regular, stat_at, stat_identity_at, unlink_at,
     verify_at,
 };
 
@@ -78,9 +81,81 @@ pub trait DirectoryTreeFileSystem {
     ) -> Result<DirectoryIdentity, RuntimeError>;
 }
 
-/// Descriptor-relative regular-file operations confined beneath an already
-/// canonical root. Every descendant directory is opened with `O_NOFOLLOW`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LinkIdentity {
+    device: u64,
+    inode: u64,
+}
+
+impl LinkIdentity {
+    pub const fn new(device: u64, inode: u64) -> Self {
+        Self { device, inode }
+    }
+
+    pub const fn device(self) -> u64 {
+        self.device
+    }
+
+    pub const fn inode(self) -> u64 {
+        self.inode
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ConfinedEntryObservation {
+    Missing,
+    RelativeSymlink {
+        identity: LinkIdentity,
+        target: crate::runtime::RelativeSymlinkTarget,
+    },
+    AbsoluteSymlink {
+        identity: LinkIdentity,
+    },
+    RegularFile,
+    Directory,
+    Other,
+}
+
+/// Descriptor-relative regular-file and final-entry operations confined
+/// beneath an already canonical root. Every descendant directory is opened
+/// with `O_NOFOLLOW`.
 pub trait ConfinedFileSystem {
+    fn inspect_entry_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+    ) -> Result<ConfinedEntryObservation, RuntimeError> {
+        let _ = (root, destination);
+        Err(RuntimeError::UnsupportedPlatform {
+            platform: std::env::consts::OS.to_owned(),
+        })
+    }
+
+    fn create_relative_symlink_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        target: &crate::runtime::RelativeSymlinkTarget,
+    ) -> Result<LinkIdentity, RuntimeError> {
+        let _ = (root, destination, target);
+        Err(RuntimeError::UnsupportedPlatform {
+            platform: std::env::consts::OS.to_owned(),
+        })
+    }
+
+    fn remove_relative_symlink_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        expected_identity: LinkIdentity,
+        expected_target: &crate::runtime::RelativeSymlinkTarget,
+    ) -> Result<LinkIdentity, RuntimeError> {
+        let _ = (root, destination, expected_identity, expected_target);
+        Err(RuntimeError::UnsupportedPlatform {
+            platform: std::env::consts::OS.to_owned(),
+        })
+    }
+
     fn read_regular_bounded_no_follow(
         &self,
         root: &AbsolutePath,
@@ -116,6 +191,33 @@ pub trait ConfinedFileSystem {
 }
 
 impl ConfinedFileSystem for SystemFileSystem {
+    fn inspect_entry_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+    ) -> Result<ConfinedEntryObservation, RuntimeError> {
+        inspect_confined_entry(root, destination)
+    }
+
+    fn create_relative_symlink_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        target: &crate::runtime::RelativeSymlinkTarget,
+    ) -> Result<LinkIdentity, RuntimeError> {
+        create_confined_symlink(root, destination, target)
+    }
+
+    fn remove_relative_symlink_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        expected_identity: LinkIdentity,
+        expected_target: &crate::runtime::RelativeSymlinkTarget,
+    ) -> Result<LinkIdentity, RuntimeError> {
+        remove_confined_symlink(root, destination, expected_identity, expected_target)
+    }
+
     fn read_regular_bounded_no_follow(
         &self,
         root: &AbsolutePath,
@@ -156,6 +258,225 @@ impl ConfinedFileSystem for SystemFileSystem {
     > {
         load_confined_tree(root, destination, limits)
     }
+}
+
+#[cfg(unix)]
+const MAX_SYMLINK_TARGET_BYTES: usize = 4096;
+
+#[cfg(unix)]
+fn inspect_confined_entry(
+    root: &AbsolutePath,
+    destination: &RelativeArtifactPath,
+) -> Result<ConfinedEntryObservation, RuntimeError> {
+    let root_directory = open_absolute_directory_preserve_mode(root, false)
+        .map_err(|source| filesystem_error(FileSystemAction::Inspect, root, source))?;
+    let (parent, name) = match open_relative_parent(&root_directory, destination, false) {
+        Ok(value) => value,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => {
+            return Ok(ConfinedEntryObservation::Missing);
+        }
+        Err(source) => return Err(filesystem_error(FileSystemAction::Inspect, root, source)),
+    };
+    let metadata = match stat_at(parent.as_raw_fd(), &name) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => {
+            return Ok(ConfinedEntryObservation::Missing);
+        }
+        Err(source) => return Err(filesystem_error(FileSystemAction::Inspect, root, source)),
+    };
+    let mode = metadata.st_mode & libc::S_IFMT;
+    if mode == libc::S_IFLNK {
+        let identity = link_identity(&metadata)
+            .map_err(|source| filesystem_error(FileSystemAction::Inspect, root, source))?;
+        return Ok(match read_relative_target(parent.as_raw_fd(), &name)? {
+            Some(target) => ConfinedEntryObservation::RelativeSymlink { identity, target },
+            None => ConfinedEntryObservation::AbsoluteSymlink { identity },
+        });
+    }
+    Ok(match mode {
+        libc::S_IFREG => ConfinedEntryObservation::RegularFile,
+        libc::S_IFDIR => ConfinedEntryObservation::Directory,
+        _ => ConfinedEntryObservation::Other,
+    })
+}
+
+#[cfg(not(unix))]
+fn inspect_confined_entry(
+    _root: &AbsolutePath,
+    _destination: &RelativeArtifactPath,
+) -> Result<ConfinedEntryObservation, RuntimeError> {
+    Err(RuntimeError::UnsupportedPlatform {
+        platform: std::env::consts::OS.to_owned(),
+    })
+}
+
+#[cfg(unix)]
+fn create_confined_symlink(
+    root: &AbsolutePath,
+    destination: &RelativeArtifactPath,
+    target: &crate::runtime::RelativeSymlinkTarget,
+) -> Result<LinkIdentity, RuntimeError> {
+    let root_directory = open_absolute_directory_preserve_mode(root, false)
+        .map_err(|source| filesystem_error(FileSystemAction::Write, root, source))?;
+    let (parent, name) = open_relative_parent(&root_directory, destination, true)
+        .map_err(|source| filesystem_error(FileSystemAction::Write, root, source))?;
+    match stat_at(parent.as_raw_fd(), &name) {
+        Ok(_) => {
+            return Err(filesystem_error(
+                FileSystemAction::Write,
+                root,
+                io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "link destination already exists",
+                ),
+            ));
+        }
+        Err(source) if source.kind() == io::ErrorKind::NotFound => {}
+        Err(source) => return Err(filesystem_error(FileSystemAction::Write, root, source)),
+    }
+    let target = CString::new(target.as_path().as_os_str().as_bytes()).map_err(|_| {
+        filesystem_error(
+            FileSystemAction::Write,
+            root,
+            io::Error::new(io::ErrorKind::InvalidInput, "NUL in symlink target"),
+        )
+    })?;
+    if unsafe { libc::symlinkat(target.as_ptr(), parent.as_raw_fd(), name.as_ptr()) } == -1 {
+        return Err(filesystem_error(
+            FileSystemAction::Write,
+            root,
+            io::Error::last_os_error(),
+        ));
+    }
+    let metadata = stat_at(parent.as_raw_fd(), &name)
+        .map_err(|source| filesystem_error(FileSystemAction::Write, root, source))?;
+    if metadata.st_mode & libc::S_IFMT != libc::S_IFLNK {
+        return Err(filesystem_error(
+            FileSystemAction::Write,
+            root,
+            io::Error::other("created entry is not a symlink"),
+        ));
+    }
+    let identity = link_identity(&metadata)
+        .map_err(|source| filesystem_error(FileSystemAction::Write, root, source))?;
+    parent
+        .sync_all()
+        .map_err(|source| filesystem_error(FileSystemAction::Sync, root, source))?;
+    Ok(identity)
+}
+
+#[cfg(not(unix))]
+fn create_confined_symlink(
+    _root: &AbsolutePath,
+    _destination: &RelativeArtifactPath,
+    _target: &crate::runtime::RelativeSymlinkTarget,
+) -> Result<LinkIdentity, RuntimeError> {
+    Err(RuntimeError::UnsupportedPlatform {
+        platform: std::env::consts::OS.to_owned(),
+    })
+}
+
+#[cfg(unix)]
+fn remove_confined_symlink(
+    root: &AbsolutePath,
+    destination: &RelativeArtifactPath,
+    expected_identity: LinkIdentity,
+    expected_target: &crate::runtime::RelativeSymlinkTarget,
+) -> Result<LinkIdentity, RuntimeError> {
+    let root_directory = open_absolute_directory_preserve_mode(root, false)
+        .map_err(|source| filesystem_error(FileSystemAction::Remove, root, source))?;
+    let (parent, name) = open_relative_parent(&root_directory, destination, false)
+        .map_err(|source| filesystem_error(FileSystemAction::Remove, root, source))?;
+    let metadata = stat_at(parent.as_raw_fd(), &name)
+        .map_err(|source| filesystem_error(FileSystemAction::Remove, root, source))?;
+    if metadata.st_mode & libc::S_IFMT != libc::S_IFLNK {
+        return Err(filesystem_error(
+            FileSystemAction::Remove,
+            root,
+            io::Error::other("refusing to remove a non-symlink entry"),
+        ));
+    }
+    let identity = link_identity(&metadata)
+        .map_err(|source| filesystem_error(FileSystemAction::Remove, root, source))?;
+    if identity != expected_identity {
+        return Err(RuntimeError::FileIdentityChanged {
+            action: FileSystemAction::Remove,
+            path: join_absolute(root, destination),
+        });
+    }
+    if read_relative_target(parent.as_raw_fd(), &name)?.as_ref() != Some(expected_target) {
+        return Err(filesystem_error(
+            FileSystemAction::Remove,
+            root,
+            io::Error::other("symlink target changed before removal"),
+        ));
+    }
+    let actual = stat_identity_at(parent.as_raw_fd(), &name)
+        .map_err(|source| filesystem_error(FileSystemAction::Remove, root, source))?;
+    if actual != DirectoryIdentity::new(identity.device(), identity.inode()) {
+        return Err(RuntimeError::FileIdentityChanged {
+            action: FileSystemAction::Remove,
+            path: join_absolute(root, destination),
+        });
+    }
+    unlink_at(parent.as_raw_fd(), &name, false)
+        .and_then(|()| parent.sync_all())
+        .map_err(|source| filesystem_error(FileSystemAction::Remove, root, source))?;
+    Ok(identity)
+}
+
+#[cfg(not(unix))]
+fn remove_confined_symlink(
+    _root: &AbsolutePath,
+    _destination: &RelativeArtifactPath,
+    _expected_identity: LinkIdentity,
+    _expected_target: &crate::runtime::RelativeSymlinkTarget,
+) -> Result<LinkIdentity, RuntimeError> {
+    Err(RuntimeError::UnsupportedPlatform {
+        platform: std::env::consts::OS.to_owned(),
+    })
+}
+
+#[cfg(unix)]
+fn read_relative_target(
+    parent: libc::c_int,
+    name: &CString,
+) -> Result<Option<crate::runtime::RelativeSymlinkTarget>, RuntimeError> {
+    let mut buffer = vec![0_u8; MAX_SYMLINK_TARGET_BYTES + 1];
+    let length = unsafe {
+        libc::readlinkat(
+            parent,
+            name.as_ptr(),
+            buffer.as_mut_ptr().cast(),
+            buffer.len(),
+        )
+    };
+    if length < 0 {
+        return Err(RuntimeError::FileSystem {
+            action: FileSystemAction::ReadLink,
+            path: AbsolutePath::new("/").expect("static root is valid"),
+            source: io::Error::last_os_error(),
+        });
+    }
+    let length = usize::try_from(length).unwrap_or(usize::MAX);
+    if length > MAX_SYMLINK_TARGET_BYTES {
+        return Ok(None);
+    }
+    buffer.truncate(length);
+    let value = OsString::from_vec(buffer);
+    let Ok(value) = value.into_string() else {
+        return Ok(None);
+    };
+    Ok(crate::runtime::RelativeSymlinkTarget::new(value).ok())
+}
+
+#[cfg(unix)]
+fn link_identity(metadata: &libc::stat) -> io::Result<LinkIdentity> {
+    let device = u64::try_from(metadata.st_dev)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid link device identity"))?;
+    let inode = u64::try_from(metadata.st_ino)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid link inode identity"))?;
+    Ok(LinkIdentity::new(device, inode))
 }
 
 #[cfg(unix)]

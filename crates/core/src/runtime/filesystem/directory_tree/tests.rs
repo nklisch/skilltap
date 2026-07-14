@@ -12,7 +12,7 @@ use std::{
 
 use skilltap_test_support::TempRoot;
 
-use crate::runtime::ExternalTreeLimits;
+use crate::runtime::{ExternalTreeLimits, RelativeSymlinkTarget};
 
 use super::*;
 
@@ -572,6 +572,124 @@ fn confined_observation_enforces_every_tree_and_document_limit() {
                 total,
             )
             .is_err()
+    );
+}
+
+#[test]
+fn confined_project_links_classify_create_and_remove_without_following() {
+    use std::os::unix::fs::symlink;
+
+    let temporary = TempRoot::new("skilltap-confined-project-link").unwrap();
+    let project = temporary.join("project");
+    fs::create_dir(&project).unwrap();
+    fs::write(project.join("file"), b"file").unwrap();
+    fs::create_dir(project.join("directory")).unwrap();
+    symlink("/outside", project.join("absolute-link")).unwrap();
+    let project = AbsolutePath::new(project.to_str().unwrap()).unwrap();
+    let target = RelativeSymlinkTarget::new("../../.agents/skills/demo").unwrap();
+    let destination = RelativeArtifactPath::new(".claude/skills/demo").unwrap();
+    let filesystem = SystemFileSystem;
+
+    assert_eq!(
+        filesystem
+            .inspect_entry_beneath_no_follow(&project, &destination)
+            .unwrap(),
+        ConfinedEntryObservation::Missing
+    );
+    let identity = filesystem
+        .create_relative_symlink_beneath_no_follow(&project, &destination, &target)
+        .unwrap();
+    assert!(matches!(
+        filesystem
+            .inspect_entry_beneath_no_follow(&project, &destination)
+            .unwrap(),
+        ConfinedEntryObservation::RelativeSymlink {
+            identity: observed,
+            target: ref observed_target,
+        } if observed == identity && observed_target == &target
+    ));
+    assert!(matches!(
+        filesystem
+            .inspect_entry_beneath_no_follow(
+                &project,
+                &RelativeArtifactPath::new("absolute-link").unwrap()
+            )
+            .unwrap(),
+        ConfinedEntryObservation::AbsoluteSymlink { .. }
+    ));
+    assert_eq!(
+        filesystem
+            .inspect_entry_beneath_no_follow(&project, &RelativeArtifactPath::new("file").unwrap())
+            .unwrap(),
+        ConfinedEntryObservation::RegularFile
+    );
+    assert_eq!(
+        filesystem
+            .inspect_entry_beneath_no_follow(
+                &project,
+                &RelativeArtifactPath::new("directory").unwrap()
+            )
+            .unwrap(),
+        ConfinedEntryObservation::Directory
+    );
+    assert_eq!(
+        filesystem
+            .remove_relative_symlink_beneath_no_follow(&project, &destination, identity, &target)
+            .unwrap(),
+        identity
+    );
+    assert_eq!(
+        filesystem
+            .inspect_entry_beneath_no_follow(&project, &destination)
+            .unwrap(),
+        ConfinedEntryObservation::Missing
+    );
+}
+
+#[test]
+fn confined_project_link_rejects_ancestor_escape_and_stale_identity() {
+    use std::os::unix::fs::symlink;
+
+    let temporary = TempRoot::new("skilltap-confined-project-link-race").unwrap();
+    let project = temporary.join("project");
+    let outside = temporary.join("outside");
+    fs::create_dir(&project).unwrap();
+    fs::create_dir(&outside).unwrap();
+    symlink(&outside, project.join("native")).unwrap();
+    let project_path = AbsolutePath::new(project.to_str().unwrap()).unwrap();
+    let target = RelativeSymlinkTarget::new("../target").unwrap();
+    let destination = RelativeArtifactPath::new("native/skills/demo").unwrap();
+    let filesystem = SystemFileSystem;
+    assert!(
+        filesystem
+            .create_relative_symlink_beneath_no_follow(&project_path, &destination, &target)
+            .is_err()
+    );
+    assert!(!outside.join("skills/demo").exists());
+
+    let destination = RelativeArtifactPath::new("links/demo").unwrap();
+    let first_target = RelativeSymlinkTarget::new("../first").unwrap();
+    let second_target = RelativeSymlinkTarget::new("../second").unwrap();
+    let identity = filesystem
+        .create_relative_symlink_beneath_no_follow(&project_path, &destination, &first_target)
+        .unwrap();
+    fs::remove_file(project.join("links/demo")).unwrap();
+    symlink(&second_target.as_path(), project.join("links/demo")).unwrap();
+    let error = filesystem
+        .remove_relative_symlink_beneath_no_follow(
+            &project_path,
+            &destination,
+            identity,
+            &first_target,
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, RuntimeError::FileIdentityChanged { .. })
+            || error.to_string().contains("target changed")
+    );
+    assert_eq!(
+        fs::read_link(project.join("links/demo")).unwrap(),
+        second_target.as_path()
     );
 }
 

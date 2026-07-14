@@ -22,7 +22,10 @@ mod locking;
 mod publication;
 mod unix_identity;
 
-pub use directory_tree::{ConfinedFileSystem, DirectoryPublishOutcome, DirectoryTreeFileSystem};
+pub use directory_tree::{
+    ConfinedEntryObservation, ConfinedFileSystem, DirectoryPublishOutcome, DirectoryTreeFileSystem,
+    LinkIdentity,
+};
 
 #[cfg(test)]
 use locking::try_acquire_with;
@@ -119,6 +122,10 @@ impl RelativeSymlinkTarget {
 
     pub fn as_path(&self) -> &Path {
         Path::new(&self.0)
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
