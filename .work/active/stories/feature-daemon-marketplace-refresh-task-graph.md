@@ -1,7 +1,7 @@
 ---
 id: feature-daemon-marketplace-refresh-task-graph
 kind: story
-stage: implementing
+stage: done
 tags: [infra]
 parent: feature-daemon-marketplace-refresh
 depends_on: []
@@ -27,6 +27,26 @@ The graph must derive from desired inventory only, preserve scope and target in
 identity, deduplicate shared marketplace prerequisites deterministically, and
 attach new dependencies through validated `Operation` construction rather than
 mutating operation internals.
+
+## Implementation notes
+
+Implemented the pure planner in `crates/core/src/daemon.rs`. Marketplace
+refreshes are keyed by exact marketplace `ResourceKey` plus `HarnessId` and are
+built in stable map order; tracked plugins resolve only the marketplace with
+their selector and scope. Missing, target-mismatched, pinned, disabled, and
+malformed relationships are retained as typed per-target blockers. Added
+`Operation::with_added_dependencies` rebuilds through `Operation::new`, so
+adapter and daemon edges remain subject to the existing operation contract.
+
+## Verification
+
+- `cargo test -p skilltap-core daemon::tests --lib` — 8 passed.
+- `cargo test -p skilltap-core daemon_native_plan --lib` — 4 passed.
+- `cargo test -p skilltap-core operation_dependency_addition_revalidates_the_union --lib` — passed, including plan wire round-trip.
+- `cargo fmt --all` — passed.
+
+The inventory relationship assumptions matched the approved design; no design
+bounce was required.
 
 ## Expected implementation surface
 

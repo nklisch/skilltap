@@ -746,6 +746,28 @@ impl Operation {
         &self.dependencies
     }
 
+    /// Add dependencies without bypassing the operation contract. Adapter
+    /// planners may contribute their own edges, while batch planners can add
+    /// prerequisites after the operation has been constructed.
+    pub fn with_added_dependencies(
+        self,
+        dependencies: impl IntoIterator<Item = OperationDependency>,
+    ) -> Result<Self, OperationContractError> {
+        let mut all_dependencies = self.dependencies;
+        all_dependencies.extend(dependencies);
+        Self::new(
+            self.id,
+            self.target,
+            self.selector,
+            self.semantics,
+            self.class,
+            self.reversibility,
+            all_dependencies,
+            self.acknowledgment,
+            self.attention,
+        )
+    }
+
     pub const fn acknowledgment(&self) -> &AcknowledgmentRequirement {
         &self.acknowledgment
     }

@@ -1,8 +1,14 @@
 //! Deterministic user-service definitions for one bounded daemon cycle.
 
+use std::collections::BTreeMap;
+
 use crate::{
-    domain::AbsolutePath,
+    domain::{
+        AbsolutePath, DesiredResource, HarnessId, HarnessSet, NativeId, ResourceId, ResourceKey,
+        ResourceKind, Scope, UpdateIntent,
+    },
     foreground_update::ForegroundUpdatePlan,
+    marketplace::PluginSelector,
     storage::{UpdateInterval, UpdateIntervalUnit},
 };
 
@@ -99,6 +105,266 @@ pub fn plan_daemon_cycle(plan: &ForegroundUpdatePlan) -> DaemonCyclePlan {
         }
     }
     DaemonCyclePlan { safe, pending }
+}
+
+/// The exact identity of a daemon marketplace prerequisite. Scope belongs to
+/// the resource key and the harness belongs to this key, so equal native names
+/// can never authorize one another across either boundary.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct DaemonMarketplaceRefreshKey {
+    resource: ResourceKey,
+    target: HarnessId,
+}
+
+impl DaemonMarketplaceRefreshKey {
+    pub fn new(resource: ResourceKey, target: HarnessId) -> Self {
+        Self { resource, target }
+    }
+
+    pub const fn resource(&self) -> &ResourceKey {
+        &self.resource
+    }
+
+    pub const fn target(&self) -> &HarnessId {
+        &self.target
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DaemonMarketplaceRefreshTask {
+    key: DaemonMarketplaceRefreshKey,
+    name: NativeId,
+}
+
+impl DaemonMarketplaceRefreshTask {
+    pub const fn key(&self) -> &DaemonMarketplaceRefreshKey {
+        &self.key
+    }
+
+    pub const fn name(&self) -> &NativeId {
+        &self.name
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DaemonPluginUpdateTask {
+    resource: ResourceKey,
+    target: HarnessId,
+    selector: PluginSelector,
+    refresh: DaemonMarketplaceRefreshKey,
+}
+
+impl DaemonPluginUpdateTask {
+    pub const fn resource(&self) -> &ResourceKey {
+        &self.resource
+    }
+
+    pub const fn target(&self) -> &HarnessId {
+        &self.target
+    }
+
+    pub const fn selector(&self) -> &PluginSelector {
+        &self.selector
+    }
+
+    pub const fn refresh(&self) -> &DaemonMarketplaceRefreshKey {
+        &self.refresh
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum DaemonPluginBlockReason {
+    InvalidSelector,
+    MarketplaceMissing,
+    MarketplaceTargetMissing,
+    MarketplaceUpdateDisabled,
+    MarketplacePinned,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DaemonBlockedPluginUpdate {
+    resource: ResourceKey,
+    target: HarnessId,
+    reason: DaemonPluginBlockReason,
+}
+
+impl DaemonBlockedPluginUpdate {
+    pub const fn resource(&self) -> &ResourceKey {
+        &self.resource
+    }
+
+    pub const fn target(&self) -> &HarnessId {
+        &self.target
+    }
+
+    pub const fn reason(&self) -> DaemonPluginBlockReason {
+        self.reason
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DaemonNativeUpdatePlan {
+    refreshes: Vec<DaemonMarketplaceRefreshTask>,
+    plugins: Vec<DaemonPluginUpdateTask>,
+    blocked_plugins: Vec<DaemonBlockedPluginUpdate>,
+}
+
+impl DaemonNativeUpdatePlan {
+    pub fn refreshes(&self) -> &[DaemonMarketplaceRefreshTask] {
+        &self.refreshes
+    }
+
+    pub fn plugins(&self) -> &[DaemonPluginUpdateTask] {
+        &self.plugins
+    }
+
+    pub fn blocked_plugins(&self) -> &[DaemonBlockedPluginUpdate] {
+        &self.blocked_plugins
+    }
+}
+
+/// Build the native part of one daemon update cycle from desired inventory.
+///
+/// Marketplace refreshes are deduplicated by their full resource key and
+/// target. Plugin selectors are resolved only against an exact marketplace
+/// resource in the same scope; no missing registration or target is invented.
+pub fn plan_daemon_native_updates<'a>(
+    resources: impl IntoIterator<Item = &'a DesiredResource>,
+) -> DaemonNativeUpdatePlan {
+    let resources = resources.into_iter().collect::<Vec<_>>();
+    let marketplaces = resources
+        .iter()
+        .filter(|resource| resource.kind() == ResourceKind::Marketplace)
+        .map(|resource| (resource.key().clone(), *resource))
+        .collect::<BTreeMap<_, _>>();
+
+    let mut refreshes =
+        BTreeMap::<DaemonMarketplaceRefreshKey, DaemonMarketplaceRefreshTask>::new();
+    for resource in marketplaces.values().copied() {
+        if resource.update() != UpdateIntent::Track {
+            continue;
+        }
+        let name = resource
+            .id()
+            .as_str()
+            .strip_prefix("marketplace:")
+            .and_then(|name| NativeId::new(name).ok());
+        let Some(name) = name else {
+            // Desired marketplace ids are validated at the inventory boundary;
+            // retaining no executable task is safer than guessing a native id
+            // if a future schema permits another marketplace identity shape.
+            continue;
+        };
+        for target in resource.targets().iter() {
+            let key = DaemonMarketplaceRefreshKey::new(resource.key().clone(), target.clone());
+            refreshes.insert(
+                key.clone(),
+                DaemonMarketplaceRefreshTask {
+                    key,
+                    name: name.clone(),
+                },
+            );
+        }
+    }
+
+    let mut plugins = Vec::new();
+    let mut blocked_plugins = Vec::new();
+    for resource in resources
+        .iter()
+        .filter(|resource| resource.kind() == ResourceKind::Plugin)
+        .filter(|resource| resource.update() == UpdateIntent::Track)
+    {
+        for target in resource.targets().iter() {
+            let selector = resource
+                .id()
+                .as_str()
+                .strip_prefix("plugin:")
+                .and_then(|value| PluginSelector::parse(value).ok());
+            let Some(selector) = selector else {
+                blocked_plugins.push(DaemonBlockedPluginUpdate {
+                    resource: resource.key().clone(),
+                    target: target.clone(),
+                    reason: DaemonPluginBlockReason::InvalidSelector,
+                });
+                continue;
+            };
+            let marketplace_key = ResourceKey::new(
+                match ResourceId::new(format!("marketplace:{}", selector.marketplace())) {
+                    Ok(id) => id,
+                    Err(_) => {
+                        blocked_plugins.push(DaemonBlockedPluginUpdate {
+                            resource: resource.key().clone(),
+                            target: target.clone(),
+                            reason: DaemonPluginBlockReason::InvalidSelector,
+                        });
+                        continue;
+                    }
+                },
+                resource.scope().clone(),
+            );
+            let Some(marketplace) = marketplaces.get(&marketplace_key).copied() else {
+                blocked_plugins.push(DaemonBlockedPluginUpdate {
+                    resource: resource.key().clone(),
+                    target: target.clone(),
+                    reason: DaemonPluginBlockReason::MarketplaceMissing,
+                });
+                continue;
+            };
+            if !marketplace.targets().contains(target) {
+                blocked_plugins.push(DaemonBlockedPluginUpdate {
+                    resource: resource.key().clone(),
+                    target: target.clone(),
+                    reason: DaemonPluginBlockReason::MarketplaceTargetMissing,
+                });
+                continue;
+            }
+            let reason = match marketplace.update() {
+                UpdateIntent::Disabled => Some(DaemonPluginBlockReason::MarketplaceUpdateDisabled),
+                UpdateIntent::Pinned => Some(DaemonPluginBlockReason::MarketplacePinned),
+                UpdateIntent::Track => None,
+            };
+            if let Some(reason) = reason {
+                blocked_plugins.push(DaemonBlockedPluginUpdate {
+                    resource: resource.key().clone(),
+                    target: target.clone(),
+                    reason,
+                });
+                continue;
+            }
+            let refresh =
+                DaemonMarketplaceRefreshKey::new(marketplace.key().clone(), target.clone());
+            if !refreshes.contains_key(&refresh) {
+                blocked_plugins.push(DaemonBlockedPluginUpdate {
+                    resource: resource.key().clone(),
+                    target: target.clone(),
+                    reason: DaemonPluginBlockReason::MarketplaceMissing,
+                });
+                continue;
+            }
+            plugins.push(DaemonPluginUpdateTask {
+                resource: resource.key().clone(),
+                target: target.clone(),
+                selector,
+                refresh,
+            });
+        }
+    }
+
+    plugins.sort_by(|left, right| {
+        (&left.resource, &left.target).cmp(&(&right.resource, &right.target))
+    });
+    blocked_plugins.sort_by(|left, right| {
+        (&left.resource, &left.target, left.reason).cmp(&(
+            &right.resource,
+            &right.target,
+            right.reason,
+        ))
+    });
+    DaemonNativeUpdatePlan {
+        refreshes: refreshes.into_values().collect(),
+        plugins,
+        blocked_plugins,
+    }
 }
 
 pub fn render_service(spec: &DaemonServiceSpec) -> Result<ServiceDefinition, ServiceRenderError> {
@@ -280,5 +546,206 @@ mod tests {
         let cycle = plan_daemon_cycle(&plan);
         assert!(cycle.safe().is_empty());
         assert!(cycle.pending().is_empty());
+    }
+
+    fn desired(
+        kind: ResourceKind,
+        id: &str,
+        scope: Scope,
+        targets: &[&str],
+        update: UpdateIntent,
+    ) -> DesiredResource {
+        DesiredResource::new(
+            ResourceKey::new(ResourceId::new(id).unwrap(), scope),
+            kind,
+            HarnessSet::new(
+                targets
+                    .iter()
+                    .map(|target| HarnessId::new(*target).unwrap()),
+            )
+            .unwrap(),
+            crate::domain::DesiredOrigin::Direct,
+            None,
+            update,
+            crate::domain::ComponentGraph::new([]).unwrap(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            std::collections::BTreeSet::new(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn daemon_native_plan_deduplicates_exact_marketplace_prerequisites() {
+        let marketplace = desired(
+            ResourceKind::Marketplace,
+            "marketplace:team",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let first = desired(
+            ResourceKind::Plugin,
+            "plugin:formatter@team",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let second = desired(
+            ResourceKind::Plugin,
+            "plugin:review@team",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let plan = plan_daemon_native_updates([&second, &marketplace, &first]);
+        assert_eq!(plan.refreshes().len(), 1);
+        assert_eq!(plan.plugins().len(), 2);
+        assert!(plan.plugins().iter().all(|task| {
+            task.refresh().resource() == marketplace.key()
+                && task.refresh().target().as_str() == "codex"
+        }));
+        assert_eq!(plan.refreshes()[0].name().as_str(), "team");
+    }
+
+    #[test]
+    fn daemon_native_plan_keeps_scope_and_target_in_refresh_identity() {
+        let global = desired(
+            ResourceKind::Marketplace,
+            "marketplace:team",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let project = desired(
+            ResourceKind::Marketplace,
+            "marketplace:team",
+            Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
+            &["claude"],
+            UpdateIntent::Track,
+        );
+        let plan = plan_daemon_native_updates([&project, &global]);
+        assert_eq!(plan.refreshes().len(), 2);
+        assert_ne!(plan.refreshes()[0].key(), plan.refreshes()[1].key());
+        assert_eq!(plan.refreshes()[0].name(), plan.refreshes()[1].name());
+    }
+
+    #[test]
+    fn daemon_native_plan_blocks_only_unresolvable_plugin_relationships() {
+        let tracked = desired(
+            ResourceKind::Marketplace,
+            "marketplace:tracked",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let pinned = desired(
+            ResourceKind::Marketplace,
+            "marketplace:pinned",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Pinned,
+        );
+        let disabled = desired(
+            ResourceKind::Marketplace,
+            "marketplace:disabled",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Disabled,
+        );
+        let target_mismatch = desired(
+            ResourceKind::Marketplace,
+            "marketplace:other-target",
+            Scope::Global,
+            &["claude"],
+            UpdateIntent::Track,
+        );
+        let valid = desired(
+            ResourceKind::Plugin,
+            "plugin:valid@tracked",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let missing = desired(
+            ResourceKind::Plugin,
+            "plugin:missing@unknown",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let mismatch = desired(
+            ResourceKind::Plugin,
+            "plugin:mismatch@other-target",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let pinned_plugin = desired(
+            ResourceKind::Plugin,
+            "plugin:pinned@pinned",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let disabled_plugin = desired(
+            ResourceKind::Plugin,
+            "plugin:disabled@disabled",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let malformed = desired(
+            ResourceKind::Plugin,
+            "plugin:malformed",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let plan = plan_daemon_native_updates([
+            &malformed,
+            &disabled_plugin,
+            &pinned_plugin,
+            &mismatch,
+            &missing,
+            &valid,
+            &target_mismatch,
+            &disabled,
+            &pinned,
+            &tracked,
+        ]);
+        assert_eq!(plan.plugins().len(), 1);
+        assert_eq!(plan.plugins()[0].resource(), valid.key());
+        let reasons = plan
+            .blocked_plugins()
+            .iter()
+            .map(|blocked| blocked.reason())
+            .collect::<Vec<_>>();
+        assert!(reasons.contains(&DaemonPluginBlockReason::InvalidSelector));
+        assert!(reasons.contains(&DaemonPluginBlockReason::MarketplaceMissing));
+        assert!(reasons.contains(&DaemonPluginBlockReason::MarketplaceTargetMissing));
+        assert!(reasons.contains(&DaemonPluginBlockReason::MarketplacePinned));
+        assert!(reasons.contains(&DaemonPluginBlockReason::MarketplaceUpdateDisabled));
+    }
+
+    #[test]
+    fn daemon_native_plan_is_independent_of_inventory_order() {
+        let marketplace = desired(
+            ResourceKind::Marketplace,
+            "marketplace:team",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let plugin = desired(
+            ResourceKind::Plugin,
+            "plugin:formatter@team",
+            Scope::Global,
+            &["codex"],
+            UpdateIntent::Track,
+        );
+        let first = plan_daemon_native_updates([&marketplace, &plugin]);
+        let second = plan_daemon_native_updates([&plugin, &marketplace]);
+        assert_eq!(first, second);
     }
 }

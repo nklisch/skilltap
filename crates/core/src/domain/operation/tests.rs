@@ -285,6 +285,21 @@ fn operation_with_class_and_fidelity(
 }
 
 #[test]
+fn operation_dependency_addition_revalidates_the_union() {
+    let parent = safe_operation("parent", &[]);
+    let child = safe_operation("child", &[])
+        .with_added_dependencies([OperationDependency::new(operation_id("parent"))])
+        .unwrap();
+    assert_eq!(child.dependencies().len(), 1);
+    let plan = Plan::new([child.clone(), parent]).unwrap();
+    let round_trip: Plan = serde_json::from_value(serde_json::to_value(&plan).unwrap()).unwrap();
+    assert_eq!(
+        round_trip.get(child.id()).unwrap().dependencies(),
+        child.dependencies()
+    );
+}
+
+#[test]
 fn plan_rejects_duplicate_unknown_self_and_cyclic_dependencies() {
     assert_eq!(
         Plan::new([safe_operation("one", &[]), safe_operation("one", &[])]).unwrap_err(),
