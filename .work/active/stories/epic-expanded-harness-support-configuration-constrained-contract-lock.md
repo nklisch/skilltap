@@ -23,9 +23,11 @@ updated: 2026-07-15
 
 Close the bounded evidence gap before any new adapter gains mutation authority.
 Capture exact version command/output, global/project MCP documents and
-precedence, and deterministic non-interactive effective-state probes for one
-installed Kimi Code, Mistral Vibe, and Kilo Code release. Store only bounded,
-non-secret fixtures and profile constants under the harnesses crate.
+precedence, and the negative evidence from deterministic non-interactive
+effective-state probes for one installed Kimi Code, Mistral Vibe, and Kilo Code
+release. Store only bounded, non-secret inline fixtures and profile constants
+under the harnesses and compiled-test crates; the relaxed contract does not
+register production probes.
 
 This is a contract-validation checkpoint, not a broad harness survey. Use the
 existing source-direct URLs and isolated installations. Do not guess version
@@ -34,10 +36,15 @@ write production adapter registration in this story.
 
 ## Design element
 
-Implement the feature's `VerifiedManagedTargetContract` and exact fixture set in:
+The realized contract lock is represented by profile constants and bounded
+inline fixtures in:
 
-- `crates/harnesses/src/adapters/configuration_constrained/contracts.rs`
-- `crates/harnesses/tests/fixtures/configuration_constrained/{kimi,vibe,kilo}/`
+- `crates/harnesses/src/adapters/{kimi,vibe,kilo}.rs` codec/profile tests;
+- `crates/cli/tests/compiled_binary.rs` isolated version, document, and
+  no-probe invocation fixtures.
+
+There is no separate `crates/harnesses/tests/fixtures/` tree: the fixture
+bytes live beside the tests that enforce their boundary.
 
 Pin Kilo's precedence when both project `kilo.jsonc` and
 `.kilo/kilo.jsonc` exist. Pin Vibe's exact named `[[mcp_servers]]` wire forms
@@ -47,10 +54,12 @@ and trust response. Pin Kimi's fresh-session probe and user/project override.
 
 - Exact version bytes decode once and select only the matching compiled profile;
   malformed/extra/control/unknown output cannot authorize mutation.
-- Exact scoped config fixtures cover supported transport/auth fields, unknown
-  fields/comments, and precedence without credentials.
-- Probe fixtures distinguish loaded, reload-required, trust-required,
-  authentication-required, and failed state through bounded decoding.
+- Inline bounded scoped-config fixtures cover supported transport/auth fields,
+  unknown fields/comments, and precedence without credentials.
+- Retained inline probe fixtures record distinctions among loaded,
+  reload-required, trust-required, authentication-required, and failed states as
+  negative evidence; production adapters leave effective state unverified and
+  register no probe.
 - If any target has no deterministic non-interactive probe or reproducible
   write/reload boundary, record the blocker in the parent feature and leave
   that target unverified. Dependent work must not manufacture a workaround.

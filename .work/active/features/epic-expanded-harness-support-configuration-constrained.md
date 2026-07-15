@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-configuration-constrained
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -46,17 +46,39 @@ exceptions to the core planner.
 
 ## Review result
 
-Direct integrated review of the committed adapter and acceptance boundary found
-no material blockers. The compiled test exercises Kimi, Vibe, and Kilo in both
-scopes with no-ack/`--yes`, daemon pending, unknown-version no-write, repeat,
-removal, conflict, and invocation sentinels; strict Clippy and the full
-workspace suite are green. The relaxed amendment is preserved in the foundation
-contract and this feature's durable handoff.
+### Standard-pass adjudication — 2026-07-15
 
-The requested nested-agent/peer paths were unavailable and prohibited by the
-caller, so this was a high-effort host-context review rather than an independent
-fresh-context pass. Residual unsupported surfaces are explicit below and are
-not approval gaps.
+The receiver confirmed and fixed all three completed STANDARD review findings;
+none remains a current-cycle blocker:
+
+1. **Vibe `cwd` boundary** — Vibe 2.19.1 no longer emits a source stdio
+   `cwd` that is not attested by its release contract. The codec rejects it,
+   and the existing requiredness path classifies it as an explicit optional
+   omission/partial outcome or a required blocker. The compiled `--yes` case
+   proves that the faithful skill may proceed only with the MCP omission
+   disclosed and no Vibe config containing silently rewritten semantics.
+2. **Kilo schema admission** — the static top-level key gate now accepts only
+   `mcp` and `username`, the two keys directly evidenced by the locked 7.4.7
+   contract and release-sensitive capture. Previously listed but ungrounded
+   settings fail closed, with codec tests documenting both accepted evidence
+   and conservative rejection.
+3. **No-probe compiled evidence** — the constrained Kimi/Vibe/Kilo compiled
+   acceptance now requires every known and unknown profile invocation log to
+   contain exact `--version` calls only. No native MCP, auth, config, UI, or
+   browser command can satisfy the fixture.
+
+The contract-lock story now records the realized inline fixture layout rather
+than a nonexistent standalone fixture tree. Verification after adjudication:
+focused Vibe/Kilo codec tests, focused constrained compiled tests, the compiled
+Vibe `cwd` boundary test, `cargo test --workspace --all-targets` (734 passed),
+strict `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
+`cargo fmt --all -- --check`, and `git diff --check` all pass.
+
+Effective review weight is `standard`: one completed review pass, receiver
+adjudication, blocker fixes, and verification, closed without a second review.
+The caller prohibited nested-agent and peer paths; no independent second pass
+was run. Residual unsupported surfaces remain explicit below and are not
+approval gaps.
 
 ## Epic context
 

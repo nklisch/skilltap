@@ -483,15 +483,19 @@ fn map_vibe_server(source: &PortableMcpServer) -> Result<Table, ()> {
             timeout_ms,
             tools,
         } => {
+            // Vibe's 2.19.1 contract does not attest a stdio `cwd` field. Do
+            // not silently drop it or emit a declaration with changed
+            // execution semantics; the caller classifies this error as an
+            // optional omission or required blocker.
+            if cwd.is_some() {
+                return Err(());
+            }
             table["name"] = value("");
             table["transport"] = value("stdio");
             table["command"] = value(command.clone());
             table["args"] = value(string_array(args));
             if !environment.is_empty() {
                 table["env"] = value(string_map(environment));
-            }
-            if let Some(cwd) = cwd {
-                table["cwd"] = value(cwd.clone());
             }
             if let Some(timeout) = timeout_ms {
                 table["timeout"] = value(*timeout as i64);
@@ -639,6 +643,20 @@ mod tests {
                 .unwrap()
                 .contains("name = \"demo\"")
         );
+    }
+
+    #[test]
+    fn vibe_rejects_stdio_cwd_without_emitting_unattested_semantics() {
+        let server = PortableMcpServer::Stdio {
+            command: "node".into(),
+            args: vec!["server.js".into()],
+            environment: BTreeMap::new(),
+            cwd: Some("/opt/server".into()),
+            enabled: true,
+            timeout_ms: None,
+            tools: None,
+        };
+        assert!(map_vibe_server(&server).is_err());
     }
 
     #[test]

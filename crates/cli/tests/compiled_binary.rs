@@ -311,6 +311,16 @@ fn shell_quote(path: &Path) -> String {
     format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
 }
 
+fn assert_version_only_invocations(executable: &Path, target: &str) {
+    let log = fs::read_to_string(executable.with_extension("invocations"))
+        .unwrap_or_else(|error| panic!("{target} invocation log is unreadable: {error}"));
+    assert!(!log.trim().is_empty(), "{target} invocation log is empty");
+    assert!(
+        log.lines().all(|line| line == "--version"),
+        "{target} used a non-version invocation: {log}"
+    );
+}
+
 fn write_gemini_marketplace(machine: &IsolatedMachine) -> PathBuf {
     let source = machine.home().join("gemini-marketplace");
     fs::create_dir_all(source.join(".agents/plugins")).unwrap();
@@ -2683,7 +2693,115 @@ fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_ch
             before,
             "unknown {target} profile wrote a native surface"
         );
+        assert_version_only_invocations(&unknown_executable, &format!("unknown {target}"));
+
+        // Kimi, Vibe, and Kilo have no production probe surface. Their fake
+        // binaries fail every argv except exact version detection, so this
+        // assertion covers every compiled operation above for each target.
+        assert_version_only_invocations(&executable, target);
     }
+}
+
+#[test]
+fn vibe_compiled_cwd_is_explicitly_partial_and_never_emitted() {
+    let machine = machine();
+    let vibe = write_constrained_harness(&machine, "vibe", "vibe 2.19.1");
+    write_owned(&machine, "config.toml", &constrained_config("vibe", &vibe));
+    fs::create_dir_all(machine.home().join(".vibe")).unwrap();
+    let source = write_gemini_marketplace(&machine);
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        br#"{"mcpServers":{"cwd-server":{"command":"demo-mcp","args":["serve"],"cwd":"/opt/demo"}}}"#,
+    )
+    .unwrap();
+
+    let add = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            source.to_str().unwrap(),
+            "--name",
+            "team",
+            "--target",
+            "vibe",
+            "--json",
+        ],
+    );
+    assert_code(&add, 0);
+
+    let blocked = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--target",
+            "vibe",
+            "--json",
+        ],
+    );
+    assert_code(&blocked, 2);
+    assert_eq!(json(&blocked)["result"], "attention_required");
+    assert!(
+        json(&blocked)["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| error["code"] == "partial_operation_requires_acknowledgment")
+    );
+    assert!(!machine.home().join(".agents/skills/demo").exists());
+    assert!(!machine.home().join(".vibe/config.toml").exists());
+
+    let accepted = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--target",
+            "vibe",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&accepted, 0);
+    let accepted_value = json(&accepted);
+    assert_eq!(accepted_value["result"], "completed");
+    assert!(
+        accepted_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|resource| {
+                resource["id"] == "omitted:mcp:cwd-server"
+                    && resource["fields"]["consequence"] == "unsupported_optional_component_omitted"
+            })
+    );
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/demo/SKILL.md")
+            .is_file()
+    );
+    assert!(!machine.home().join(".vibe/config.toml").exists());
+
+    let repeat = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--target",
+            "vibe",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+    assert!(!machine.home().join(".vibe/config.toml").exists());
+    assert_version_only_invocations(&vibe, "vibe cwd boundary");
 }
 
 #[test]

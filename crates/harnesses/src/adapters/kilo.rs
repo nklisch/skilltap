@@ -659,35 +659,17 @@ fn map_kilo_server(source: &PortableMcpServer) -> Result<Value, ()> {
 fn validate_schema(
     object: &serde_json::Map<String, Value>,
 ) -> Result<(), skilltap_core::managed_projection::ManagedProjectionError> {
-    const KNOWN: &[&str] = &[
-        "$schema",
-        "mcp",
-        "username",
-        "model",
-        "provider",
-        "theme",
-        "permission",
-        "permissions",
-        "autoupdate",
-        "autoUpdate",
-        "disabledProviders",
-        "keybinds",
-        "command",
-        "agent",
-        "instructions",
-        "experimental",
-        "logLevel",
-        "small_model",
-        "smallModel",
-        "network",
-        "server",
-        "formatter",
-        "snapshot",
-        "lsp",
-        "plugin",
-        "plugins",
-    ];
-    if object.keys().any(|key| !KNOWN.contains(&key.as_str())) {
+    // Keep this admission list to the keys directly evidenced by the locked
+    // Kilo 7.4.7 contract: `mcp` in the documented config forms and
+    // `username` in the isolated effective-config capture. Other valid Kilo
+    // settings remain blocked until the release-sensitive schema records
+    // them; accepting an ungrounded key could make Kilo reject the edited
+    // document even though the bytes were otherwise preserved.
+    const ATTESTED_TOP_LEVEL_KEYS: &[&str] = &["mcp", "username"];
+    if object
+        .keys()
+        .any(|key| !ATTESTED_TOP_LEVEL_KEYS.contains(&key.as_str()))
+    {
         return Err(
             skilltap_core::managed_projection::ManagedProjectionError::Other {
                 code: "configuration.unknown-schema-key",
@@ -1003,14 +985,28 @@ mod tests {
     use skilltap_core::domain::{CapabilityId, CapabilityScope, CapabilitySupport};
     #[test]
     fn kilo_codec_keeps_comments_and_rejects_unknown_schema() {
-        let source=b"{\n  // keep\n  \"mcp\": {\n    \"old\": {\"type\": \"local\"},\n  },\n  \"theme\": \"dark\"\n}\n";
+        let source=b"{\n  // keep\n  \"mcp\": {\n    \"old\": {\"type\": \"local\"},\n  },\n  \"username\": \"nested-user\"\n}\n";
         let doc = KiloJsoncDocument::parse(Some(source)).unwrap();
-        assert!(doc.value["theme"] == "dark");
-        assert!(KiloJsoncDocument::parse(Some(br#"{\"unknownGlobal\":true}"#)).is_err());
+        assert!(doc.value["username"] == "nested-user");
+        assert!(KiloJsoncDocument::parse(Some(br#"{"unknownGlobal":true}"#)).is_err());
+    }
+
+    #[test]
+    fn kilo_codec_admits_only_contract_grounded_top_level_keys() {
+        for source in [br#"{"mcp":{}}"#.as_slice(), br#"{"username":"user"}"#] {
+            assert!(KiloJsoncDocument::parse(Some(source)).is_ok());
+        }
+        for key in ["$schema", "theme", "model", "provider", "plugins"] {
+            let source = format!(r#"{{"{key}":true}}"#);
+            assert!(
+                KiloJsoncDocument::parse(Some(source.as_bytes())).is_err(),
+                "unattested Kilo key {key} must fail closed"
+            );
+        }
     }
     #[test]
     fn kilo_jsonc_targeted_patch_preserves_unrelated_bytes_and_removes_owned_entries() {
-        let source = b"{\n  // keep this comment\n  \"mcp\": {\n    \"old\": {\"type\": \"local\"},\n  },\n  \"theme\": \"dark\"\n}\n";
+        let source = b"{\n  // keep this comment\n  \"mcp\": {\n    \"old\": {\"type\": \"local\"},\n  },\n  \"username\": \"nested-user\"\n}\n";
         let mut document = KiloJsoncDocument::parse(Some(source)).unwrap();
         let id = NativeId::new("new").unwrap();
         assert!(
@@ -1026,7 +1022,7 @@ mod tests {
         assert!(encoded.contains("keep this comment"));
         assert!(encoded.contains("\"old\""));
         assert!(encoded.contains("\"new\""));
-        assert!(encoded.contains("\"theme\": \"dark\""));
+        assert!(encoded.contains("\"username\": \"nested-user\""));
         assert!(document.servers().unwrap().contains_key(&id));
         assert!(document.remove(&id).unwrap());
         assert!(!document.servers().unwrap().contains_key(&id));
