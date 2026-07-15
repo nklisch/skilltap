@@ -82,6 +82,29 @@ pub(crate) fn compiled_capabilities(
     project_lifecycle: bool,
     managed_projection: bool,
 ) -> ScopedCapabilitySets {
+    compiled_capabilities_with_components(
+        plugin_update,
+        project_lifecycle,
+        managed_projection,
+        CapabilitySupport::Supported,
+        if managed_projection {
+            CapabilitySupport::Supported
+        } else {
+            CapabilitySupport::Unverified
+        },
+    )
+}
+
+/// Build the common profile while keeping managed projection authority
+/// independent from component-specific support. Targets such as Copilot can
+/// verify MCP declarations while only declaring skill loading unverified.
+pub(crate) fn compiled_capabilities_with_components(
+    plugin_update: bool,
+    project_lifecycle: bool,
+    managed_projection: bool,
+    component_skill: CapabilitySupport,
+    component_mcp: CapabilitySupport,
+) -> ScopedCapabilitySets {
     let support = |capability: &str, supported: bool| {
         (
             CapabilityId::new(capability).expect("compiled capability is valid"),
@@ -90,6 +113,12 @@ pub(crate) fn compiled_capabilities(
             } else {
                 CapabilitySupport::Unverified
             },
+        )
+    };
+    let component = |capability: &str, value: CapabilitySupport| {
+        (
+            CapabilityId::new(capability).expect("compiled capability is valid"),
+            value,
         )
     };
     let global = CapabilitySet::new([
@@ -104,8 +133,8 @@ pub(crate) fn compiled_capabilities(
         support("skill.install", true),
         support("skill.update", true),
         support("skill.remove", true),
-        support("component.skill", true),
-        support("component.mcp", managed_projection),
+        component("component.skill", component_skill),
+        component("component.mcp", component_mcp),
     ]);
     let project_managed = project_lifecycle || managed_projection;
     let project = CapabilitySet::new([
@@ -120,8 +149,8 @@ pub(crate) fn compiled_capabilities(
         support("skill.install", project_managed),
         support("skill.update", project_managed),
         support("skill.remove", project_managed),
-        support("component.skill", true),
-        support("component.mcp", managed_projection),
+        component("component.skill", component_skill),
+        component("component.mcp", component_mcp),
     ]);
     ScopedCapabilitySets::new(global, project)
 }

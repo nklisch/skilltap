@@ -47,6 +47,41 @@ impl PluginGraphReader for CodexPluginGraphReader {
     }
 }
 
+/// Reads a Copilot plugin from the explicitly selected source checkout. Copilot
+/// documents `.github/plugin.json` alongside Claude-compatible manifests; the
+/// graph remains target-specific source evidence and is never a native writer.
+pub struct CopilotPluginGraphReader {
+    root: AbsolutePath,
+    tree_limits: ExternalTreeLimits,
+    json_limits: JsonLimits,
+}
+
+impl CopilotPluginGraphReader {
+    pub const fn new(
+        root: AbsolutePath,
+        tree_limits: ExternalTreeLimits,
+        json_limits: JsonLimits,
+    ) -> Self {
+        Self {
+            root,
+            tree_limits,
+            json_limits,
+        }
+    }
+}
+
+impl PluginGraphReader for CopilotPluginGraphReader {
+    fn read(&self, source: &Source) -> Result<Vec<ComponentDeclaration>, PluginGraphReadError> {
+        NativePluginGraphReader {
+            root: &self.root,
+            manifest: ".github/plugin.json",
+            tree_limits: self.tree_limits,
+            json_limits: self.json_limits,
+        }
+        .read(source)
+    }
+}
+
 /// Reads a Claude Code plugin from the explicitly selected source checkout.
 pub struct ClaudePluginGraphReader {
     root: AbsolutePath,

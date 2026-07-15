@@ -12,8 +12,8 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    ClaudeAdapter, CodexAdapter, CodexConfigError, DetectionError, FactoryAdapter, HarnessAdapter,
-    PiAdapter, ProbeError, QwenAdapter, TargetRegistry,
+    ClaudeAdapter, CodexAdapter, CodexConfigError, CopilotAdapter, DetectionError, FactoryAdapter,
+    HarnessAdapter, PiAdapter, ProbeError, QwenAdapter, TargetRegistry,
     detect_configured_installation as detect_configured_installation_with_environment,
     detect_installation as detect_installation_with_environment, observe_codex_canonical_resources,
     observe_codex_config, probe_profile, unreachable_installation,
@@ -199,6 +199,12 @@ fn exact_real_versions_are_reachable_and_select_exact_profiles() {
             "0.171.0",
         ),
         (
+            CopilotAdapter::static_ref(),
+            FakeHarnessProfile::copilot(),
+            "copilot",
+            "1.0.70",
+        ),
+        (
             CodexAdapter::static_ref(),
             FakeHarnessProfile::codex(),
             "codex",
@@ -291,6 +297,39 @@ fn qwen_adjacent_version_is_observe_only_and_detection_is_zero_write() {
     assert_eq!(native_version.as_str(), "0.19.11");
     assert!(
         QwenAdapter::static_ref()
+            .select_profile(native_version)
+            .mutation_capabilities()
+            .is_none()
+    );
+    assert_eq!(before, after);
+    assert_eq!(
+        fixture.captured_invocation().unwrap().arguments(),
+        &[b"--version".to_vec()]
+    );
+}
+
+#[test]
+fn copilot_adjacent_version_is_observe_only_and_detection_is_zero_write() {
+    let profile = FakeHarnessProfile::copilot_with_version(
+        "GitHub Copilot CLI 1.0.71.\nRun 'copilot update' to check for updates.",
+    );
+    let (root, fixture) = install_profile(&profile, "copilot");
+    let before = fs::read_dir(root.path()).unwrap().count();
+    let (process_limits, json_limits) = limits();
+    let installation = detect_installation(
+        CopilotAdapter::static_ref(),
+        root.path().as_os_str().to_os_string(),
+        process_limits,
+        json_limits,
+    )
+    .unwrap();
+    let after = fs::read_dir(root.path()).unwrap().count();
+    let HarnessReachability::Reachable { native_version, .. } = installation.reachability() else {
+        panic!("Copilot fixture must remain reachable");
+    };
+    assert_eq!(native_version.as_str(), "1.0.71");
+    assert!(
+        CopilotAdapter::static_ref()
             .select_profile(native_version)
             .mutation_capabilities()
             .is_none()
@@ -527,7 +566,7 @@ fn blocked_candidate_reports_match_registry_absence_and_first_party_bootstrap_sc
     assert_eq!(
         registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
         [
-            "codex", "claude", "droid", "gemini", "qwen", "opencode", "kiro", "pi"
+            "codex", "claude", "droid", "copilot", "gemini", "qwen", "opencode", "kiro", "pi"
         ]
     );
     assert_eq!(

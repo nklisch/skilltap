@@ -1,6 +1,8 @@
 mod claude;
 mod codex;
 mod codex_managed;
+mod copilot;
+mod copilot_managed;
 mod factory;
 mod factory_managed;
 mod file_managed;
@@ -19,6 +21,11 @@ mod qwen_managed;
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
 pub use codex_managed::CodexManagedProjection;
+pub use copilot::{
+    CopilotAdapter, CopilotEffectiveMcpObservation, CopilotEffectiveStateProbe,
+    CopilotPolicyHealth, CopilotSkillProjection, copilot_policy_finding,
+};
+pub use copilot_managed::CopilotManagedProjection;
 pub use factory::{
     FactoryAdapter, FactoryLifecycle, FactoryNativeDistribution, FactorySkillProjection,
     decode_factory_plugin_list,
@@ -181,6 +188,9 @@ mod tests {
             .adapter(&HarnessId::new("claude").unwrap())
             .unwrap();
         let droid = registry.adapter(&HarnessId::new("droid").unwrap()).unwrap();
+        let copilot = registry
+            .adapter(&HarnessId::new("copilot").unwrap())
+            .unwrap();
         let gemini = registry
             .adapter(&HarnessId::new("gemini").unwrap())
             .unwrap();
@@ -200,6 +210,12 @@ mod tests {
         assert_eq!(gemini.identity(), GeminiAdapter::static_ref().identity());
         assert_eq!(droid.identity(), FactoryAdapter::static_ref().identity());
         assert!(droid.native_lifecycle().is_some());
+        assert_eq!(copilot.identity(), CopilotAdapter::static_ref().identity());
+        assert!(copilot.native_lifecycle().is_none());
+        assert!(copilot.native_distribution().is_none());
+        assert!(copilot.managed_projection().is_some());
+        assert!(copilot.effective_state_probe().is_some());
+        assert!(copilot.skill_projection().is_some());
         assert!(droid.skill_projection().is_some());
         assert!(droid.native_distribution().is_some());
         assert!(droid.managed_projection().is_some());

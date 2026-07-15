@@ -9,7 +9,7 @@ use skilltap_core::{
     storage::ArtifactTree,
 };
 
-use crate::{ClaudePluginGraphReader, CodexPluginGraphReader};
+use crate::{ClaudePluginGraphReader, CodexPluginGraphReader, CopilotPluginGraphReader};
 
 /// A complete, explicitly selected source plugin normalized for destination
 /// adapters. Native destination paths and MCP encodings remain outside this
@@ -38,6 +38,9 @@ pub(crate) fn read_complete_source_plugin(
         .read(source)
         .or_else(|_| {
             ClaudePluginGraphReader::new(root.clone(), tree_limits, json_limits).read(source)
+        })
+        .or_else(|_| {
+            CopilotPluginGraphReader::new(root.clone(), tree_limits, json_limits).read(source)
         })
         .map_err(|_| ManagedProjectionError::PluginMissing {
             detail: "The selected source does not contain a valid supported plugin manifest.",

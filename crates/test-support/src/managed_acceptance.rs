@@ -150,6 +150,15 @@ impl ManagedProjectionProfile {
         Self::new("kiro", &[], Some("settings/mcp.json"), "skills")
     }
 
+    pub const fn copilot() -> Self {
+        Self::new(
+            "copilot",
+            &[],
+            Some(".copilot/mcp-config.json"),
+            ".agents/skills",
+        )
+    }
+
     /// Construct a dependency-neutral profile for a test adapter or a future
     /// concrete adapter acceptance suite.
     pub const fn new(

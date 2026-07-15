@@ -470,6 +470,15 @@ fn render_script(
     if lifecycle_dialect != LifecycleDialect::None
         || (version_response.is_none() && matches!(mode, FakeNativeMode::VersionKnown))
     {
+        if lifecycle_dialect == LifecycleDialect::Copilot {
+            script.push_str(
+                r#"if [ "${1-} ${2-} ${3-}" = "mcp list --json" ] || { [ "${1-} ${2-}" = "mcp get" ] && [ "${4-}" = "--json" ]; }; then
+  printf '%s' '{"mcpServers":{}}'
+  exit 0
+fi
+"#,
+            );
+        }
         if lifecycle_dialect == LifecycleDialect::Qwen {
             script.push_str(&format!(
                 r#"lifecycle={lifecycle}

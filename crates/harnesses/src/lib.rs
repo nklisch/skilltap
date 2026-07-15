@@ -21,19 +21,21 @@ pub mod conditional_profile;
 pub use adapters::{
     ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection, CodexAdapter,
     CodexInstructionBridge, CodexLifecycle, CodexManagedProjection, CodexSkillProjection,
-    FactoryAdapter, FactoryLifecycle, FactoryManagedProjection, FactoryNativeDistribution,
-    FactorySkillProjection, GeminiAdapter, GeminiEffectiveStateProbe, GeminiManagedProjection,
-    GeminiSkillProjection, KiroAdapter, KiroManagedProjection, KiroSkillProjection,
-    OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeManagedProjection,
-    OpenCodeSkillProjection, PiAdapter, PiConditionalProfile, PiSkillProjection, QwenAdapter,
-    QwenEffectiveStateProbe, QwenExtensionRecord, QwenLifecycle, QwenManagedProjection,
-    QwenNativeDistribution, QwenSkillProjection, decode_factory_plugin_list,
+    CopilotAdapter, CopilotEffectiveMcpObservation, CopilotEffectiveStateProbe,
+    CopilotManagedProjection, CopilotPolicyHealth, CopilotSkillProjection, FactoryAdapter,
+    FactoryLifecycle, FactoryManagedProjection, FactoryNativeDistribution, FactorySkillProjection,
+    GeminiAdapter, GeminiEffectiveStateProbe, GeminiManagedProjection, GeminiSkillProjection,
+    KiroAdapter, KiroManagedProjection, KiroSkillProjection, OpenCodeAdapter,
+    OpenCodeEffectiveStateProbe, OpenCodeManagedProjection, OpenCodeSkillProjection, PiAdapter,
+    PiConditionalProfile, PiSkillProjection, QwenAdapter, QwenEffectiveStateProbe,
+    QwenExtensionRecord, QwenLifecycle, QwenManagedProjection, QwenNativeDistribution,
+    QwenSkillProjection, copilot_policy_finding, decode_factory_plugin_list,
     decode_qwen_extensions, decode_qwen_mcp_status,
 };
 
 mod plugin_graph;
 pub use conditional_profile::{ConditionalProfileContext, ConditionalProfilePort};
-pub use plugin_graph::{ClaudePluginGraphReader, CodexPluginGraphReader};
+pub use plugin_graph::{ClaudePluginGraphReader, CodexPluginGraphReader, CopilotPluginGraphReader};
 mod managed_codex_project;
 pub use managed_codex_project::{ManagedCodexCatalog, ManagedCodexCatalogError};
 mod effective_state;

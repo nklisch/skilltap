@@ -34,6 +34,8 @@ pub fn snapshot_native_roots(machine: &IsolatedMachine) -> io::Result<NativeTree
     for root in [
         machine.home().join(".codex"),
         machine.home().join(".claude"),
+        machine.home().join(".copilot"),
+        machine.home().join(".agents"),
         machine.configuration_home().join("skilltap"),
     ] {
         if root.exists() {

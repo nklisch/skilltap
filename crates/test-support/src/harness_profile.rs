@@ -41,6 +41,7 @@ pub enum LifecycleDialect {
     Claude,
     Factory,
     Qwen,
+    Copilot,
     None,
 }
 
@@ -193,6 +194,35 @@ impl FakeHarnessProfile {
                 global_mcp: "settings.json",
                 project_skill: ".qwen/skills/contract-skill",
                 project_mcp: ".qwen/settings.json",
+                mcp_initial: br#"{"mcpServers":{"contract":{"command":"contract-server"}}}"#,
+                mcp_reloaded: br#"{"mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
+            },
+        }
+    }
+
+    pub const fn copilot() -> Self {
+        Self::copilot_with_version(
+            "GitHub Copilot CLI 1.0.70.\nRun 'copilot update' to check for updates.",
+        )
+    }
+
+    pub const fn copilot_with_version(version: &'static str) -> Self {
+        Self {
+            id: "copilot",
+            version_response: VersionResponse::TextSuffix {
+                version,
+                suffix: "",
+            },
+            lifecycle_dialect: LifecycleDialect::Copilot,
+            managed_projection: Some(ManagedProjectionProfile::copilot()),
+            conditional_profile: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Home,
+                global_mcp_base: LayoutBase::Home,
+                global_skill: ".agents/skills/contract-skill",
+                global_mcp: ".copilot/mcp-config.json",
+                project_skill: ".agents/skills/contract-skill",
+                project_mcp: ".mcp.json",
                 mcp_initial: br#"{"mcpServers":{"contract":{"command":"contract-server"}}}"#,
                 mcp_reloaded: br#"{"mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
             },
@@ -641,6 +671,7 @@ mod tests {
             FakeHarnessProfile::claude(),
             FakeHarnessProfile::droid(),
             FakeHarnessProfile::qwen(),
+            FakeHarnessProfile::copilot(),
             FakeHarnessProfile::gemini(),
             FakeHarnessProfile::opencode(),
             FakeHarnessProfile::kiro(),
@@ -671,6 +702,12 @@ mod tests {
                 .managed_projection()
                 .map(ManagedProjectionProfile::id),
             Some("qwen")
+        );
+        assert_eq!(
+            FakeHarnessProfile::copilot()
+                .managed_projection()
+                .map(ManagedProjectionProfile::id),
+            Some("copilot")
         );
         for profile in [
             FakeHarnessProfile::gemini(),
