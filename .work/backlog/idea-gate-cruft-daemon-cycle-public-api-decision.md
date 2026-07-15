@@ -1,6 +1,6 @@
 ---
 id: idea-gate-cruft-daemon-cycle-public-api-decision
-created: 2026-04-02
+created: 2026-07-15
 updated: 2026-07-15
 tags: [cleanup]
 release_binding: null

@@ -15,7 +15,7 @@ updated: 2026-07-15
 
 ## Bound items
 
-69 completed items: 68 active done items and one late-bound archived feature (`feature-daemon-marketplace-refresh`, completed atop `v3.0.3`).
+80 completed non-release items: the original 69-item bundle plus 11 late-bound, completed gate items. The original bundle contains 68 active items and one archived feature (`feature-daemon-marketplace-refresh`, completed atop `v3.0.3`).
 
 | id | kind | source | stage | archived_atop |
 |----|------|--------|-------|---------------|
@@ -89,6 +89,32 @@ updated: 2026-07-15
 | feature-managed-fallback-target-parity-orchestrator | story | active | done | — |
 | feature-daemon-marketplace-refresh | feature | archive | done | v3.0.3 |
 
+### Late-bound gate items
+
+| id | gate | stage |
+|----|------|-------|
+| gate-tests-declaration-daemon-skip-matrix | tests | done |
+| gate-tests-execution-acknowledgment-exact-match | tests | done |
+| gate-tests-native-journal-after-apply-recovery | tests | done |
+| gate-tests-declaration-acceptance-real-profiles | tests | done |
+| gate-cruft-unify-file-managed-skill-planning | cruft | done |
+| gate-cruft-share-adapter-path-existence | cruft | done |
+| gate-cruft-share-projection-helpers | cruft | done |
+| gate-cruft-remove-common-target-name-plumbing | cruft | done |
+| gate-docs-self-hosted-skill-registry | docs | done |
+| gate-docs-changelog-3-1-0 | docs | done |
+| gate-patterns-3-1-0 | patterns | done |
+
 ## Gate runs
 
-_Pending configured release gates._
+- **Security** — 0 critical/high/medium findings. Two low-severity hardening findings were routed to the unbound backlog: bound Git-root subprocess execution and confinement of remaining top-level filesystem writes.
+- **Tests** — 2 high- and 2 medium-priority release findings. Added exact declaration-managed daemon/acknowledgment coverage, post-apply native journal recovery coverage, and exact acknowledgment validation; all four items are done.
+- **Cruft** — 4 medium-confidence release findings. Shared managed skill planning, path observation, and projection helpers were consolidated; dead target-name plumbing was removed. Two public-API removal decisions remain unbound backlog proposals.
+- **Docs** — 2 high-confidence release findings. The self-hosted skill now describes the expanded registry, and this release has a changelog entry.
+- **Patterns** — codified `drift-checked-managed-projection-plan`; regenerated the index/digest. Two broader consistency refactors remain unbound for a subsequent release.
+
+## Release artifacts
+
+- Workspace package versions: `3.1.0`.
+- Changelog: `v3.1.0` entry present.
+- Shipping mapping: tag-based as `v3.1.0`.

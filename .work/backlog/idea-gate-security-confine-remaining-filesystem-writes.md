@@ -1,6 +1,6 @@
 ---
 id: idea-gate-security-confine-remaining-filesystem-writes
-created: 2026-04-02
+created: 2026-07-15
 updated: 2026-07-15
 tags: [security, cleanup]
 release_binding: null
