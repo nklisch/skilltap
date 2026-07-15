@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-candidate-admission
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -98,6 +98,18 @@ approval is claimed here.
 - The compiled candidate mutation matrix covers status, plan, sync, adopt,
   marketplace, plugin, skill, bootstrap, and target-all behavior while
   preserving isolated configuration and native trees byte-for-byte.
+
+## Review result
+
+The required standard independent pass approved the relaxed observe-only
+admission with no material findings. Cursor uses bounded `agent --version`
+observation while Zoo and ZCode use typed file-only identities with no guessed
+binary or argv. All three expose documented read surfaces and unresolved
+boundary warnings, provide no mutation ports or mutation profiles, leave every
+mutation command byte-for-byte zero-write, and remain outside first-party
+bootstrap. Project-only skill failures currently use a generic unavailable
+message, and one executable-only helper retains a call-site-proven `expect`;
+both are cosmetic defense-in-depth opportunities rather than closure risks.
 
 ## Epic context
 
