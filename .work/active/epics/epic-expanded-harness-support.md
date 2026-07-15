@@ -258,3 +258,20 @@ completed aggregate review are resolved; no second review pass was run.
 - **Verification**: `cargo test --workspace --all-targets --all-features
   --no-fail-fast` (750 passed), strict all-feature Clippy, `cargo fmt --all
   -- --check`, and `git diff --check` all passed.
+
+## Real-binary isolated validation (2026-07-15)
+
+A fresh Sol execution pass built HEAD and ran the actual `skilltap` binary in
+disposable `env -i` HOME/XDG/project/PATH roots with exact fake harnesses and
+local-only sources. The first 128-command pass found three publication/status
+defects; `3f18f995` fixed them with compiled regressions. The clean rerun
+executed 237 commands and 2,837 assertions with zero failures across all 17
+registered targets and both scopes where applicable.
+
+Mandatory checks passed: blocked declaration installs left inventory and every
+native surface byte-identical; Cursor marketplace mutation was zero-write;
+Copilot status reported only its unverified skill component; declaration daemon
+work remained pending; repeats were hash-stable; all JSON commands emitted one
+parseable document; and 516 fake-process invocations stayed within the finite
+whitelist with no doctor, auth, login, OAuth, debug, TUI, editor, browser,
+network, or real harness process.
