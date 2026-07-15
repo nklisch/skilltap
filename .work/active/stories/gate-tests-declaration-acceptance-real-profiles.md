@@ -1,7 +1,7 @@
 ---
 id: gate-tests-declaration-acceptance-real-profiles
 kind: story
-stage: implementing
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -30,3 +30,13 @@ Exercise the real declaration-managed profiles through a shared acceptance path 
 
 ## Test location
 `crates/cli/src/application/tests.rs` and, where process isolation matters, `crates/cli/tests/compiled_binary.rs`
+
+## Verification
+
+Exercised real unverified declaration-managed profiles through unacknowledged zero-write, acknowledged effective-unverified, and daemon no-write paths.
+
+- Focused core, application, and compiled-binary tests pass.
+- `cargo test --workspace --all-targets`: clean.
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- Independent standard review: no material findings.
+- `cargo fmt --all -- --check` and `git diff --check`: clean.

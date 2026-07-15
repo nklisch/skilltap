@@ -471,10 +471,11 @@ mod tests {
     use super::*;
     use crate::{
         domain::{
-            AffectedSurface, CompatibilityClass, CompatibilityEvidence, CompatibilityResult,
-            ConsequenceCode, ConsequenceSummary, HarnessId, MaterialConsequence, OperationAction,
-            OperationReason, OperationSelector, OperationSemantics, Provenance, ResourceId,
-            ResourceKey, Reversibility, Scope, TransferFidelity,
+            AbsolutePath, AcknowledgmentRequirement, AffectedSurface, CompatibilityClass,
+            CompatibilityEvidence, CompatibilityResult, ConsequenceCode, ConsequenceSummary,
+            HarnessId, MaterialConsequence, OperationAction, OperationReason, OperationSelector,
+            OperationSemantics, Provenance, ResourceId, ResourceKey, Reversibility, Scope,
+            TransferFidelity,
         },
         runtime::{ConfigurationLockGuard, RuntimeError},
     };
@@ -602,9 +603,7 @@ mod tests {
                 ),
                 compatibility,
                 Provenance::Native,
-                [AffectedSurface::file(
-                    crate::domain::AbsolutePath::new("/tmp/skilltap-resource").unwrap(),
-                )],
+                [AffectedSurface::file(resource_path())],
             ),
             class,
             if matches!(class, OperationClass::NoOp) {
@@ -615,14 +614,83 @@ mod tests {
             dependencies
                 .iter()
                 .map(|id| crate::domain::OperationDependency::new(OperationId::new(*id).unwrap())),
-            crate::domain::AcknowledgmentRequirement::not_required(),
+            AcknowledgmentRequirement::not_required(),
             None,
         )
         .unwrap()
     }
 
+    fn partial_operation(id: &str) -> Operation {
+        let target = HarnessId::new("codex").unwrap();
+        crate::lifecycle_operation::partial_file_operation(
+            OperationId::new(id).unwrap(),
+            target.clone(),
+            ResourceKey::new(ResourceId::new("plugin:demo").unwrap(), Scope::Global),
+            OperationAction::PluginInstall,
+            resource_path(),
+            [CompatibilityEvidence::new(
+                EvidenceCode::new("managed.partial").unwrap(),
+                target,
+                [],
+                EvidenceDetail::new("A managed projection component has partial support.").unwrap(),
+            )],
+            [partial_consequence("managed.partial")],
+        )
+        .unwrap()
+    }
+
+    fn partial_consequence(code: &str) -> MaterialConsequence {
+        MaterialConsequence::new(
+            ConsequenceCode::new(code).unwrap(),
+            [],
+            ConsequenceSummary::new("A managed projection component has partial support.").unwrap(),
+        )
+    }
+
+    fn resource_path() -> AbsolutePath {
+        AbsolutePath::new("/tmp/skilltap-resource").unwrap()
+    }
+
     fn plan(operations: impl IntoIterator<Item = Operation>) -> Plan {
         Plan::new(operations).unwrap()
+    }
+
+    #[test]
+    fn explicit_acknowledgments_must_match_exact_partial_requirements() {
+        let partial = partial_operation("partial");
+        let partial_id = partial.id().clone();
+        let exact = partial.acknowledgment().clone();
+        let safe = operation("safe", OperationClass::SafeNative, &[]);
+        let safe_id = safe.id().clone();
+        let plan = plan([partial.clone(), safe]);
+
+        let accepted =
+            ExecutionAcknowledgments::new(&plan, [(partial_id.clone(), exact.clone())]).unwrap();
+        assert!(!ExecutionAcknowledgments::default().accepts(&partial));
+        assert!(accepted.accepts(&partial));
+
+        let unknown = OperationId::new("unknown").unwrap();
+        assert!(matches!(
+            ExecutionAcknowledgments::new(&plan, [(unknown.clone(), exact.clone())]),
+            Err(GraphError::UnknownOperation { operation }) if operation == unknown
+        ));
+        assert!(matches!(
+            ExecutionAcknowledgments::new(
+                &plan,
+                [(safe_id, AcknowledgmentRequirement::not_required())]
+            ),
+            Err(GraphError::InvalidAcknowledgment)
+        ));
+
+        let changed = AcknowledgmentRequirement::required(
+            exact.selectors().unwrap().iter().cloned(),
+            [partial_consequence("managed.changed")],
+        )
+        .unwrap();
+        assert!(matches!(
+            ExecutionAcknowledgments::new(&plan, [(partial_id, changed)]),
+            Err(GraphError::InvalidAcknowledgment)
+        ));
     }
 
     #[test]

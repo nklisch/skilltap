@@ -1,7 +1,7 @@
 ---
 id: gate-tests-native-journal-after-apply-recovery
 kind: story
-stage: implementing
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -30,3 +30,13 @@ Inject a state repository whose post-apply journal write fails after a fake nati
 
 ## Test location
 `crates/cli/src/application/tests.rs` or `crates/cli/tests/compiled_binary.rs`
+
+## Verification
+
+Added application-level fault-injection coverage for post-apply terminal journal failure on native install and removal, including actual native state and recovered inventory.
+
+- Focused core, application, and compiled-binary tests pass.
+- `cargo test --workspace --all-targets`: clean.
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- Independent standard review: no material findings.
+- `cargo fmt --all -- --check` and `git diff --check`: clean.

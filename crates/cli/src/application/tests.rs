@@ -352,9 +352,25 @@ fn enable_codex_only(paths: &PlatformPaths) {
     repository
         .replace(
             &defaults
-                .with_harness_enabled(&HarnessId::new("codex").unwrap(), true)
+                .with_harness_enabled(&codex_target_id(), true)
                 .unwrap()
                 .with_harness_enabled(&HarnessId::new("claude").unwrap(), false)
+                .unwrap(),
+        )
+        .unwrap();
+}
+
+fn enable_claude_only_with_binary(paths: &PlatformPaths, binary: &Path) {
+    let filesystem = SystemFileSystem;
+    let repository =
+        FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let binary = HarnessBinary::new(binary.to_string_lossy().into_owned()).unwrap();
+    repository
+        .replace(
+            &ConfigDocument::defaults()
+                .with_harness_enabled(&codex_target_id(), false)
+                .unwrap()
+                .with_harness_policy(&claude_target_id(), true, Some(&binary))
                 .unwrap(),
         )
         .unwrap();
@@ -522,11 +538,133 @@ fn global_scope() -> ScopeArgs {
     }
 }
 
+fn codex_target_id() -> HarnessId {
+    HarnessId::new("codex").unwrap()
+}
+
+fn claude_target_id() -> HarnessId {
+    HarnessId::new("claude").unwrap()
+}
+
 fn codex_target() -> TargetArgs {
     TargetArgs {
         target: Some(skilltap_core::domain::TargetSelection::Only(
-            HarnessId::new("codex").unwrap(),
+            codex_target_id(),
         )),
+    }
+}
+
+fn claude_target() -> TargetArgs {
+    TargetArgs {
+        target: Some(skilltap_core::domain::TargetSelection::Only(
+            claude_target_id(),
+        )),
+    }
+}
+
+struct NativeLifecycleFixture {
+    _root: TempRoot,
+    paths: PlatformPaths,
+    project: PathBuf,
+    source: PathBuf,
+    _native: FakeNativeProcess,
+    executable: PathBuf,
+}
+
+impl NativeLifecycleFixture {
+    fn new(prefix: &str) -> Self {
+        let root = TempRoot::new(prefix).unwrap();
+        let paths = isolated_platform_paths(&root);
+        let project = root.join("project");
+        fs::create_dir_all(&project).unwrap();
+        let source = root.join("marketplace");
+        write_managed_marketplace(&source);
+        let native = FakeHarnessProfile::claude()
+            .build(root.path(), FakeNativeMode::VersionKnown)
+            .unwrap();
+        let executable = native
+            .install_alias(&root.join("fake-bin"), "claude")
+            .unwrap();
+        enable_claude_only_with_binary(&paths, &executable);
+        Self {
+            _root: root,
+            paths,
+            project,
+            source,
+            _native: native,
+            executable,
+        }
+    }
+
+    fn run_lifecycle(
+        &self,
+        state_filesystem: &dyn FileSystem,
+        kind: NativeLifecycleKind,
+        source: Option<&str>,
+        name: Option<&str>,
+    ) -> Outcome {
+        let filesystem = SystemFileSystem;
+        let config =
+            FileConfigRepository::new(&filesystem, self.paths.skilltap_config().clone()).unwrap();
+        let inventory =
+            FileInventoryRepository::new(&filesystem, self.paths.skilltap_config().clone())
+                .unwrap();
+        let state =
+            FileStateRepository::new(state_filesystem, self.paths.skilltap_config().clone())
+                .unwrap();
+        let working_directory = FixedWorkingDirectory(absolute(&self.project));
+        let git = NoGitRoot;
+        let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+        let registry = TargetRegistry::canonical();
+        StatusApplication {
+            config: &config,
+            inventory: &inventory,
+            state: &state,
+            scopes: &scopes,
+            working_directory: &working_directory,
+            native_observation: NativeObservationMode::Disabled,
+            registry: &registry,
+            test_platform_paths: Some(self.paths.clone()),
+            test_managed_filesystem: None,
+        }
+        .execute_native_lifecycle(
+            "native lifecycle test",
+            kind,
+            &managed_scope(&self.project),
+            &claude_target(),
+            NativeLifecycleValues { source, name },
+            false,
+        )
+    }
+
+    fn add_marketplace(&self, state_filesystem: &dyn FileSystem) -> Outcome {
+        self.run_lifecycle(
+            state_filesystem,
+            NativeLifecycleKind::MarketplaceAdd,
+            Some(self.source.to_str().unwrap()),
+            Some("team"),
+        )
+    }
+
+    fn run_plugin_lifecycle(
+        &self,
+        state_filesystem: &dyn FileSystem,
+        kind: NativeLifecycleKind,
+    ) -> Outcome {
+        self.run_lifecycle(
+            state_filesystem,
+            kind,
+            match kind {
+                NativeLifecycleKind::PluginInstall => Some("demo@team"),
+                NativeLifecycleKind::PluginRemove => None,
+                _ => unreachable!("fixture only covers plugin install/remove"),
+            },
+            match kind {
+                NativeLifecycleKind::PluginInstall => None,
+                NativeLifecycleKind::PluginRemove => Some("demo@team"),
+                _ => unreachable!("fixture only covers plugin install/remove"),
+            },
+        )
     }
 }
 
@@ -1779,6 +1917,117 @@ fn assert_error_code(outcome: &Outcome, code: &str) {
     assert!(
         outcome.errors.iter().any(|error| error.code == code),
         "expected {code}: {outcome:?}"
+    );
+}
+
+fn assert_next_action_code(outcome: &Outcome, code: &str) {
+    assert!(
+        outcome
+            .next_actions
+            .iter()
+            .any(|action| action.code == code),
+        "expected next action {code}: {outcome:?}"
+    );
+}
+
+fn native_plugin_key(project: &Path) -> ResourceKey {
+    ResourceKey::new(
+        ResourceId::new("plugin:demo@team").unwrap(),
+        Scope::Project(absolute(&fs::canonicalize(project).unwrap())),
+    )
+}
+
+fn native_inventory(paths: &PlatformPaths) -> InventoryDocument {
+    let filesystem = SystemFileSystem;
+    let inventory =
+        FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    match inventory.load().unwrap() {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => {
+            InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                .unwrap()
+        }
+    }
+}
+
+fn assert_native_plugin_presence(executable: &Path, name: &str, present: bool) {
+    let output = Command::new(executable)
+        .args(["plugin", "list", "--json"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "plugin list failed: {output:?}");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        stdout.contains(name),
+        present,
+        "plugin presence mismatch for {name}: {stdout}"
+    );
+}
+
+#[test]
+fn native_lifecycle_recovers_inventory_after_terminal_journal_publication_fails() {
+    let install = NativeLifecycleFixture::new("skilltap-native-journal-install");
+    let install_state = RecordingFaultFileSystem::new();
+    let marketplace = install.add_marketplace(&install_state);
+    assert_eq!(
+        marketplace.result,
+        ResultClass::Completed,
+        "{marketplace:?}"
+    );
+    install_state.fail_atomic_write_number(2);
+    let failed_install =
+        install.run_plugin_lifecycle(&install_state, NativeLifecycleKind::PluginInstall);
+    assert_error_code(&failed_install, "state_journal_failed_after_apply");
+    assert_next_action_code(&failed_install, "reobserve_before_retry");
+    assert_native_plugin_presence(&install.executable, "demo@team", true);
+
+    let install_inventory = native_inventory(&install.paths);
+    let install_key = native_plugin_key(&install.project);
+    let installed = install_inventory
+        .resources()
+        .get(&install_key)
+        .expect("applied native install is recovered into desired inventory");
+    assert!(installed.targets().contains(&claude_target_id()));
+    let pending_install = managed_target_state(
+        &install.paths,
+        &install.project,
+        &install_state,
+        &claude_target_id(),
+        "plugin:demo@team",
+    );
+    assert!(
+        pending_install
+            .last_apply()
+            .and_then(|apply| apply.operations().values().next())
+            .is_some_and(|result| matches!(
+                result.outcome(),
+                skilltap_core::domain::OperationOutcome::Pending
+            )),
+        "post-apply journal failure should leave only the pre-action pending boundary"
+    );
+
+    let removal = NativeLifecycleFixture::new("skilltap-native-journal-remove");
+    let removal_state = RecordingFaultFileSystem::new();
+    let marketplace = removal.add_marketplace(&removal_state);
+    assert_eq!(
+        marketplace.result,
+        ResultClass::Completed,
+        "{marketplace:?}"
+    );
+    let installed =
+        removal.run_plugin_lifecycle(&removal_state, NativeLifecycleKind::PluginInstall);
+    assert_eq!(installed.result, ResultClass::Completed, "{installed:?}");
+    removal_state.fail_atomic_write_number(2);
+    let failed_remove =
+        removal.run_plugin_lifecycle(&removal_state, NativeLifecycleKind::PluginRemove);
+    assert_error_code(&failed_remove, "state_journal_failed_after_apply");
+    assert_next_action_code(&failed_remove, "reobserve_before_retry");
+    assert_native_plugin_presence(&removal.executable, "demo@team", false);
+    assert!(
+        !native_inventory(&removal.paths)
+            .resources()
+            .contains_key(&native_plugin_key(&removal.project)),
+        "applied native removal is recovered out of desired inventory"
     );
 }
 

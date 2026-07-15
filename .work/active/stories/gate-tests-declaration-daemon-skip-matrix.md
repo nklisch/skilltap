@@ -1,7 +1,7 @@
 ---
 id: gate-tests-declaration-daemon-skip-matrix
 kind: story
-stage: implementing
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -30,3 +30,13 @@ Extend compiled-binary coverage for Kimi, Vibe, Kilo, Junie, and Amp. After an a
 
 ## Test location
 `crates/cli/tests/compiled_binary.rs`
+
+## Verification
+
+Added an isolated compiled-binary matrix for Kimi, Vibe, Kilo, Junie, and Amp that snapshots managed roots, inventory, and resource state; proves daemon pending behavior; and permits only version probes.
+
+- Focused core, application, and compiled-binary tests pass.
+- `cargo test --workspace --all-targets`: clean.
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- Independent standard review: no material findings.
+- `cargo fmt --all -- --check` and `git diff --check`: clean.

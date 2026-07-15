@@ -345,6 +345,17 @@ fn assert_version_only_invocations(executable: &Path, target: &str) {
     );
 }
 
+fn assert_fake_harness_version_only(harness: &InstalledFakeHarness, target: &str) {
+    let invocations = harness.invocation_arguments();
+    assert!(!invocations.is_empty(), "{target} invocation log is empty");
+    assert!(
+        invocations
+            .iter()
+            .all(|arguments| arguments.len() == 1 && arguments[0] == "--version"),
+        "{target} used a non-version invocation: {invocations:?}"
+    );
+}
+
 fn write_gemini_marketplace(machine: &IsolatedMachine) -> PathBuf {
     let source = machine.home().join("gemini-marketplace");
     fs::create_dir_all(source.join(".agents/plugins")).unwrap();
@@ -382,6 +393,72 @@ fn write_owned(machine: &IsolatedMachine, name: &str, contents: &str) {
     let root = config_root(machine);
     fs::create_dir_all(&root).expect("create configuration root");
     fs::write(root.join(name), contents).expect("write owned document");
+}
+
+fn declaration_target_roots(machine: &IsolatedMachine, target: &str) -> Vec<PathBuf> {
+    let mut roots = vec![
+        machine.home().join(".agents"),
+        machine.home().join(".claude-plugin"),
+    ];
+    match target {
+        "kimi" => roots.push(machine.home().join(".kimi")),
+        "vibe" => roots.push(machine.home().join(".vibe")),
+        "kilo" => roots.push(machine.configuration_home().join("kilo")),
+        "junie" => roots.push(machine.home().join(".junie")),
+        "amp" => roots.push(machine.configuration_home().join("amp")),
+        _ => unreachable!("declaration target fixture only covers known profiles"),
+    }
+    roots
+}
+
+fn prepare_declaration_target(machine: &IsolatedMachine, target: &str) {
+    fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude-plugin")).unwrap();
+    match target {
+        "kimi" => {
+            fs::create_dir_all(machine.home().join(".kimi")).unwrap();
+            fs::write(machine.home().join(".kimi/mcp.json"), b"{}" as &[u8]).unwrap();
+        }
+        "vibe" => {
+            fs::create_dir_all(machine.home().join(".vibe")).unwrap();
+            fs::write(machine.home().join(".vibe/config.toml"), b"" as &[u8]).unwrap();
+        }
+        "kilo" => {
+            fs::create_dir_all(machine.configuration_home().join("kilo")).unwrap();
+            fs::write(
+                machine.configuration_home().join("kilo/kilo.jsonc"),
+                b"{}" as &[u8],
+            )
+            .unwrap();
+        }
+        "junie" => {
+            fs::create_dir_all(machine.home().join(".junie/mcp")).unwrap();
+            fs::write(machine.home().join(".junie/mcp/mcp.json"), b"{}" as &[u8]).unwrap();
+        }
+        "amp" => {
+            fs::create_dir_all(machine.configuration_home().join("amp")).unwrap();
+            fs::write(
+                machine.configuration_home().join("amp/settings.json"),
+                b"{}" as &[u8],
+            )
+            .unwrap();
+        }
+        _ => unreachable!("declaration target fixture only covers known profiles"),
+    }
+}
+
+fn declaration_snapshots(machine: &IsolatedMachine, target: &str) -> Vec<Vec<NativeEntrySnapshot>> {
+    declaration_target_roots(machine, target)
+        .iter()
+        .map(|root| snapshot_native_tree(root))
+        .collect()
+}
+
+fn declaration_skill_candidates(machine: &IsolatedMachine, target: &str) -> Vec<PathBuf> {
+    match target {
+        "junie" => vec![machine.home().join(".junie/skills/demo/SKILL.md")],
+        _ => vec![machine.home().join(".agents/skills/demo/SKILL.md")],
+    }
 }
 
 fn run(machine: &IsolatedMachine, arguments: &[&str]) -> Output {
@@ -463,6 +540,38 @@ fn snapshot_native_tree(root: &Path) -> Vec<NativeEntrySnapshot> {
     let mut entries = Vec::new();
     visit(root, root, &mut entries);
     entries
+}
+
+fn state_without_daemon_run(machine: &IsolatedMachine) -> Option<Value> {
+    // Declaration-managed pending work may update only the daemon-run record;
+    // resource state and operation journals must remain byte-equivalent.
+    let path = config_root(machine).join("state.json");
+    if !path.exists() {
+        return None;
+    }
+    let mut value: Value = serde_json::from_slice(&fs::read(path).expect("read state document"))
+        .expect("state document is JSON");
+    if let Some(object) = value.as_object_mut() {
+        object.remove("daemon_run");
+    }
+    Some(value)
+}
+
+fn owned_document_bytes(machine: &IsolatedMachine, name: &str) -> Option<Vec<u8>> {
+    let path = config_root(machine).join(name);
+    path.exists()
+        .then(|| fs::read(path).expect("read owned document bytes"))
+}
+
+fn assert_json_entries_include_code(value: &Value, field: &str, code: &str) {
+    assert!(
+        value[field]
+            .as_array()
+            .unwrap_or_else(|| panic!("{field} is not an array in {value}"))
+            .iter()
+            .any(|entry| entry["code"] == code),
+        "{field} did not include {code}: {value}"
+    );
 }
 
 fn assert_code(output: &Output, expected: i32) {
@@ -2569,6 +2678,172 @@ fn relaxed_junie_and_amp_profiles_project_both_scopes_without_native_processes()
                     .and_then(Value::as_object)
                     .is_none_or(|servers| !servers.contains_key("demo-docs"))
             );
+        }
+    }
+}
+
+#[test]
+fn declaration_managed_profiles_require_exact_foreground_acknowledgment_and_daemon_skips() {
+    for target in ["kimi", "vibe", "kilo", "junie", "amp"] {
+        let machine = machine();
+        let (executable, fake_harness) = match target {
+            "kimi" => (
+                write_constrained_harness(&machine, "kimi", "kimi, version 1.48.0"),
+                None,
+            ),
+            "vibe" => (
+                write_constrained_harness(&machine, "vibe", "vibe 2.19.1"),
+                None,
+            ),
+            "kilo" => (write_constrained_harness(&machine, "kilo", "7.4.7"), None),
+            "junie" => {
+                let harness = fake_harness(&machine, &FakeHarnessProfile::junie());
+                (harness.executable().to_path_buf(), Some(harness))
+            }
+            "amp" => {
+                let harness = fake_harness(&machine, &FakeHarnessProfile::amp());
+                (harness.executable().to_path_buf(), Some(harness))
+            }
+            _ => unreachable!("declaration target fixture only covers known profiles"),
+        };
+        write_owned(
+            &machine,
+            "config.toml",
+            &constrained_config(target, &executable),
+        );
+        prepare_declaration_target(&machine, target);
+        let source = write_gemini_marketplace(&machine);
+        let add = run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                source.to_str().unwrap(),
+                "--name",
+                "team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&add, 0);
+        assert_eq!(json(&add)["result"], "completed", "target {target}");
+
+        let target_before_blocked = declaration_snapshots(&machine, target);
+        let inventory_before_blocked = owned_document_bytes(&machine, "inventory.toml");
+        let state_before_blocked = state_without_daemon_run(&machine);
+        let blocked = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "demo@team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&blocked, 2);
+        let blocked_value = json(&blocked);
+        assert_eq!(blocked_value["result"], "attention_required");
+        assert_eq!(blocked_value["summary"]["changed"], false);
+        assert_json_entries_include_code(
+            &blocked_value,
+            "errors",
+            "partial_operation_requires_acknowledgment",
+        );
+        assert_eq!(
+            declaration_snapshots(&machine, target),
+            target_before_blocked,
+            "unacknowledged {target} declaration wrote a target tree"
+        );
+        assert_eq!(
+            owned_document_bytes(&machine, "inventory.toml"),
+            inventory_before_blocked,
+            "unacknowledged {target} declaration changed inventory"
+        );
+        assert_eq!(
+            state_without_daemon_run(&machine),
+            state_before_blocked,
+            "unacknowledged {target} declaration changed operation state"
+        );
+
+        let accepted = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "demo@team",
+                "--yes",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&accepted, 0);
+        let accepted_value = json(&accepted);
+        assert_eq!(accepted_value["result"], "completed", "target {target}");
+        assert!(
+            declaration_skill_candidates(&machine, target)
+                .iter()
+                .any(|path| path.is_file()),
+            "acknowledged {target} declaration did not publish the skill tree"
+        );
+        let status = run(
+            &machine,
+            &["status", "--all-scopes", "--target", target, "--json"],
+        );
+        assert_code(&status, 2);
+        let status_value = json(&status);
+        assert!(
+            status_value.to_string().contains("effective_unverified"),
+            "acknowledged {target} declaration did not remain effective-unverified: {status_value}"
+        );
+
+        fs::write(
+            source.join("plugins/demo/skills/demo/SKILL.md"),
+            "---\nname: demo\ndescription: changed declaration fixture\n---\nchanged\n",
+        )
+        .unwrap();
+        let target_before_daemon = declaration_snapshots(&machine, target);
+        let inventory_before_daemon = owned_document_bytes(&machine, "inventory.toml");
+        let state_before_daemon = state_without_daemon_run(&machine);
+        let daemon = run(&machine, &["daemon", "run", "--json"]);
+        assert_code(&daemon, 2);
+        let daemon_value = json(&daemon);
+        assert_eq!(daemon_value["result"], "attention_required");
+        assert!(
+            daemon_value["summary"]["pending_operations"]
+                .as_u64()
+                .unwrap()
+                >= 1,
+            "daemon did not report a pending declaration-managed operation for {target}: {daemon_value}"
+        );
+        assert_json_entries_include_code(
+            &daemon_value,
+            "warnings",
+            "daemon.declaration_managed_pending",
+        );
+        assert_eq!(
+            declaration_snapshots(&machine, target),
+            target_before_daemon,
+            "daemon applied an unacknowledged {target} declaration"
+        );
+        assert_eq!(
+            owned_document_bytes(&machine, "inventory.toml"),
+            inventory_before_daemon,
+            "daemon changed {target} inventory while declaration was pending"
+        );
+        assert_eq!(
+            state_without_daemon_run(&machine),
+            state_before_daemon,
+            "daemon changed {target} resource state or operation journals while declaration was pending"
+        );
+
+        if let Some(harness) = &fake_harness {
+            assert_fake_harness_version_only(harness, target);
+        } else {
+            assert_version_only_invocations(&executable, target);
         }
     }
 }

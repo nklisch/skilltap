@@ -1,7 +1,7 @@
 ---
 id: gate-tests-execution-acknowledgment-exact-match
 kind: story
-stage: implementing
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -30,3 +30,13 @@ Build a plan with one partial operation. Verify that the exact `(operation id, r
 
 ## Test location
 `crates/core/src/executor.rs`
+
+## Verification
+
+Added focused core tests for exact partial acknowledgment acceptance and unknown-id, non-partial-id, and changed-requirement rejection.
+
+- Focused core, application, and compiled-binary tests pass.
+- `cargo test --workspace --all-targets`: clean.
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- Independent standard review: no material findings.
+- `cargo fmt --all -- --check` and `git diff --check`: clean.
