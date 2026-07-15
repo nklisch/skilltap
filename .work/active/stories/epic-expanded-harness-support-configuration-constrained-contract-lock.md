@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-configuration-constrained-contract-lock
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-configuration-constrained
 depends_on: []
@@ -14,7 +14,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Lock Kimi, Vibe, and Kilo Native Contracts
@@ -465,27 +465,43 @@ release-specific evidence:
 The earlier research-channel limitation is therefore resolved and is no longer
 a blocker. The substantive native-contract gaps below remain.
 
-## Blocker
+## Relaxed amendment and completion — 2026-07-15
 
-This checkpoint remains at `stage: implementing`; no target profile may gain
-mutation authority from this run.
+The exact evidence above is retained as the negative contract record. The
+updated foundation changes the admission consequence rather than disputing the
+evidence:
 
-1. **Kimi Code CLI 1.48.0:** current official docs and release source provide
-   only global `~/.kimi/mcp.json`. There is no ambient project MCP file,
-   user/project precedence, project trust outcome, or project reload contract.
-2. **Mistral Vibe 2.19.1:** no deterministic non-TTY command reports effective
-   MCP servers/connections; `/mcp` is TUI-only and programmatic mode requires an
-   LLM turn. Current web docs reject OAuth while the exact release implements
-   it. Native TOML writes are lexically lossy, and no non-TTY post-write probe
-   closes that boundary.
-3. **Kilo Code CLI 7.4.7:** `debug config`, `mcp list`, and auth listing expose
-   the needed effective/status states, but invoking the CLI creates native and
-   project files, including `.kilo/.gitignore`; `mcp list` is also unstructured
-   human output. No side-effect-free isolation grammar has been proven against
-   the real global/project resolution, and externally edited project MCP reload
-   remains undocumented.
+- Kimi `1.48.0` receives global-only declaration-managed MCP authority through
+  `~/.kimi/mcp.json` and `KIMI_SHARE_DIR`; its project MCP capability remains
+  `Unsupported`. No `mcp list`, `mcp test`, `mcp auth`, UI, or browser flow is
+  part of production.
+- Vibe `2.19.1` receives declaration-managed user/project TOML authority only
+  through a lossless syntax patch. Static credentials/references are the
+  admitted subset; OAuth is `Unsupported`. No `/mcp`, TUI, LLM, trust approval,
+  or effective probe is part of production.
+- Kilo `7.4.7` receives declaration-managed valid global/project JSON/JSONC
+  authority through targeted edits. Unknown schema keys and conflicting
+  locations block. No `debug config`, `mcp list`, or `mcp auth` command is part
+  of production, and no native side-effect directory is created by observation.
 
-The older attestations are insufficient to clear these release-specific gaps.
-Dependent work must remain blocked rather than manufacture project paths,
-parse interactive UIs, ignore documentation contradictions, or treat
-side-effectful probes as read-only observation.
+The locked evidence therefore clears this checkpoint for the narrower
+contract: exact version decoders, document/precedence fixtures, codec
+preservation, explicit unsupported outcomes, and negative no-process
+sentinels. It does not grant effective-state claims. Foreground `--yes` may
+acknowledge the declared/effective consequence; daemon work remains pending.
+
+## Implementation notes
+
+- Execution capability: highest, because this checkpoint defines exact-profile
+  mutation boundaries for three adapters.
+- Files changed: foundation contract amendments, validated path boundaries,
+  private family source/codec tests, and adapter contract tests.
+- Verification: `cargo test --workspace --all-targets` is green after the
+  registry target set was updated to include `kimi`, `vibe`, and `kilo`.
+- Adjacent issues parked: none.
+
+## Completion
+
+The contract-lock story is `done` under the amended relaxed foundation. The
+next projection-scope checkpoint may consume the exact profiles without
+inventing effective probes or project MCP support for Kimi.

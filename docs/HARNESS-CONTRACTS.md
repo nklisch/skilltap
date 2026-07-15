@@ -157,12 +157,33 @@ Kiro CLI
 Amp
 ```
 
-Each direct adapter reports the independently established global/project skill,
-MCP, marketplace, and plugin capabilities. A target may be registered with
-unsupported scopes or components. Mutation still requires a verified exact
-version profile plus either effective verification or a declaration-managed
-file contract with ownership-safe update/removal and the applicable acceptance
-matrix.
+Each direct adapter reports independently established capabilities by component
+and concrete scope. A target may be registered with unsupported scopes or
+components; registration never implies that every listed surface is mutable.
+Mutation still requires a verified exact version profile plus either effective
+verification or a declaration-managed file contract with ownership-safe
+update/removal and the applicable acceptance matrix.
+
+### Configuration-constrained profiles
+
+The following exact profiles are admitted only on the surfaces listed here.
+Source attestations that describe a broader or older product surface do not
+grant authority to an exact release.
+
+| Target/profile | Complete skills | MCP declarations | Native/effective commands |
+|---|---|---|---|
+| Kimi Code CLI `1.48.0` | Official complete skill roots only; `.agents/skills` is the canonical managed root at global and project scope | Global `~/.kimi/mcp.json`, relocated by `KIMI_SHARE_DIR`, may be declaration-managed and remains effective-unverified; project MCP is `Unsupported` | No `mcp list`, `mcp test`, `mcp auth`, UI, or session probe is invoked by skilltap |
+| Mistral Vibe `2.19.1` | Official complete skill roots only; `.agents/skills` is the canonical managed root at global and trusted-project scope | User/project `config.toml` declarations may be declaration-managed through lossless token/syntax patches; only static credentials and references are admitted; OAuth is `Unsupported` because official sources contradict the release implementation | No `/mcp`, TUI, LLM, trust-approval, or effective-state probe is invoked by skilltap; project effective state remains unverified |
+| Kilo Code `7.4.7` | Official complete skill roots only; `.agents/skills` is the canonical managed root at global and project scope | Global and effective project `kilo.json`/`kilo.jsonc` declarations may be declaration-managed through targeted valid-document edits; project precedence and shadow conflicts are enforced | No `debug config`, `mcp list`, or `mcp auth` is invoked by skilltap; no database, cache, `.kilo`, or `.gitignore` is created by observation |
+
+Kimi's project MCP capability is unsupported rather than inferred from an
+explicit per-invocation override. Vibe's trust boundary is observed only as
+an unverified declared/effective distinction; skilltap does not approve trust.
+Kilo refuses invalid documents, unknown schema keys, conflicting effective
+locations, and any edit that cannot preserve valid comments and unrelated
+fields. These constraints apply in foreground and daemon flows: foreground
+`--yes` acknowledges the declaration/effective consequence only, while the
+daemon leaves declaration-managed work pending.
 
 Cursor, Zoo Code, and ZCode participate through the same per-component model.
 Documented read surfaces may be observe-only; documented version-known file

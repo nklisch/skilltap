@@ -26,15 +26,19 @@ updated: 2026-07-15
 
 ## Brief
 
-Deliver complete adapters for Kimi Code CLI, Mistral Vibe, and Kilo Code while
-preserving their distinct new-session reload, transport/authentication, JSONC,
-and configuration-precedence constraints. Each target meets the same
-global-and-project skill and MCP admission contract; its limitations appear as
-typed capabilities and health evidence rather than being smoothed into generic
-support.
+Deliver exact-profile adapters for Kimi Code CLI `1.48.0`, Mistral Vibe
+`2.19.1`, and Kilo Code `7.4.7` under the relaxed component/scope admission
+contract. Each target admits only its documented complete-skill and MCP
+surfaces; unsupported scopes and adjacent plugin behavior remain explicitly
+blocked. Kimi's global MCP declaration is the only MCP mutation surface;
+project MCP is unsupported and no MCP lifecycle/status/auth command is invoked.
+Vibe and Kilo use declaration-managed, lossless configuration edits while
+leaving effective state unverified and avoiding interactive or side-effectful
+probes. Their limitations appear as typed capabilities and health evidence
+rather than being smoothed into generic support.
 
 The adapters consume shared managed projection and target-local state, preserve
-unknown documented native configuration, and classify unsupported transports,
+unrelated documented native configuration, and classify unsupported transports,
 authentication, hooks, agents, or other optional components through the normal
 faithful/partial/blocked model. Each target ships with isolated validation and
 the common adapter acceptance evidence. This feature does not add target-local
@@ -95,15 +99,15 @@ their realized contracts rather than their earlier sketches:
   file mutation is not currently tied to a verified executable version. This
   feature closes that gap with a distinct compiled `managed.projection`
   capability and never treats a runtime probe as mutation authority.
-- `AdapterObservationPaths` currently carries roots and labels but not
-  adapter-authored health findings, and managed execution verifies bytes rather
-  than the harness's post-reload effective state. Kimi's new-session rule,
-  Vibe's trusted-project gate, and Kilo's failed/authentication-required states
-  therefore need one bounded read-only activation-probe contract shared by
-  status and post-apply verification.
+- `AdapterObservationPaths` carries roots and labels, while managed execution
+  verifies bytes without claiming harness activation. The relaxed amendment
+  intentionally does not add an effective probe for this family: Kimi's
+  project MCP is unsupported, Vibe has no safe non-TTY MCP observer, and Kilo's
+  documented probes create native state. Their declared/effective separation
+  remains explicit in status.
 - `PlatformPaths` models `HOME`, XDG, Codex, and Claude overrides but not
-  `KIMI_CODE_HOME`; Kimi must add that validated environment boundary rather
-  than silently assuming `~/.kimi-code`.
+  `KIMI_SHARE_DIR` or `VIBE_HOME`; the exact target paths add those validated
+  environment boundaries rather than assuming operator locations.
 - The exact target research establishes admission, paths, precedence, supported
   transport families, Kimi's new-session reload, Vibe's OAuth limitation and
   trust gate, Kilo's JSONC/direct-edit surface, and the absence of deterministic
@@ -115,29 +119,43 @@ The mapping was direct-read only. Nested agents and peer mechanisms were
 explicitly prohibited. The child stories below are durable checkpoints for one
 cohesive feature owner, not parallel worker assignments.
 
-## Evidence blocker
+## Relaxed contract amendment — 2026-07-15
 
-The existing source-direct attestations are sufficient to design boundaries but
-insufficient to grant mutation authority. Before any of these adapters is
-registered with a supported `managed.projection` capability, the first child
-must capture, in isolated fixtures, for one installed release of each target:
+The earlier evidence blocker required deterministic effective-state probes for
+all three targets. The updated foundation deliberately removes that requirement
+where the native product cannot provide a safe observation boundary. This is a
+narrow amendment, not a weakening of mutation safety:
 
-1. exact version command argv and output decoding;
-2. exact global/project MCP document examples and precedence, including Kilo's
-   two documented project filenames;
-3. a deterministic, bounded, non-interactive effective-state probe that can run
-   in a fresh session/project working directory and distinguish loaded,
-   reload-required, trust-required, authentication-required, and failed state;
-4. round-trip evidence that the chosen Vibe TOML and Kilo JSONC mutation paths
-   preserve unrelated and unknown native content.
+- Kimi `1.48.0` is admitted for complete skills on exact documented roots and
+  for global MCP declarations at `~/.kimi/mcp.json`, relocated by
+  `KIMI_SHARE_DIR`. Project MCP is `Unsupported`. Production never invokes
+  `mcp list`, `mcp test`, `mcp auth`, a TUI, or a browser/auth flow.
+- Vibe `2.19.1` is admitted for complete skills and user/trusted-project TOML
+  declarations. Skilltap patches only the selected `[[mcp_servers]]` entries
+  through a lossless syntax-preserving codec. Static credentials and
+  references are the admitted subset; OAuth is `Unsupported` because the
+  official web contract contradicts the release implementation. No `/mcp`,
+  TUI, LLM turn, trust approval, or effective-state probe runs in production.
+- Kilo `7.4.7` is admitted for complete skills and valid global/effective
+  project JSON/JSONC declarations through targeted token-preserving edits.
+  Invalid unknown schema keys and conflicting locations block. Production
+  never invokes `debug config`, `mcp list`, or `mcp auth`, and observation
+  creates no native database, cache, `.kilo`, or `.gitignore`.
 
-This is a bounded contract refresh and isolated validation, not a new broad
-research campaign. If any target exposes only an interactive UI/slash command
-that cannot be driven deterministically without a TTY, or if its exact
-write/reload boundary cannot be reproduced, that target's mutation profile
-remains unverified and the dependent adapter story is blocked. The
-implementation must not invent version literals, parse human text across
-versions, or register an observe-only adapter as complete support.
+The declaration contract now proves owned bytes, lossless preservation,
+conflict/drift detection, rollback, and repeat-idempotence. It does not claim
+that a declaration loaded, activated, passed trust, or authenticated. Vibe's
+project trust and all three targets' effective state remain unverified; no
+approval is stored or inferred. Foreground `--yes` acknowledges only the
+reported declaration/effective consequence. Daemon runs leave these operations
+pending. A target-specific scope/component capability is `Unsupported` rather
+than inferred from an explicit invocation override or from an adjacent native
+surface.
+
+The exact release/version/document/probe fixtures recorded by the contract-lock
+story remain useful as negative evidence and codec fixtures. They no longer
+block independently safe declaration-managed siblings merely because a
+side-effect-free effective probe is unavailable.
 
 ## Design decisions
 
@@ -145,8 +163,9 @@ versions, or register an observe-only adapter as complete support.
   distinct registry entries. Share only source-plugin extraction and normalized
   portable MCP classification in a private
   `adapters/configuration_constrained/source.rs` module. Native paths, document
-  codecs, precedence, probe argv/decoding, and capability profiles remain in
-  each target module.
+  codecs, precedence, and capability profiles remain in each target module.
+  No activation-probe port is implemented for this family because the updated
+  contract explicitly forbids production probes.
 - **No interactive native lifecycle:** Kimi's user-only plugin TUI/slash flow and
   Kilo's sidebar marketplace are observable native state, not deterministic
   mutation APIs. Vibe has no documented package lifecycle. All three return
@@ -187,32 +206,34 @@ versions, or register an observe-only adapter as complete support.
   local/remote forms in its locked JSONC schema. Unsupported optional servers
   produce `ManagedProjection::Omitted`; unsupported required servers return
   `ManagedProjectionError::RequiredUnsupported`, including under `--yes`.
-- **Kimi paths/reload:** add validated `KIMI_CODE_HOME` handling with
-  `~/.kimi-code` fallback. Global MCP is `<kimi-home>/mcp.json`; project MCP is
-  `<project>/.kimi-code/mcp.json`; project entries override equal user names.
-  Post-apply verification launches the locked fresh-session probe. A write is
-  never reported effective from file presence alone.
+- **Kimi paths/reload:** add validated `KIMI_SHARE_DIR` handling with
+  `~/.kimi` fallback. Global MCP is `<kimi-share-dir>/mcp.json`; project MCP
+  is `Unsupported`. No MCP status, connection, auth, or fresh-session probe
+  is launched by skilltap. A write is declaration-managed and never reported
+  effective from file presence alone.
 - **Vibe document/trust:** global MCP is `~/.vibe/config.toml`; project MCP is
-  `<project>/.vibe/config.toml`, which has precedence only in a trusted project.
-  A private lossless `VibeConfigDocument` edits named `[[mcp_servers]]` entries
-  and preserves unrelated tables, comments, and unknown fields. Trust refusal
-  is `trust.required` health, not drift; declared managed bytes remain owned and
-  repeat idempotently while status stays attention-required.
+  `<project>/.vibe/config.toml`, selected only by the documented trusted-project
+  layer. A private lossless `VibeConfigDocument` edits named
+  `[[mcp_servers]]` entries and preserves unrelated tables, comments, ordering,
+  and unknown representable values. Trust is not approved or probed by
+  skilltap; declared managed bytes remain owned and repeat idempotently while
+  effective state stays unverified and attention-required.
 - **Kilo JSONC/precedence:** global MCP is
   `${XDG_CONFIG_HOME:-~/.config}/kilo/kilo.jsonc`. A profile-bound private
   resolver selects the documented effective project file (`kilo.jsonc` or
   `.kilo/kilo.jsonc`) using the locked precedence. If an unmanaged
   higher-precedence file would shadow an owned lower-precedence file, mutation
   blocks with `configuration.higher-precedence`; skilltap never writes both.
-  `KiloJsoncDocument` performs span/token-preserving edits so comments, trailing
-  commas, key order, and unknown fields survive.
+  Invalid unknown schema keys also block. `KiloJsoncDocument` performs
+  token/span-preserving edits so comments, trailing commas, key order, and
+  unrelated valid fields survive. No Kilo debug/config/list/auth command is
+  used for effective observation.
 - **Declared versus effective state:** file/tree observation remains the
-  declared-state source. `ManagedActivationProbe` is a read-only bounded native
-  process port used after apply and by status. It returns typed projection
-  identities and registered health findings. Reload, trust, auth, or runtime
-  failure may leave a correctly applied declared representation with an
-  attention-required effective state; it is never mislabeled as drift and is
-  not silently rolled back.
+  declared-state source. This family exposes no activation probe: Kimi's
+  forbidden MCP commands, Vibe's TUI/LLM-only status, and Kilo's side-effectful
+  probes cannot become production observation ports. Managed writes remain
+  declared and effective-unverified; trust, auth, reload, or runtime state is
+  never inferred from bytes and is never mislabeled as drift.
 - **Finding vocabulary:** add registered `reload.required` and
   `authentication.required` findings; reuse `trust.required`,
   `configuration.higher-precedence`, `native.state.incomplete`, and

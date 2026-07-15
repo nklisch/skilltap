@@ -24,3 +24,4 @@ skilltap-core = { path = "crates/core" }
 skilltap-harnesses = { path = "crates/harnesses" }
 skilltap-test-support = { path = "crates/test-support" }
 toml = "1.1.2"
+toml_edit = "0.23"

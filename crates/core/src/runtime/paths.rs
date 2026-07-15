@@ -52,6 +52,8 @@ pub struct PlatformPaths {
     global_agents: AbsolutePath,
     codex_home: AbsolutePath,
     claude_home: AbsolutePath,
+    kimi_share_dir: AbsolutePath,
+    vibe_home: AbsolutePath,
     kiro_home: AbsolutePath,
     pi_home: AbsolutePath,
     pi_package_dir: AbsolutePath,
@@ -77,6 +79,10 @@ impl PlatformPaths {
         let claude_home =
             optional_environment_path(environment, EnvironmentVariable::ClaudeConfigDir)?
                 .map_or_else(|| join(&home, ".claude", PathRole::ClaudeHome), Ok)?;
+        let kimi_share_dir = optional_environment_path(environment, EnvironmentVariable::KimiShareDir)?
+            .map_or_else(|| join(&home, ".kimi", PathRole::KimiShareDir), Ok)?;
+        let vibe_home = optional_environment_path(environment, EnvironmentVariable::VibeHome)?
+            .map_or_else(|| join(&home, ".vibe", PathRole::VibeHome), Ok)?;
         let kiro_home = optional_environment_path(environment, EnvironmentVariable::KiroHome)?
             .map_or_else(|| join(&home, ".kiro", PathRole::KiroHome), Ok)?;
         let pi_home = join(&home, ".pi/agent", PathRole::PiHome)?;
@@ -90,6 +96,8 @@ impl PlatformPaths {
             global_agents: join(&home, "AGENTS.md", PathRole::GlobalAgents)?,
             codex_home,
             claude_home,
+            kimi_share_dir,
+            vibe_home,
             kiro_home,
             pi_home,
             pi_package_dir,
@@ -129,6 +137,14 @@ impl PlatformPaths {
 
     pub const fn claude_home(&self) -> &AbsolutePath {
         &self.claude_home
+    }
+
+    pub const fn kimi_share_dir(&self) -> &AbsolutePath {
+        &self.kimi_share_dir
+    }
+
+    pub const fn vibe_home(&self) -> &AbsolutePath {
+        &self.vibe_home
     }
 
     pub const fn kiro_home(&self) -> &AbsolutePath {
@@ -172,6 +188,14 @@ impl PlatformPaths {
             (
                 OsString::from(EnvironmentVariable::ClaudeConfigDir.as_str()),
                 OsString::from(self.claude_home.as_str()),
+            ),
+            (
+                OsString::from(EnvironmentVariable::KimiShareDir.as_str()),
+                OsString::from(self.kimi_share_dir.as_str()),
+            ),
+            (
+                OsString::from(EnvironmentVariable::VibeHome.as_str()),
+                OsString::from(self.vibe_home.as_str()),
             ),
             (
                 OsString::from(EnvironmentVariable::KiroHome.as_str()),
@@ -268,6 +292,8 @@ mod tests {
         assert_eq!(paths.global_agents().as_str(), "/home/nathan/AGENTS.md");
         assert_eq!(paths.codex_home().as_str(), "/home/nathan/.codex");
         assert_eq!(paths.claude_home().as_str(), "/opt/claude/nathan");
+        assert_eq!(paths.kimi_share_dir().as_str(), "/home/nathan/.kimi");
+        assert_eq!(paths.vibe_home().as_str(), "/home/nathan/.vibe");
         assert_eq!(paths.kiro_home().as_str(), "/home/nathan/.kiro");
         assert_eq!(paths.pi_home().as_str(), "/home/nathan/.pi/agent");
         assert_eq!(
@@ -378,6 +404,8 @@ mod tests {
                 .with(EnvironmentVariable::XdgCacheHome, "/var/cache/nathan")
                 .with(EnvironmentVariable::CodexHome, "/opt/codex/nathan")
                 .with(EnvironmentVariable::ClaudeConfigDir, "/opt/claude/nathan")
+                .with(EnvironmentVariable::KimiShareDir, "/opt/kimi/nathan")
+                .with(EnvironmentVariable::VibeHome, "/opt/vibe/nathan")
                 .with(EnvironmentVariable::KiroHome, "/opt/kiro/nathan")
                 .with(EnvironmentVariable::PiPackageDir, "/opt/pi/packages"),
         )
@@ -386,7 +414,7 @@ mod tests {
         let environment = paths
             .native_process_environment(Some(OsString::from("/usr/local/bin:/usr/bin")))
             .unwrap();
-        assert_eq!(environment.len(), 8);
+        assert_eq!(environment.len(), 10);
         assert_eq!(environment[OsStr::new("HOME")], "/home/nathan");
         assert_eq!(
             environment[OsStr::new("XDG_CONFIG_HOME")],
@@ -401,6 +429,8 @@ mod tests {
             environment[OsStr::new("CLAUDE_CONFIG_DIR")],
             "/opt/claude/nathan"
         );
+        assert_eq!(environment[OsStr::new("KIMI_SHARE_DIR")], "/opt/kimi/nathan");
+        assert_eq!(environment[OsStr::new("VIBE_HOME")], "/opt/vibe/nathan");
         assert_eq!(environment[OsStr::new("KIRO_HOME")], "/opt/kiro/nathan");
         assert_eq!(
             environment[OsStr::new("PI_PACKAGE_DIR")],
