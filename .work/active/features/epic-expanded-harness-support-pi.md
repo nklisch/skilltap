@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-pi
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-pi-hook-research]
@@ -43,6 +43,18 @@ write is denied before dispatch. Canonical project skills remain unduplicated,
 other authorized targets can proceed, and Codex/Claude remain the only
 first-party bootstrap targets. Isolated acceptance passed 670 workspace tests,
 strict Clippy, formatting, and diff checks without accessing operator Pi state.
+
+## Review result
+
+The required standard independent cross-model pass approved the feature with no
+material findings after build, strict Clippy, and focused core, adapter, and
+compiled CLI verification. Four advisory notes are retained here for future
+profile evolution: the known observe-only tuple still uses the conservative
+`profile.compound.unavailable` label; symlinked roots and manifests use slightly
+different internal missing/unreadable classifications; the manifest byte limit
+currently duplicates the JSON limit; and MCP activation intentionally remains
+`Unverified` even when declaration evidence is exact. These are cosmetic or
+stricter-than-required behaviors and require no closure fix.
 
 ## Epic context
 
