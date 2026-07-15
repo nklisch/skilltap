@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support
 kind: epic
-stage: implementing
+stage: review
 tags: []
 parent: null
 depends_on: [epic-cross-harness-materialization, epic-harness-observation-adoption, epic-reconciliation-execution]
@@ -27,27 +27,39 @@ update, and removal without writing undocumented caches.
 
 The direct target set is Factory Droid, Qwen Code, GitHub Copilot CLI, Gemini
 CLI, Junie, Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, and Amp.
-Cursor, Zoo Code, and ZCode are included as boundary-validation tracks and do
-not gain mutation support until their exact supported write paths are verified.
-Pi is a conditional compound target: mutation support is enabled only when a
-compatible MCP extension and Claude Code hook-compatibility extension are
-installed and healthy for that user.
+Cursor, Zoo Code, and ZCode participate as registered observe-only targets with
+safe documented read surfaces and no mutation ports. Pi is a conditional
+compound observe-only target for the currently attested companion tuple.
 
-Support means the same thing for every admitted target: explicit detection,
-version-bounded mutation authority, global and project scopes, whole-directory
-skills, faithful MCP translation, effective-state observation, managed
-ownership, safe update/removal, idempotent reconciliation, and exact partial or
-blocked reporting for unsupported optional or required components.
+Support is explicit per component, concrete scope, and verification level.
+Effectively verified capabilities reconcile normally. Exact-version documented
+file surfaces without a safe effective observer may be declaration-managed only
+through acknowledged foreground operations; owned bytes, preservation,
+rollback, and idempotence are verified while load or activation remains
+unverified. Unsupported components and scopes do not block unrelated safe
+capabilities.
+
+## Implementation result
+
+The canonical registry now contains Codex, Claude, Factory Droid, Qwen,
+Copilot, Gemini, Junie, Kimi, OpenCode, Kilo, Vibe, Kiro, Amp, Pi, Cursor, Zoo,
+and ZCode. Native lifecycle is used only where attested. Copilot is managed-only;
+Kiro, Kimi, Vibe, Kilo, Junie, and Amp use exact-version declaration management
+for their admitted surfaces; Pi and the three candidates remain observe-only.
+All declaration-managed changes require `--yes`, never run from the daemon, and
+never invoke login, OAuth, trust approval, TUI, editor, or side-effectful status
+commands. Every child feature completed its standard review.
 
 ## Strategic decisions
 
 - **Which harnesses are in scope?** All eleven research-qualified direct
-  targets, Pi as a conditional compound target, and the three boundary-spike
-  candidates. A candidate becomes supported only after it clears the same
-  adapter acceptance contract.
-- **Does a target need a marketplace or plugin manager?** No. Documented,
-  observable global and project skill and MCP surfaces are the admission bar.
-  Native lifecycle remains preferred when it exists.
+  targets, Pi as a conditional compound target, and the three former boundary
+  candidates. Admission is per component and scope; registration can be
+  observe-only and never implies mutation authority.
+- **Does a target need a marketplace or plugin manager?** No. Documented safe
+  read surfaces permit observe-only registration. Exact-version documented file
+  surfaces may permit acknowledged declaration management. Native lifecycle
+  remains preferred when deterministic and complete.
 - **How is Pi admitted?** Treat Pi plus the user's installed MCP and Claude Code
   hook-compatibility extensions as one capability profile. Detect and report
   companion-extension health separately; never pretend Pi core supplies those
@@ -97,15 +109,17 @@ not flatten their schemas or lifecycle behavior into a universal plugin format.
 
 ## Acceptance direction
 
-- Every direct target passes the shared isolated adapter acceptance matrix for
-  detection, both scopes, complete skills, MCP, observation, reload, drift,
-  removal, and immediate-repeat idempotency.
+- Every mutable component passes the applicable isolated acceptance matrix for
+  exact detection, its admitted scopes, complete skills or MCP declarations,
+  ownership, preservation, removal, and immediate-repeat idempotency. Missing
+  scopes and components are explicit rather than inferred.
 - Native plugin distributions remain independently tracked and preferred over
   managed fallback whenever the same plugin exists for a target.
 - Unknown target versions remain observe-only; runtime probes may narrow but
   never grant mutation authority.
-- Cursor, Zoo Code, and ZCode stay observe-only candidates until their boundary
-  spikes attest exact supported files and reload behavior.
+- Cursor, Zoo Code, and ZCode are registered observe-only targets. Their
+  unresolved identity, editor-storage, project-skill, precedence, and effective
+  reload boundaries remain visible and cannot produce mutation.
 - Pi status distinguishes the core harness, MCP extension, and Claude-hook
   extension. Missing or incompatible companions keep the compound adapter
   observe-only and produce actionable health output.
