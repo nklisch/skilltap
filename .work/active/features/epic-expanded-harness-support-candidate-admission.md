@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-candidate-admission
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links]
@@ -49,6 +49,14 @@ ZCode remain absent from the registry, help, mutation, and `--target all`
 surfaces, while Codex/Claude bootstrap behavior and sibling isolation remain
 unchanged. Workspace verification passed 656 tests with strict Clippy,
 formatting, and diff checks.
+
+## Review result
+
+The required standard independent cross-model pass approved the feature with no
+material blockers. It directly re-ran the 656-test workspace suite, strict
+Clippy, formatting, diff checks, focused gate/registry/compiled CLI tests, and
+production-isolation searches. One cosmetic stale Cursor CLI name was corrected
+to the current documented `agent` command; no second review pass was required.
 
 ## Epic context
 

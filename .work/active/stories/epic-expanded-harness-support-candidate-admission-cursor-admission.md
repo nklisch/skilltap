@@ -25,7 +25,7 @@ Realize exactly the Cursor boundary disposition through ordinary adapter ports.
 An admitted result adds `cursor.rs`/`cursor_managed.rs`, an exact mutable
 profile, verified skill roots and compatibility, both-scope managed projection,
 a Cursor-owned `mcpServers` codec, and a bounded effective probe using the
-validated `cursor-agent mcp` commands. It edits only the attested global/project
+current documented `agent mcp` commands. It edits only the attested global/project
 `mcp.json` files, consumes the shared project-skill representation, and leaves
 OAuth/extension registration native-owned.
 
