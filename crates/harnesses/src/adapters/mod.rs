@@ -4,12 +4,16 @@ mod codex_managed;
 mod file_managed;
 mod gemini;
 mod gemini_managed;
+mod opencode;
+mod opencode_managed;
 
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
 pub use codex_managed::CodexManagedProjection;
 pub use gemini::{GeminiAdapter, GeminiEffectiveStateProbe, GeminiSkillProjection};
 pub use gemini_managed::GeminiManagedProjection;
+pub use opencode::{OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeSkillProjection};
+pub use opencode_managed::OpenCodeManagedProjection;
 
 #[cfg(test)]
 mod tests {
@@ -41,6 +45,13 @@ mod tests {
                 GeminiAdapter::static_ref(),
                 "0.50.0",
                 "gemini-0-50-0",
+                true,
+                true,
+            ),
+            (
+                OpenCodeAdapter::static_ref(),
+                "1.18.1",
+                "opencode-1-18-1",
                 true,
                 true,
             ),
@@ -142,6 +153,9 @@ mod tests {
         let gemini = registry
             .adapter(&HarnessId::new("gemini").unwrap())
             .unwrap();
+        let opencode = registry
+            .adapter(&HarnessId::new("opencode").unwrap())
+            .unwrap();
 
         assert_eq!(codex.identity(), CodexAdapter::static_ref().identity());
         assert_eq!(claude.identity(), ClaudeAdapter::static_ref().identity());
@@ -159,6 +173,14 @@ mod tests {
         assert!(gemini.skill_projection().is_some());
         assert!(gemini.managed_projection().is_some());
         assert!(gemini.effective_state_probe().is_some());
+        assert_eq!(
+            opencode.identity(),
+            OpenCodeAdapter::static_ref().identity()
+        );
+        assert!(opencode.native_lifecycle().is_none());
+        assert!(opencode.skill_projection().is_some());
+        assert!(opencode.managed_projection().is_some());
+        assert!(opencode.effective_state_probe().is_some());
     }
 
     fn support(value: bool) -> CapabilitySupport {

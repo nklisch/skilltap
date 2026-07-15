@@ -111,6 +111,14 @@ fn native_config_with_gemini(codex: &Path, claude: &Path, gemini: &Path) -> Stri
     )
 }
 
+fn native_config_with_opencode(codex: &Path, claude: &Path, opencode: &Path) -> String {
+    format!(
+        "{}\n[harnesses.opencode]\nenabled = true\nbinary = {}\n",
+        native_config(codex, claude),
+        toml_string(opencode),
+    )
+}
+
 fn write_gemini_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
     let executable = machine.working_directory().join("gemini");
     fs::write(
@@ -130,6 +138,29 @@ fn write_gemini_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
         permissions.set_mode(0o755);
         fs::set_permissions(&executable, permissions)
             .expect("make Gemini version fixture executable");
+    }
+    executable
+}
+
+fn write_opencode_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
+    let executable = machine.working_directory().join("opencode");
+    fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' {}\n",
+            toml_string(Path::new(version))
+        ),
+    )
+    .expect("write OpenCode version fixture");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(&executable)
+            .expect("read OpenCode version fixture")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&executable, permissions)
+            .expect("make OpenCode version fixture executable");
     }
     executable
 }
@@ -1357,6 +1388,160 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
             .iter()
             .any(|resource| resource["id"] == "omitted:mcp:plugin-relative")
     );
+}
+
+#[test]
+fn opencode_exact_profile_manages_scoped_plugins_and_unknown_versions_do_not_write() {
+    let machine = machine();
+    let opencode = write_opencode_harness(&machine, "1.18.1");
+    let config = native_config_with_opencode(&opencode, &opencode, &opencode)
+        .replace(
+            "[harnesses.codex]\nenabled = true",
+            "[harnesses.codex]\nenabled = false",
+        )
+        .replace(
+            "[harnesses.claude]\nenabled = true",
+            "[harnesses.claude]\nenabled = false",
+        );
+    write_owned(&machine, "config.toml", &config);
+    let source = write_gemini_marketplace(&machine);
+    let project = machine.home().join("opencode-project");
+    fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+    fs::create_dir_all(project.join(".agents/skills")).unwrap();
+    fs::create_dir_all(machine.configuration_home().join("opencode")).unwrap();
+    fs::write(
+        machine.configuration_home().join("opencode/opencode.json"),
+        br#"{"model":"keep-global","plugin":["unrelated-plugin"],"future":{"preserve":true}}"#,
+    )
+    .unwrap();
+    fs::write(
+        project.join("opencode.json"),
+        br#"{"model":"keep-project","future":{"project":true}}"#,
+    )
+    .unwrap();
+
+    for scope in [None, Some(project.as_path())] {
+        let mut add = vec![
+            "marketplace",
+            "add",
+            source.to_str().unwrap(),
+            "--name",
+            "team",
+        ];
+        if let Some(project) = scope {
+            add.extend(["--project", project.to_str().unwrap()]);
+        }
+        add.extend(["--target", "opencode", "--json"]);
+        let output = run(&machine, &add);
+        assert_code(&output, 0);
+
+        let mut install = vec!["plugin", "install", "demo@team"];
+        if let Some(project) = scope {
+            install.extend(["--project", project.to_str().unwrap()]);
+        }
+        install.extend(["--target", "opencode", "--json"]);
+        let output = run(&machine, &install);
+        assert_code(&output, 0);
+        assert_eq!(json(&output)["result"], "completed");
+    }
+
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/demo/SKILL.md")
+            .is_file()
+    );
+    assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
+    let global_config = machine.configuration_home().join("opencode/opencode.json");
+    let project_config = project.join("opencode.json");
+    let global: Value = serde_json::from_slice(&fs::read(global_config).unwrap()).unwrap();
+    let project_value: Value = serde_json::from_slice(&fs::read(project_config).unwrap()).unwrap();
+    assert_eq!(global["model"], "keep-global");
+    assert_eq!(global["plugin"][0], "unrelated-plugin");
+    assert_eq!(global["future"]["preserve"], true);
+    assert_eq!(global["mcp"]["demo-docs"]["type"], "local");
+    assert_eq!(
+        global["mcp"]["demo-docs"]["command"],
+        serde_json::json!(["demo-mcp", "serve"])
+    );
+    assert_eq!(project_value["model"], "keep-project");
+    assert_eq!(project_value["future"]["project"], true);
+    assert_eq!(project_value["mcp"]["demo-docs"]["type"], "local");
+    assert!(config_root(&machine).join("state.json").is_file());
+
+    for version in ["1.18.0", "1.18.2"] {
+        let machine = IsolatedMachine::new("skilltap-compiled-opencode-unknown")
+            .expect("create isolated unknown-version machine");
+        let opencode = write_opencode_harness(&machine, version);
+        let config = native_config_with_opencode(&opencode, &opencode, &opencode)
+            .replace(
+                "[harnesses.codex]\nenabled = true",
+                "[harnesses.codex]\nenabled = false",
+            )
+            .replace(
+                "[harnesses.claude]\nenabled = true",
+                "[harnesses.claude]\nenabled = false",
+            );
+        write_owned(&machine, "config.toml", &config);
+        let source = write_gemini_marketplace(&machine);
+        let project = machine.home().join("opencode-unknown-project");
+        fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+        fs::create_dir_all(project.join(".agents/skills")).unwrap();
+        let cache_sentinel = machine.cache_home().join("opencode/sentinel");
+        fs::create_dir_all(cache_sentinel.parent().unwrap()).unwrap();
+        fs::write(&cache_sentinel, b"native cache must remain untouched").unwrap();
+
+        for scope in [None, Some(project.as_path())] {
+            let mut add = vec![
+                "marketplace",
+                "add",
+                source.to_str().unwrap(),
+                "--name",
+                "team",
+            ];
+            if let Some(project) = scope {
+                add.extend(["--project", project.to_str().unwrap()]);
+            }
+            add.extend(["--target", "opencode", "--json"]);
+            let output = run(&machine, &add);
+            assert_code(&output, 2);
+        }
+
+        let roots = [
+            machine.home().join(".agents/skills"),
+            machine.configuration_home().join("opencode"),
+            project.join(".agents/skills"),
+            project.join(".opencode"),
+        ];
+        let before = roots
+            .iter()
+            .map(|root| snapshot_native_tree(root))
+            .collect::<Vec<_>>();
+        assert!(!config_root(&machine).join("state.json").exists());
+        for scope in [None, Some(project.as_path())] {
+            let mut install = vec!["plugin", "install", "demo@team"];
+            if let Some(project) = scope {
+                install.extend(["--project", project.to_str().unwrap()]);
+            }
+            install.extend(["--target", "opencode", "--json"]);
+            let output = run(&machine, &install);
+            assert_code(&output, 2);
+            assert_eq!(json(&output)["summary"]["changed"], false);
+        }
+        let after = roots
+            .iter()
+            .map(|root| snapshot_native_tree(root))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            after, before,
+            "unknown OpenCode {version} wrote a target surface"
+        );
+        assert_eq!(
+            fs::read(&cache_sentinel).unwrap(),
+            b"native cache must remain untouched"
+        );
+        assert!(!config_root(&machine).join("state.json").exists());
+    }
 }
 
 #[test]
