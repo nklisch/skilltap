@@ -75,13 +75,14 @@ impl HarnessAdapter for KiroAdapter {
         TargetIdentity {
             id: HarnessId::new("kiro").expect("static harness id is valid"),
             display_name: "Kiro CLI",
-            default_binary: "kiro-cli",
+            default_binary: Some("kiro-cli"),
             distribution_surface: DistributionSurface::Managed,
+            identity_boundary: crate::TargetIdentityBoundary::Executable,
         }
     }
 
-    fn version_arguments(&self) -> Vec<OsString> {
-        vec![OsString::from("--version")]
+    fn version_arguments(&self) -> Option<Vec<OsString>> {
+        Some(vec![OsString::from("--version")])
     }
 
     fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, crate::DetectionError> {
@@ -201,7 +202,7 @@ mod tests {
     #[test]
     fn exact_version_profile_is_authorized_and_adjacent_versions_are_unknown() {
         let adapter = KiroAdapter;
-        assert_eq!(adapter.identity().default_binary, "kiro-cli");
+        assert_eq!(adapter.identity().default_binary, Some("kiro-cli"));
         assert_eq!(
             adapter
                 .decode_version(b"kiro-cli 2.12.2\n")

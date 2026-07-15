@@ -1312,7 +1312,6 @@ impl StatusApplication<'_> {
             let Some(mutating_targets) = mutating_targets else {
                 continue;
             };
-            authorized_targets.extend(mutating_targets.iter().cloned());
             let scope_requests = match request.as_ref() {
                 Some(request) => vec![request.clone()],
                 None => inventory
@@ -1335,6 +1334,51 @@ impl StatusApplication<'_> {
                     .collect::<Vec<_>>(),
             };
             for request in scope_requests {
+                // Establish at least one real mutation route before changing
+                // desired inventory. Observe-only/file-only candidates have
+                // neither an exact native profile nor a managed projection;
+                // publishing their desired resource would violate the
+                // no-write contract even though route selection later blocks.
+                let routable_targets = mutating_targets
+                    .iter()
+                    .filter(|target_id| {
+                        // This is intentionally a static preflight. Native
+                        // profile detection is performed once by route
+                        // selection; probing here would consume stateful
+                        // version fixtures and could change existing
+                        // revalidation behavior. A configured binary or a
+                        // declared managed projection is enough to defer to
+                        // that authoritative route selection.
+                        let has_binary = documents
+                            .config
+                            .harnesses()
+                            .get(target_id)
+                            .and_then(|policy| policy.binary.as_ref())
+                            .is_some();
+                        let has_managed_projection = self
+                            .registry
+                            .adapter(target_id)
+                            .is_some_and(|adapter| adapter.managed_projection().is_some());
+                        has_binary || has_managed_projection
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let Ok(mutating_targets) = HarnessSet::new(routable_targets) else {
+                    outcome.result = ResultClass::AttentionRequired;
+                    continue;
+                };
+                if mutating_targets.iter().next().is_none() {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "native_profile_unavailable",
+                            "The selected harness is observe-only for this lifecycle action; no desired or native state was changed.",
+                        )
+                        .with_context("scope", scope_label(concrete_scope)),
+                    );
+                    continue;
+                }
+                authorized_targets.extend(mutating_targets.iter().cloned());
                 let resource = if request.is_update() || removal {
                     let key = request.resource_key(concrete_scope).map_err(|_| {
                         ErrorDetail::new(
@@ -1534,7 +1578,8 @@ impl StatusApplication<'_> {
                                         .config
                                         .harnesses()
                                         .get(target_id)
-                                        .map(|policy| policy.binary.as_str())
+                                        .and_then(|policy| policy.binary.as_ref())
+                                        .map(|binary| binary.as_str())
                                         .unwrap_or_else(|| target_id.as_str());
                                     let diagnostic =
                                         detection_diagnostic(&error, target_id.as_str(), binary);
@@ -1608,7 +1653,8 @@ impl StatusApplication<'_> {
                                 .config
                                 .harnesses()
                                 .get(target_id)
-                                .map(|policy| policy.binary.as_str())
+                                .and_then(|policy| policy.binary.as_ref())
+                                .map(|binary| binary.as_str())
                                 .unwrap_or_else(|| target_id.as_str());
                             let diagnostic =
                                 detection_diagnostic(&error, target_id.as_str(), binary);
@@ -2272,6 +2318,147 @@ impl StatusApplication<'_> {
                 ));
             }
         };
+        // Resolve standalone skill mutation authority before resolving the
+        // source. A missing local source may otherwise trigger a Git checkout
+        // into the managed source store even though every selected candidate
+        // is observe-only and the command must be zero-write.
+        let project_only = scope
+            .resolved
+            .iter()
+            .all(|scope| matches!(scope, Scope::Project(_)));
+        let file_only_candidates = !project_only
+            && targets.resolved.iter().all(|target_id| {
+                let has_binary = documents
+                    .config
+                    .harnesses()
+                    .get(target_id)
+                    .and_then(|policy| policy.binary.as_ref())
+                    .is_some();
+                let has_managed_projection = self
+                    .registry
+                    .adapter(target_id)
+                    .is_some_and(|adapter| adapter.managed_projection().is_some());
+                !has_binary && !has_managed_projection
+            });
+        if file_only_candidates {
+            return outcome.with_warning(Warning::new(
+                "skill_mutation_unavailable",
+                "The selected harness is observe-only and has no documented standalone skill mutation route; no files were written.",
+            ));
+        }
+        let mut profile_targets = None;
+        let mut conditional_process_limits = None;
+        let mut conditional_json_limits = None;
+        if !project_only {
+            let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+                Ok(paths) => paths,
+                Err(_) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "platform_paths_unavailable",
+                        "The skilltap configuration paths could not be resolved.",
+                    ));
+                }
+            };
+            let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+                .expect("bounded conditional profile process limits are valid");
+            let json_limits = JsonLimits::new(256 * 1024, 64)
+                .expect("bounded conditional profile JSON limits are valid");
+            let search_path = std::env::var_os("PATH");
+            let environment = match paths.native_process_environment(search_path.clone()) {
+                Ok(environment) => environment,
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_error(ErrorDetail::new(
+                        "native_environment_unavailable",
+                        "The bounded native process environment could not be resolved.",
+                    ));
+                }
+            };
+            let mut profile_target_ids = Vec::new();
+            for target_id in targets.resolved.iter() {
+                match configured_adapter_profile(
+                    self.registry,
+                    &documents.config,
+                    target_id,
+                    NativeProfileRequest {
+                        scope: &Scope::Global,
+                        environment: &environment,
+                        process_limits,
+                        json_limits,
+                        search_path: search_path.clone(),
+                        capability_name: if command == "skill update" || command == "sync" {
+                            "skill.update"
+                        } else {
+                            "skill.install"
+                        },
+                    },
+                ) {
+                    Ok(Some(profile)) if profile.capability == CapabilitySupport::Supported => {
+                        let skill_capability = CapabilityId::new("component.skill")
+                            .expect("static component skill capability is valid");
+                        match profile.profile.mutation_support(
+                            &Scope::Global,
+                            &skill_capability,
+                        ) {
+                            Some(CapabilitySupport::Supported) => {
+                                profile_target_ids.push(target_id.clone())
+                            }
+                            Some(CapabilitySupport::Unverified)
+                                if profile
+                                    .declaration_contract
+                                    .as_ref()
+                                    .is_some_and(|contract| {
+                                        contract.covers(&BTreeSet::from([
+                                            skilltap_core::mutation_authority::ManagedSurfaceKind::CompleteSkillTree,
+                                        ]))
+                                    }) && acknowledged =>
+                            {
+                                profile_target_ids.push(target_id.clone());
+                                outcome = outcome.with_warning(
+                                    Warning::new(
+                                        "skill_effective_unverified",
+                                        "The complete skill tree will be written, but Copilot skill loading remains unverified.",
+                                    )
+                                    .with_context("harness", target_id.as_str()),
+                                );
+                            }
+                            _ => {
+                                outcome = outcome.with_warning(
+                                    Warning::new(
+                                        "skill_mutation_unavailable",
+                                        "The selected harness profile requires explicit declaration acknowledgment for standalone skill mutation; no files were written for it.",
+                                    )
+                                    .with_context("harness", target_id.as_str()),
+                                );
+                            }
+                        }
+                    }
+                    Ok(Some(profile)) => {
+                        outcome = outcome.with_warning(
+                            Warning::new(
+                                "skill_mutation_unavailable",
+                                "The selected harness profile is not verified for standalone skill mutation; no files were written for it.",
+                            )
+                            .with_context("harness", target_id.as_str())
+                            .with_context("support", format!("{:?}", profile.capability)),
+                        );
+                    }
+                    Ok(None) | Err(_) => {
+                        outcome = outcome.with_warning(
+                            Warning::new(
+                                "skill_mutation_unavailable",
+                                "The selected harness profile could not be verified for standalone skill mutation; no files were written for it.",
+                            )
+                            .with_context("harness", target_id.as_str()),
+                        );
+                    }
+                }
+            }
+            profile_targets = HarnessSet::new(profile_target_ids).ok();
+            conditional_process_limits = Some(process_limits);
+            conditional_json_limits = Some(json_limits);
+        }
         let locator = match SourceLocator::new(request.source) {
             Ok(locator) => locator,
             Err(_) => {
@@ -2527,103 +2714,15 @@ impl StatusApplication<'_> {
         let mut entries = BTreeMap::new();
         let mut seeds = BTreeMap::new();
         let mut old_revision = None;
-        let conditional_process_limits =
-            ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
-                .expect("bounded conditional profile process limits are valid");
-        let conditional_json_limits = JsonLimits::new(256 * 1024, 64)
-            .expect("bounded conditional profile JSON limits are valid");
-        let search_path = std::env::var_os("PATH");
-        let native_environment = match paths.native_process_environment(search_path.clone()) {
-            Ok(environment) => environment,
-            Err(_) => {
-                outcome.result = ResultClass::AttentionRequired;
-                return outcome.with_error(ErrorDetail::new(
-                    "native_environment_unavailable",
-                    "The bounded native process environment could not be resolved.",
-                ));
-            }
-        };
-        let mut profile_target_ids = Vec::new();
-        for target_id in targets.resolved.iter() {
-            match configured_adapter_profile(
-                self.registry,
-                &documents.config,
-                target_id,
-                NativeProfileRequest {
-                    scope: &Scope::Global,
-                    environment: &native_environment,
-                    process_limits: conditional_process_limits,
-                    json_limits: conditional_json_limits,
-                    search_path: search_path.clone(),
-                    capability_name: if command == "skill update" || command == "sync" {
-                        "skill.update"
-                    } else {
-                        "skill.install"
-                    },
-                },
-            ) {
-                Ok(Some(profile)) if profile.capability == CapabilitySupport::Supported => {
-                    let skill_capability = CapabilityId::new("component.skill")
-                        .expect("static component skill capability is valid");
-                    match profile.profile.mutation_support(&Scope::Global, &skill_capability) {
-                        Some(CapabilitySupport::Supported) => profile_target_ids.push(target_id.clone()),
-                        Some(CapabilitySupport::Unverified)
-                            if profile
-                                .declaration_contract
-                                .as_ref()
-                                .is_some_and(|contract| {
-                                    contract.covers(&BTreeSet::from([
-                                        skilltap_core::mutation_authority::ManagedSurfaceKind::CompleteSkillTree,
-                                    ]))
-                                }) && acknowledged =>
-                        {
-                            profile_target_ids.push(target_id.clone());
-                            outcome = outcome.with_warning(
-                                Warning::new(
-                                    "skill_effective_unverified",
-                                    "The complete skill tree will be written, but Copilot skill loading remains unverified.",
-                                )
-                                .with_context("harness", target_id.as_str()),
-                            );
-                        }
-                        _ => {
-                            outcome = outcome.with_warning(
-                                Warning::new(
-                                    "skill_mutation_unavailable",
-                                    "The selected harness profile requires explicit declaration acknowledgment for standalone skill mutation; no files were written for it.",
-                                )
-                                .with_context("harness", target_id.as_str()),
-                            );
-                        }
-                    }
-                }
-                Ok(Some(profile)) => {
-                    outcome = outcome.with_warning(
-                        Warning::new(
-                            "skill_mutation_unavailable",
-                            "The selected harness profile is not verified for standalone skill mutation; no files were written for it.",
-                        )
-                        .with_context("harness", target_id.as_str())
-                        .with_context("support", format!("{:?}", profile.capability)),
-                    );
-                }
-                Ok(None) | Err(_) => {
-                    outcome = outcome.with_warning(
-                        Warning::new(
-                            "skill_mutation_unavailable",
-                            "The selected harness profile could not be verified for standalone skill mutation; no files were written for it.",
-                        )
-                        .with_context("harness", target_id.as_str()),
-                    );
-                }
-            }
-        }
+        let conditional_process_limits = conditional_process_limits
+            .expect("global skill mutation preflight established process limits");
+        let conditional_json_limits = conditional_json_limits
+            .expect("global skill mutation preflight established JSON limits");
         let mutation_capability_name = if command == "skill update" || command == "sync" {
             "skill.update"
         } else {
             "skill.install"
         };
-        let profile_targets = HarnessSet::new(profile_target_ids).ok();
         let timestamp = match Timestamp::from_system_time(std::time::SystemTime::now()) {
             Ok(timestamp) => timestamp,
             Err(_) => {

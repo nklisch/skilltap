@@ -19,8 +19,8 @@ use skilltap_harnesses::{
     observe_codex_config, probe_profile, unreachable_installation,
 };
 use skilltap_test_support::{
-    BLOCKED_CANDIDATES, CandidateAdmissionReport, CandidateDisposition, FakeHarnessProfile,
-    FakeNativeMode, FakeNativeProcess, TempRoot, blocked_candidate_admission_reports,
+    CandidateAdmissionReport, CandidateDisposition, FakeHarnessProfile, FakeNativeMode,
+    FakeNativeProcess, OBSERVE_ONLY_CANDIDATES, TempRoot, observe_only_candidate_admission_reports,
 };
 
 #[derive(Default)]
@@ -547,19 +547,19 @@ fn missing_binary_and_explicit_unreachable_results_do_not_probe() {
 }
 
 #[test]
-fn blocked_candidate_reports_match_registry_absence_and_first_party_bootstrap_scope() {
-    let reports = blocked_candidate_admission_reports();
+fn observe_only_candidate_reports_match_registry_and_first_party_bootstrap_scope() {
+    let reports = observe_only_candidate_admission_reports();
     assert_eq!(
         reports
             .iter()
             .map(CandidateAdmissionReport::candidate)
             .collect::<Vec<_>>(),
-        BLOCKED_CANDIDATES.to_vec()
+        OBSERVE_ONLY_CANDIDATES.to_vec()
     );
     assert!(
         reports
             .iter()
-            .all(|report| report.disposition() == CandidateDisposition::Blocked)
+            .all(|report| report.disposition() == CandidateDisposition::ObserveOnly)
     );
 
     let registry = TargetRegistry::canonical();
@@ -567,7 +567,7 @@ fn blocked_candidate_reports_match_registry_absence_and_first_party_bootstrap_sc
         registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
         [
             "codex", "claude", "droid", "copilot", "gemini", "qwen", "opencode", "kiro", "kimi",
-            "vibe", "kilo", "junie", "amp", "pi"
+            "vibe", "kilo", "junie", "amp", "pi", "cursor", "zoo", "zcode"
         ]
     );
     assert_eq!(
@@ -580,12 +580,19 @@ fn blocked_candidate_reports_match_registry_absence_and_first_party_bootstrap_sc
 
     for report in reports {
         let id = HarnessId::new(report.candidate()).unwrap();
-        assert!(!registry.contains(&id));
-        assert!(registry.adapter(&id).is_none());
+        assert!(registry.contains(&id));
+        let adapter = registry
+            .adapter(&id)
+            .expect("observe-only candidate is registered");
+        assert!(adapter.native_lifecycle().is_none());
+        assert!(adapter.skill_projection().is_none());
+        assert!(adapter.managed_projection().is_none());
+        assert!(adapter.effective_state_probe().is_none());
         assert!(
-            registry
-                .iter()
-                .all(|adapter| adapter.identity().id.as_str() != report.candidate())
+            adapter
+                .select_profile(&skilltap_core::domain::NativeVersion::new("99.0.0").unwrap())
+                .mutation_capabilities()
+                .is_none()
         );
     }
 }

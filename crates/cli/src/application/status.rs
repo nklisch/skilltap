@@ -921,7 +921,89 @@ impl NativeObservation {
                 result.failed_targets += scope.resolved.len();
                 continue;
             };
-            let binary = policy.binary.as_str();
+            if let Some(read_only) = adapter.read_only_target() {
+                let profile = read_only.profile();
+                for current_scope in &scope.resolved {
+                    match adapter.observe(&paths, current_scope, tree_limits) {
+                        Ok(observed_paths) => {
+                            result.observed_targets += 1;
+                            result.resources.push(
+                                OutputEntry::new(observation_id(target, current_scope), "observed")
+                                    .with_field("harness", target.as_str())
+                                    .with_field("scope", scope_label(current_scope))
+                                    .with_field("identity_boundary", "file_only")
+                                    .with_field("profile_authority", "observe_only")
+                                    .with_field(
+                                        "native_entries",
+                                        observed_paths.canonical.len() as u64
+                                            + observed_paths.surface_labels.len() as u64,
+                                    ),
+                            );
+                            for snapshot in observed_paths.canonical {
+                                result.resources.push(native_surface_output_entry(
+                                    target,
+                                    current_scope,
+                                    &snapshot.root,
+                                    profile.authority(),
+                                    snapshot.snapshot.entries().len(),
+                                ));
+                                result.native_entries += 1;
+                            }
+                            for label in observed_paths.surface_labels {
+                                result.resources.push(native_surface_output_entry(
+                                    target,
+                                    current_scope,
+                                    label,
+                                    profile.authority(),
+                                    0,
+                                ));
+                                result.native_entries += 1;
+                            }
+                            result.warnings.push(
+                                Warning::new(
+                                    "capability.unverified",
+                                    "This target exposes documented read surfaces only; no mutation authority is available.",
+                                )
+                                .with_context("harness", target.as_str())
+                                .with_context("scope", scope_label(current_scope)),
+                            );
+                            for boundary in adapter.unresolved_observation_boundaries() {
+                                result.warnings.push(
+                                    Warning::new(
+                                        "target_boundary_unresolved",
+                                        "A documented target boundary remains unavailable for effective management.",
+                                    )
+                                    .with_context("harness", target.as_str())
+                                    .with_context("boundary", *boundary),
+                                );
+                            }
+                        }
+                        Err(_error) => {
+                            result.failed_targets += 1;
+                            result.warnings.push(
+                                Warning::new(
+                                    "native_observation_failed",
+                                    "Native harness state could not be observed within the safety limits.",
+                                )
+                                .with_context("harness", target.as_str())
+                            );
+                        }
+                    }
+                }
+                continue;
+            }
+            let Some(binary) = policy.binary.as_ref() else {
+                result.failed_targets += scope.resolved.len();
+                result.warnings.push(
+                    Warning::new(
+                        "native_executable_not_configured",
+                        "This executable-backed target has no configured binary.",
+                    )
+                    .with_context("harness", target.as_str()),
+                );
+                continue;
+            };
+            let binary = binary.as_str();
             let configured = match configured_binary(binary) {
                 Ok(binary) => binary,
                 Err(_) => {
@@ -955,6 +1037,16 @@ impl NativeObservation {
                     let diagnostic = detection_diagnostic(&error, target.as_str(), binary);
                     result.warnings.push(diagnostic.warning);
                     result.next_actions.push(diagnostic.next_action);
+                    for boundary in adapter.unresolved_observation_boundaries() {
+                        result.warnings.push(
+                            Warning::new(
+                                "target_boundary_unresolved",
+                                "A documented target boundary remains unavailable for effective management.",
+                            )
+                            .with_context("harness", target.as_str())
+                            .with_context("boundary", *boundary),
+                        );
+                    }
                     continue;
                 }
             };
@@ -1313,13 +1405,46 @@ pub(crate) fn first_use_harness_report(
         let Some(policy) = config.harnesses().get(&harness) else {
             continue;
         };
-        let binary = policy.binary.as_str();
         let mut entry =
             OutputEntry::new(harness.as_str(), "not_enabled").with_field("enabled", false);
         if mode == NativeObservationMode::Disabled {
+            if adapter.read_only_target().is_some() {
+                entry = entry
+                    .with_field("identity_boundary", "file_only")
+                    .with_field("profile_authority", "observe_only");
+            }
             outcome = outcome.with_resource(entry);
             continue;
         }
+        if adapter.read_only_target().is_some() {
+            entry = entry
+                .with_field("identity_boundary", "file_only")
+                .with_field("profile_authority", "observe_only")
+                .with_field("reachable", false);
+            outcome = outcome
+                .with_warning(
+                    Warning::new(
+                        "harness_observe_only",
+                        "This registered target has documented read surfaces but no executable boundary; mutation is unavailable.",
+                    )
+                    .with_context("harness", harness.as_str()),
+                )
+                .with_resource(entry);
+            continue;
+        }
+        let Some(binary) = policy.binary.as_ref() else {
+            outcome = outcome
+                .with_warning(
+                    Warning::new(
+                        "native_executable_not_configured",
+                        "This executable-backed target has no configured binary.",
+                    )
+                    .with_context("harness", harness.as_str()),
+                )
+                .with_resource(entry.with_field("reachable", false));
+            continue;
+        };
+        let binary = binary.as_str();
         let configured = match configured_binary(binary) {
             Ok(value) => value,
             Err(_) => {
@@ -1682,6 +1807,30 @@ fn managed_declaration_status_projection(
             outcome.result = ResultClass::AttentionRequired;
         }
     }
+}
+
+fn native_surface_output_entry(
+    harness: &HarnessId,
+    scope: &Scope,
+    root: &str,
+    authority: ProfileAuthority,
+    entries: usize,
+) -> OutputEntry {
+    let status = if authority == ProfileAuthority::ObserveOnly {
+        "observed_unverified"
+    } else {
+        "observed"
+    };
+    OutputEntry::new(stable_resource_id(harness, root), status)
+        .with_field("harness", harness.as_str())
+        .with_field("scope", scope_label(scope))
+        .with_field("kind", resource_kind(native_surface_kind(root)))
+        .with_field("layer", "declared")
+        .with_field(
+            "native_identity",
+            format!("{harness}:{root}:entries-{entries}"),
+        )
+        .with_field("native_entries", entries as u64)
 }
 
 fn native_surface_resource(

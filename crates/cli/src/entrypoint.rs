@@ -628,17 +628,38 @@ fn execute_system_harness_list(registry: &TargetRegistry, _args: &OutputArgs) ->
             let policy = config.harnesses().get(&identity.id);
             let enabled = policy.is_some_and(|policy| policy.enabled);
             let binary = policy
-                .map(|policy| policy.binary.as_str())
-                .unwrap_or_else(|| identity.id.as_str());
+                .and_then(|policy| policy.binary.as_ref())
+                .map(|binary| binary.as_str())
+                .or(identity.default_binary);
             let mut entry = OutputEntry::new(
                 identity.id.as_str(),
                 if enabled { "enabled" } else { "disabled" },
             )
-            .with_field("enabled", enabled)
-            .with_field("binary", binary);
+            .with_field("enabled", enabled);
+            if let Some(binary) = binary {
+                entry = entry.with_field("binary", binary);
+            }
             if let Some(native_root) = adapter.native_root(&paths) {
                 entry = entry.with_field("native_root", native_root.as_str());
             }
+            let Some(binary) = binary else {
+                entry = entry
+                    .with_field("identity_boundary", "file_only")
+                    .with_field("profile_authority", "observe_only")
+                    .with_field("reachable", false);
+                if enabled {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(
+                        crate::Warning::new(
+                            "harness_observe_only",
+                            "This registered target has documented read surfaces but no executable boundary; mutation is unavailable.",
+                        )
+                        .with_context("harness", identity.id.as_str()),
+                    );
+                }
+                outcome = outcome.with_resource(entry);
+                continue;
+            };
             let configured = if std::path::Path::new(binary).is_absolute() {
                 AbsolutePath::new(binary)
                     .map(ConfiguredBinary::absolute)
@@ -710,6 +731,16 @@ fn execute_system_harness_list(registry: &TargetRegistry, _args: &OutputArgs) ->
                     outcome = outcome
                         .with_warning(diagnostic.warning)
                         .with_next_action(diagnostic.next_action);
+                    for boundary in adapter.unresolved_observation_boundaries() {
+                        outcome = outcome.with_warning(
+                            crate::Warning::new(
+                                "target_boundary_unresolved",
+                                "A documented target boundary remains unavailable for effective management.",
+                            )
+                            .with_context("harness", identity.id.as_str())
+                            .with_context("boundary", *boundary),
+                        );
+                    }
                 }
             }
             outcome = outcome.with_resource(entry);
@@ -748,11 +779,18 @@ fn execute_harness_change(
         if let Some(error) = config_membership_error(registry, &current) {
             return Outcome::new(command, ResultClass::Invalid).with_error(error);
         }
-        let default_binary = registry
-            .adapter(harness)
-            .and_then(|adapter| HarnessBinary::new(adapter.identity().default_binary).ok());
-        let binary = binary.or(default_binary.as_ref());
-        let next = match current.with_harness_policy(harness, enabled, binary) {
+        let adapter = registry.adapter(harness);
+        let default_binary = adapter
+            .and_then(|adapter| adapter.identity().default_binary)
+            .and_then(|binary| HarnessBinary::new(binary).ok());
+        let next = match if adapter.is_some_and(|adapter| {
+            adapter.identity().identity_boundary
+                == skilltap_harnesses::TargetIdentityBoundary::FileOnly
+        }) {
+            current.with_file_only_harness_policy(harness, enabled)
+        } else {
+            current.with_harness_policy(harness, enabled, binary.or(default_binary.as_ref()))
+        } {
             Ok(value) => value,
             Err(_) => {
                 return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(

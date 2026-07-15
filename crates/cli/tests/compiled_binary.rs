@@ -9,8 +9,8 @@ use serde_json::Value;
 use skilltap_core::VERSION;
 use skilltap_test_support::{
     ConditionalFixtureCase, ConditionalTargetFixture, FakeHarnessProfile, FakeLifecycleAction,
-    FakeNativeMode, FakeNativeProcess, IsolatedMachine, blocked_candidate_admission_reports,
-    captured_stderr, captured_stdout, compiled_binary,
+    FakeNativeMode, FakeNativeProcess, IsolatedMachine, captured_stderr, captured_stdout,
+    compiled_binary, observe_only_candidate_admission_reports,
 };
 
 const ENABLED_CONFIG: &str = r#"schema = 1
@@ -1365,9 +1365,9 @@ fn unregistered_harness_is_rejected_before_state_creation() {
 }
 
 #[test]
-fn blocked_candidates_have_no_help_mutation_or_target_all_surface() {
-    let reports = blocked_candidate_admission_reports();
-    assert!(reports.iter().all(|report| report.is_blocked()));
+fn observe_only_candidates_have_registry_help_and_zero_native_write_surface() {
+    let reports = observe_only_candidate_admission_reports();
+    assert!(reports.iter().all(|report| report.is_observe_only()));
 
     let machine = machine();
     for arguments in [
@@ -1383,8 +1383,8 @@ fn blocked_candidates_have_no_help_mutation_or_target_all_surface() {
         let help = stdout(&output);
         for report in &reports {
             assert!(
-                !help.contains(report.candidate()),
-                "{} unexpectedly appears in help for {arguments:?}",
+                help.contains(report.candidate()),
+                "{} is missing from registry-derived help for {arguments:?}",
                 report.candidate()
             );
         }
@@ -1392,18 +1392,35 @@ fn blocked_candidates_have_no_help_mutation_or_target_all_surface() {
 
     let target_all = run(&machine, &["plan", "--target", "all", "--json"]);
     let target_all_value = json(&target_all);
-    for report in &reports {
-        assert!(!target_all_value.to_string().contains(report.candidate()));
-    }
+    assert_eq!(target_all_value["command"], "plan");
 
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
-    let before = snapshot_native_tree(&config_root(&machine));
+    let mut candidate_config = ENABLED_CONFIG.to_owned();
+    for report in &reports {
+        candidate_config.push_str(&format!(
+            "\n[harnesses.{}]\nenabled = true\n",
+            report.candidate()
+        ));
+    }
+    write_owned(&machine, "config.toml", &candidate_config);
+    let target_all_status = run(&machine, &["status", "--target", "all", "--json"]);
+    let target_all_status_value = json(&target_all_status);
+    for report in &reports {
+        assert!(
+            target_all_status_value
+                .to_string()
+                .contains(report.candidate())
+        );
+    }
+    let before_config = snapshot_native_tree(&config_root(&machine));
+    let before_home = snapshot_native_tree(machine.home());
 
     for report in &reports {
         let target = report.candidate();
         let attempts = [
-            vec!["harness", "enable", target, "--json"],
-            vec!["harness", "disable", target, "--json"],
+            vec!["status", "--target", target, "--json"],
+            vec!["plan", "--target", target, "--json"],
+            vec!["sync", "--target", target, "--json"],
+            vec!["adopt", "--from", target, "--json"],
             vec![
                 "marketplace",
                 "add",
@@ -1413,6 +1430,23 @@ fn blocked_candidates_have_no_help_mutation_or_target_all_surface() {
                 "--json",
             ],
             vec![
+                "marketplace",
+                "remove",
+                "team",
+                "--target",
+                target,
+                "--json",
+            ],
+            vec![
+                "marketplace",
+                "update",
+                "team",
+                "--target",
+                target,
+                "--json",
+            ],
+            vec!["marketplace", "list", "--target", target, "--json"],
+            vec![
                 "plugin",
                 "install",
                 "demo@team",
@@ -1420,23 +1454,57 @@ fn blocked_candidates_have_no_help_mutation_or_target_all_surface() {
                 target,
                 "--json",
             ],
-            vec!["skill", "update", "--target", target, "--json"],
+            vec![
+                "plugin",
+                "remove",
+                "demo@team",
+                "--target",
+                target,
+                "--json",
+            ],
+            vec![
+                "plugin",
+                "update",
+                "demo@team",
+                "--target",
+                target,
+                "--json",
+            ],
+            vec!["plugin", "list", "--target", target, "--json"],
+            vec![
+                "skill",
+                "install",
+                "./missing-skill",
+                "--target",
+                target,
+                "--json",
+            ],
+            vec!["skill", "remove", "demo", "--target", target, "--json"],
+            vec!["skill", "update", "demo", "--target", target, "--json"],
+            vec!["skill", "list", "--target", target, "--json"],
             vec!["bootstrap", "--target", target, "--json"],
         ];
         for arguments in attempts {
             let output = run(&machine, &arguments);
-            assert_code(&output, 1);
             let value = json(&output);
-            assert_eq!(value["errors"][0]["code"], "target_not_registered");
-            assert_eq!(value["errors"][0]["context"]["harness"], target);
-            assert_eq!(snapshot_native_tree(&config_root(&machine)), before);
+            assert_ne!(value["errors"][0]["code"], "target_not_registered");
+            assert_eq!(
+                snapshot_native_tree(&config_root(&machine)),
+                before_config,
+                "candidate {target} changed skilltap state for {arguments:?}"
+            );
+            assert_eq!(
+                snapshot_native_tree(machine.home()),
+                before_home,
+                "candidate {target} changed native state for {arguments:?}"
+            );
         }
     }
 
     let list = run(&machine, &["harness", "list", "--json"]);
     let list_value = json(&list);
     for report in &reports {
-        assert!(!list_value.to_string().contains(report.candidate()));
+        assert!(list_value.to_string().contains(report.candidate()));
     }
     for sibling in ["codex", "claude"] {
         assert!(

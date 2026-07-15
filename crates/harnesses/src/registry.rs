@@ -12,9 +12,9 @@ use skilltap_core::{
 use crate::{
     CanonicalObservation, DetectionError,
     adapters::{
-        AmpAdapter, ClaudeAdapter, CodexAdapter, CopilotAdapter, FactoryAdapter, GeminiAdapter,
-        JunieAdapter, KiloAdapter, KimiAdapter, KiroAdapter, OpenCodeAdapter, PiAdapter,
-        QwenAdapter, VibeAdapter,
+        AmpAdapter, ClaudeAdapter, CodexAdapter, CopilotAdapter, CursorAdapter, FactoryAdapter,
+        GeminiAdapter, JunieAdapter, KiloAdapter, KimiAdapter, KiroAdapter, OpenCodeAdapter,
+        PiAdapter, QwenAdapter, VibeAdapter, ZCodeAdapter, ZooAdapter,
     },
     conditional_profile::ConditionalProfilePort,
     lifecycle::{
@@ -39,10 +39,17 @@ pub struct TargetIdentity {
     pub id: HarnessId,
     pub display_name: &'static str,
     /// The executable name used when policy does not provide an explicit path.
-    /// It is adapter metadata rather than an assumption that id and binary are
-    /// interchangeable (for example, Kiro uses `kiro-cli`).
-    pub default_binary: &'static str,
+    /// `None` is intentional for editor/file-only targets: their registry
+    /// contract must not invent a command from the target id.
+    pub default_binary: Option<&'static str>,
     pub distribution_surface: DistributionSurface,
+    pub identity_boundary: TargetIdentityBoundary,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TargetIdentityBoundary {
+    Executable,
+    FileOnly,
 }
 
 /// Documented native observation roots for one concrete scope.
@@ -97,10 +104,21 @@ impl From<ObservationRuntimeError> for ObservationPathError {
 /// Required methods provide detection, capability selection, and bounded
 /// observation. Optional ports expose only the native behavior a target
 /// actually supports.
+/// Read-only identity and observation contract for a target without a safe
+/// executable/version command. It is deliberately not a mutation port.
+pub trait ReadOnlyTargetPort: Sync {
+    fn profile(&self) -> CapabilityProfileSelection;
+    fn unresolved_boundaries(&self) -> &'static [&'static str];
+}
+
 pub trait HarnessAdapter: Sync {
     fn identity(&self) -> TargetIdentity;
 
-    fn version_arguments(&self) -> Vec<OsString>;
+    /// Returns the bounded version argv for executable-backed targets. A file-
+    /// only target returns no argv and is observed through `read_only_target`.
+    fn version_arguments(&self) -> Option<Vec<OsString>> {
+        None
+    }
     fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, DetectionError>;
 
     /// Detection callers with an explicit JSON boundary use this method. The
@@ -114,6 +132,10 @@ pub trait HarnessAdapter: Sync {
     }
 
     fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection;
+
+    fn read_only_target(&self) -> Option<&dyn ReadOnlyTargetPort> {
+        None
+    }
 
     fn observe(
         &self,
@@ -170,6 +192,12 @@ pub trait HarnessAdapter: Sync {
         _scope: CapabilityScope,
     ) -> Option<&'static skilltap_core::mutation_authority::ManagedDeclarationContract> {
         None
+    }
+
+    /// Stable, authored explanations for observation gaps that remain visible
+    /// even when a target has a safe documented read surface.
+    fn unresolved_observation_boundaries(&self) -> &'static [&'static str] {
+        &[]
     }
 
     /// An agent action returned instead of unattended first-party bootstrap.
@@ -293,6 +321,9 @@ impl TargetRegistry {
             JunieAdapter::static_ref(),
             AmpAdapter::static_ref(),
             PiAdapter::static_ref(),
+            CursorAdapter::static_ref(),
+            ZooAdapter::static_ref(),
+            ZCodeAdapter::static_ref(),
         ])
     }
 
@@ -359,13 +390,14 @@ mod tests {
             TargetIdentity {
                 id: HarnessId::new(self.id).expect("test harness id is valid"),
                 display_name: self.display_name,
-                default_binary: self.id,
+                default_binary: Some(self.id),
                 distribution_surface: self.distribution_surface,
+                identity_boundary: TargetIdentityBoundary::Executable,
             }
         }
 
-        fn version_arguments(&self) -> Vec<OsString> {
-            vec![OsString::from("--version")]
+        fn version_arguments(&self) -> Option<Vec<OsString>> {
+            Some(vec![OsString::from("--version")])
         }
 
         fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, DetectionError> {
@@ -455,16 +487,23 @@ mod tests {
             registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
             [
                 "codex", "claude", "droid", "copilot", "gemini", "qwen", "opencode", "kiro",
-                "kimi", "vibe", "kilo", "junie", "amp", "pi"
+                "kimi", "vibe", "kilo", "junie", "amp", "pi", "cursor", "zoo", "zcode"
             ]
         );
-        assert_eq!(registry.iter().count(), 14);
+        assert_eq!(registry.iter().count(), 17);
         assert_eq!(registry.first_party_targets().count(), 2);
         assert!(
             registry
                 .adapter(&HarnessId::new("gemini").unwrap())
                 .is_some()
         );
+        for id in ["cursor", "zoo", "zcode"] {
+            let adapter = registry.adapter(&HarnessId::new(id).unwrap()).unwrap();
+            assert!(adapter.native_lifecycle().is_none());
+            assert!(adapter.skill_projection().is_none());
+            assert!(adapter.managed_projection().is_none());
+            assert!(adapter.effective_state_probe().is_none());
+        }
     }
 
     #[test]

@@ -37,13 +37,14 @@ impl HarnessAdapter for PiAdapter {
         TargetIdentity {
             id: HarnessId::new("pi").expect("static harness id is valid"),
             display_name: "Pi",
-            default_binary: "pi",
+            default_binary: Some("pi"),
             distribution_surface: DistributionSurface::Managed,
+            identity_boundary: crate::TargetIdentityBoundary::Executable,
         }
     }
 
-    fn version_arguments(&self) -> Vec<OsString> {
-        vec![OsString::from("--version")]
+    fn version_arguments(&self) -> Option<Vec<OsString>> {
+        Some(vec![OsString::from("--version")])
     }
 
     fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, crate::DetectionError> {
@@ -230,7 +231,10 @@ mod tests {
     #[test]
     fn exact_version_bytes_are_strict_and_adjacent_versions_are_unknown() {
         let adapter = PiAdapter;
-        assert_eq!(adapter.version_arguments(), [OsString::from("--version")]);
+        assert_eq!(
+            adapter.version_arguments(),
+            Some(vec![OsString::from("--version")])
+        );
         assert_eq!(
             adapter.decode_version(b"0.80.6\n").unwrap().as_str(),
             "0.80.6"

@@ -187,7 +187,10 @@ impl<'de> Deserialize<'de> for UpdateInterval {
 #[serde(deny_unknown_fields)]
 pub struct HarnessPolicy {
     pub enabled: bool,
-    pub binary: HarnessBinary,
+    /// Executable policy for CLI-backed targets. File-only observe-only targets
+    /// intentionally keep this absent rather than inventing a command name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binary: Option<HarnessBinary>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -218,16 +221,24 @@ impl HarnessPolicyMap {
         binary: Option<&HarnessBinary>,
     ) -> Self {
         let mut policies = self.0.clone();
-        let binary = binary.cloned().unwrap_or_else(|| {
+        let binary = binary.cloned().or_else(|| {
             policies
                 .get(&id)
-                .map(|policy| policy.binary.clone())
-                .unwrap_or_else(|| {
-                    // Harness identifiers are valid single PATH components, so
-                    // they are also valid first-use PATH-lookup binary names.
-                    HarnessBinary::new(id.as_str()).expect("validated harness id is a PATH name")
+                .and_then(|policy| policy.binary.clone())
+                .or_else(|| {
+                    // Preserve the established first-use behavior for
+                    // executable targets. File-only targets use the explicit
+                    // no-binary entry point below instead of guessing from id.
+                    HarnessBinary::new(id.as_str()).ok()
                 })
         });
+        policies.insert(id, HarnessPolicy { enabled, binary });
+        Self(policies)
+    }
+
+    pub fn with_file_only_policy(&self, id: HarnessId, enabled: bool) -> Self {
+        let mut policies = self.0.clone();
+        let binary = policies.get(&id).and_then(|policy| policy.binary.clone());
         policies.insert(id, HarnessPolicy { enabled, binary });
         Self(policies)
     }
@@ -353,14 +364,14 @@ impl ConfigDocument {
                     HarnessId::new("codex").expect("known valid harness id"),
                     HarnessPolicy {
                         enabled: false,
-                        binary: HarnessBinary::new("codex").expect("known valid binary"),
+                        binary: Some(HarnessBinary::new("codex").expect("known valid binary")),
                     },
                 ),
                 (
                     HarnessId::new("claude").expect("known valid harness id"),
                     HarnessPolicy {
                         enabled: false,
-                        binary: HarnessBinary::new("claude").expect("known valid binary"),
+                        binary: Some(HarnessBinary::new("claude").expect("known valid binary")),
                     },
                 ),
             ])),
@@ -406,6 +417,21 @@ impl ConfigDocument {
     ) -> Result<Self, SchemaError> {
         let mut next = self.clone();
         next.harnesses = self.harnesses.with_policy(harness.clone(), enabled, binary);
+        Ok(next)
+    }
+
+    /// Enables a target whose documented boundary is files or an extension,
+    /// not a command. Keeping the binary absent prevents later code from
+    /// turning a product id into an invented executable.
+    pub fn with_file_only_harness_policy(
+        &self,
+        harness: &HarnessId,
+        enabled: bool,
+    ) -> Result<Self, SchemaError> {
+        let mut next = self.clone();
+        next.harnesses = self
+            .harnesses
+            .with_file_only_policy(harness.clone(), enabled);
         Ok(next)
     }
 

@@ -73,13 +73,14 @@ impl HarnessAdapter for AmpAdapter {
         TargetIdentity {
             id: HarnessId::new("amp").expect("static harness id is valid"),
             display_name: "Amp",
-            default_binary: AMP.default_binary,
+            default_binary: Some(AMP.default_binary),
             distribution_surface: DistributionSurface::Managed,
+            identity_boundary: crate::TargetIdentityBoundary::Executable,
         }
     }
 
-    fn version_arguments(&self) -> Vec<OsString> {
-        AMP.version_arguments.iter().map(OsString::from).collect()
+    fn version_arguments(&self) -> Option<Vec<OsString>> {
+        Some(AMP.version_arguments.iter().map(OsString::from).collect())
     }
 
     fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, crate::DetectionError> {

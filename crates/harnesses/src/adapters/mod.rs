@@ -4,6 +4,7 @@ mod codex_managed;
 mod configuration_constrained;
 mod copilot;
 mod copilot_managed;
+mod cursor;
 mod factory;
 mod factory_managed;
 mod file_managed;
@@ -22,6 +23,8 @@ mod qwen;
 mod qwen_managed;
 mod trust_interactive;
 mod vibe;
+mod zcode;
+mod zoo;
 
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
@@ -31,6 +34,7 @@ pub use copilot::{
     CopilotPolicyHealth, CopilotSkillProjection, copilot_policy_finding,
 };
 pub use copilot_managed::CopilotManagedProjection;
+pub use cursor::CursorAdapter;
 pub use factory::{
     FactoryAdapter, FactoryLifecycle, FactoryNativeDistribution, FactorySkillProjection,
     decode_factory_plugin_list,
@@ -57,6 +61,8 @@ pub use trust_interactive::{
     declared_list_arguments, decode_declared_mcp_list,
 };
 pub use vibe::{VibeAdapter, VibeManagedProjection, VibeSkillProjection};
+pub use zcode::{ZCodeAdapter, ZCodeReadOnlyTarget};
+pub use zoo::{ZooAdapter, ZooReadOnlyTarget};
 
 #[cfg(test)]
 mod tests {

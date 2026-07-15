@@ -24,16 +24,17 @@ pub use adapters::{
     ClaudeSkillProjection, CodexAdapter, CodexInstructionBridge, CodexLifecycle,
     CodexManagedProjection, CodexSkillProjection, CopilotAdapter, CopilotEffectiveMcpObservation,
     CopilotEffectiveStateProbe, CopilotManagedProjection, CopilotPolicyHealth,
-    CopilotSkillProjection, FactoryAdapter, FactoryLifecycle, FactoryManagedProjection,
-    FactoryNativeDistribution, FactorySkillProjection, GeminiAdapter, GeminiEffectiveStateProbe,
-    GeminiManagedProjection, GeminiSkillProjection, JunieAdapter, JunieManagedProjection,
-    JunieSkillProjection, KiloAdapter, KiloManagedProjection, KiloSkillProjection, KimiAdapter,
-    KimiManagedProjection, KimiSkillProjection, KiroAdapter, KiroManagedProjection,
-    KiroSkillProjection, OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeManagedProjection,
-    OpenCodeSkillProjection, PiAdapter, PiConditionalProfile, PiSkillProjection, QwenAdapter,
-    QwenEffectiveStateProbe, QwenExtensionRecord, QwenLifecycle, QwenManagedProjection,
-    QwenNativeDistribution, QwenSkillProjection, VibeAdapter, VibeManagedProjection,
-    VibeSkillProjection, copilot_policy_finding, declared_list_arguments, decode_declared_mcp_list,
+    CopilotSkillProjection, CursorAdapter, FactoryAdapter, FactoryLifecycle,
+    FactoryManagedProjection, FactoryNativeDistribution, FactorySkillProjection, GeminiAdapter,
+    GeminiEffectiveStateProbe, GeminiManagedProjection, GeminiSkillProjection, JunieAdapter,
+    JunieManagedProjection, JunieSkillProjection, KiloAdapter, KiloManagedProjection,
+    KiloSkillProjection, KimiAdapter, KimiManagedProjection, KimiSkillProjection, KiroAdapter,
+    KiroManagedProjection, KiroSkillProjection, OpenCodeAdapter, OpenCodeEffectiveStateProbe,
+    OpenCodeManagedProjection, OpenCodeSkillProjection, PiAdapter, PiConditionalProfile,
+    PiSkillProjection, QwenAdapter, QwenEffectiveStateProbe, QwenExtensionRecord, QwenLifecycle,
+    QwenManagedProjection, QwenNativeDistribution, QwenSkillProjection, VibeAdapter,
+    VibeManagedProjection, VibeSkillProjection, ZCodeAdapter, ZCodeReadOnlyTarget, ZooAdapter,
+    ZooReadOnlyTarget, copilot_policy_finding, declared_list_arguments, decode_declared_mcp_list,
     decode_factory_plugin_list, decode_qwen_extensions, decode_qwen_mcp_status,
 };
 
@@ -73,8 +74,8 @@ pub use lifecycle::{
 pub mod registry;
 pub use registry::{
     AdapterObservationPaths, DistributionSurface, HarnessAdapter, InstructionBridgePort,
-    NativeLifecycleVector, ObservationPathError, SkillProjectionPort, TargetIdentity,
-    TargetRegistry,
+    NativeLifecycleVector, ObservationPathError, ReadOnlyTargetPort, SkillProjectionPort,
+    TargetIdentity, TargetIdentityBoundary, TargetRegistry,
 };
 mod bootstrap;
 pub use bootstrap::{
@@ -111,9 +112,12 @@ pub fn detect_installation(
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
 ) -> Result<HarnessInstallation, DetectionError> {
+    let default_binary = adapter
+        .identity()
+        .default_binary
+        .ok_or(DetectionError::InvalidVersion)?;
     let configured = ConfiguredBinary::path_lookup(
-        NativeId::new(adapter.identity().default_binary)
-            .map_err(|_| DetectionError::InvalidVersion)?,
+        NativeId::new(default_binary).map_err(|_| DetectionError::InvalidVersion)?,
     )
     .map_err(|_| DetectionError::InvalidVersion)?;
     detect_configured_installation(
@@ -143,10 +147,13 @@ pub fn detect_configured_installation(
             search_path,
         ))
         .map_err(DetectionError::Runtime)?;
+    let version_arguments = adapter
+        .version_arguments()
+        .ok_or(DetectionError::InvalidVersion)?;
     let output = SystemNativeProcessRunner
         .run(&NativeProcessRequest::new(
             resolved.clone(),
-            adapter.version_arguments(),
+            version_arguments,
             environment.clone(),
             None,
             process_limits,
@@ -172,9 +179,12 @@ pub fn unreachable_installation(
     reason: UnreachableReason,
 ) -> HarnessInstallation {
     let id = adapter.identity().id;
+    let default_binary = adapter
+        .identity()
+        .default_binary
+        .expect("executable-backed harness has a default binary");
     let configured = ConfiguredBinary::path_lookup(
-        NativeId::new(adapter.identity().default_binary)
-            .expect("registered harness default binary is valid"),
+        NativeId::new(default_binary).expect("registered harness default binary is valid"),
     )
     .expect("registered harness default binary is a path name");
     HarnessInstallation::new(id, configured, HarnessReachability::Unreachable { reason })

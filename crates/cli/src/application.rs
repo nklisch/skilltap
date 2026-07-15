@@ -1292,8 +1292,10 @@ fn configured_adapter_profile(
     let Some(policy) = config.harnesses().get(target) else {
         return Ok(None);
     };
-    let binary = policy.binary.as_str();
-    let Some(configured) = configured_binary(binary).ok() else {
+    let Some(binary) = policy.binary.as_ref() else {
+        return Ok(None);
+    };
+    let Some(configured) = configured_binary(binary.as_str()).ok() else {
         return Ok(None);
     };
     let installation = detect_configured_installation(
@@ -1373,7 +1375,10 @@ fn configured_native_profile(
     let Some(policy) = config.harnesses().get(target) else {
         return Ok(None);
     };
-    let Some(executable) = NativeId::new(policy.binary.as_str()).ok() else {
+    let Some(binary) = policy.binary.as_ref() else {
+        return Ok(None);
+    };
+    let Some(executable) = NativeId::new(binary.as_str()).ok() else {
         return Ok(None);
     };
     Ok(Some(ConfiguredNativeProfile {
@@ -2421,9 +2426,9 @@ fn lifecycle_preview_presence(
         .config
         .harnesses()
         .get(harness)
-        .ok_or(())
-        .and_then(|policy| configured_binary(policy.binary.as_str()));
-    let Ok(configured) = configured else {
+        .and_then(|policy| policy.binary.as_ref())
+        .and_then(|binary| configured_binary(binary.as_str()).ok());
+    let Some(configured) = configured else {
         return NativeResourceObservation::Indeterminate(NativeObservationFailure::CommandFailed);
     };
     let Ok(name) = NativeId::new(name) else {

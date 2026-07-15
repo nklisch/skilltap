@@ -219,11 +219,25 @@ fn config_defaults_are_explicit_strict_and_golden() {
     assert!(!config.harnesses().get(&codex).unwrap().enabled);
     assert!(!config.harnesses().get(&claude).unwrap().enabled);
     assert_eq!(
-        config.harnesses().get(&codex).unwrap().binary.as_str(),
+        config
+            .harnesses()
+            .get(&codex)
+            .unwrap()
+            .binary
+            .as_ref()
+            .unwrap()
+            .as_str(),
         "codex"
     );
     assert_eq!(
-        config.harnesses().get(&claude).unwrap().binary.as_str(),
+        config
+            .harnesses()
+            .get(&claude)
+            .unwrap()
+            .binary
+            .as_ref()
+            .unwrap()
+            .as_str(),
         "claude"
     );
     assert_eq!(
@@ -266,6 +280,21 @@ fn intervals_are_positive_and_canonical_at_both_boundaries() {
 }
 
 #[test]
+fn file_only_harness_policy_has_no_guessed_binary() {
+    let zcode = HarnessId::new("zcode").unwrap();
+    let config = ConfigDocument::defaults()
+        .with_file_only_harness_policy(&zcode, true)
+        .unwrap();
+    let policy = config.harnesses().get(&zcode).unwrap();
+    assert!(policy.enabled);
+    assert!(policy.binary.is_none());
+    let encoded = toml::to_string(&config).unwrap();
+    assert!(!encoded.contains("binary = \"zcode\""));
+    let decoded: ConfigDocument = toml::from_str(&encoded).unwrap();
+    assert_eq!(decoded.harnesses().get(&zcode).unwrap().binary, None);
+}
+
+#[test]
 fn harness_binaries_accept_only_path_names_or_normalized_absolute_paths() {
     for valid in ["codex", "claude-code", "codex.exe", "/usr/local/bin/codex"] {
         let binary = HarnessBinary::new(valid).unwrap();
@@ -274,7 +303,7 @@ fn harness_binaries_accept_only_path_names_or_normalized_absolute_paths() {
             toml::from_str::<HarnessPolicy>(&format!("enabled = true\nbinary = {valid:?}\n"))
                 .unwrap()
                 .binary,
-            binary
+            Some(binary)
         );
     }
 
@@ -319,7 +348,10 @@ fn harness_policy_map_updates_any_structurally_valid_target() {
         .with_harness_policy(&codex, true, Some(&custom))
         .unwrap();
     assert!(updated.harnesses().get(&codex).unwrap().enabled);
-    assert_eq!(updated.harnesses().get(&codex).unwrap().binary, custom);
+    assert_eq!(
+        updated.harnesses().get(&codex).unwrap().binary,
+        Some(custom)
+    );
     assert!(!updated.harnesses().get(&claude).unwrap().enabled);
     assert_eq!(
         updated.harnesses().get(&claude),
@@ -329,7 +361,14 @@ fn harness_policy_map_updates_any_structurally_valid_target() {
     let disabled = updated.with_harness_enabled(&codex, false).unwrap();
     assert!(!disabled.harnesses().get(&codex).unwrap().enabled);
     assert_eq!(
-        disabled.harnesses().get(&codex).unwrap().binary.as_str(),
+        disabled
+            .harnesses()
+            .get(&codex)
+            .unwrap()
+            .binary
+            .as_ref()
+            .unwrap()
+            .as_str(),
         "/opt/bin/codex"
     );
 
@@ -337,7 +376,14 @@ fn harness_policy_map_updates_any_structurally_valid_target() {
     assert_eq!(expanded.harnesses().iter().len(), 3);
     assert!(expanded.harnesses().get(&gemini).unwrap().enabled);
     assert_eq!(
-        expanded.harnesses().get(&gemini).unwrap().binary.as_str(),
+        expanded
+            .harnesses()
+            .get(&gemini)
+            .unwrap()
+            .binary
+            .as_ref()
+            .unwrap()
+            .as_str(),
         "gemini"
     );
 }

@@ -87,12 +87,13 @@ impl HarnessAdapter for KiloAdapter {
         TargetIdentity {
             id: HarnessId::new("kilo").expect("static harness id is valid"),
             display_name: "Kilo Code",
-            default_binary: "kilo",
+            default_binary: Some("kilo"),
             distribution_surface: DistributionSurface::Managed,
+            identity_boundary: crate::TargetIdentityBoundary::Executable,
         }
     }
-    fn version_arguments(&self) -> Vec<OsString> {
-        vec![OsString::from("--version")]
+    fn version_arguments(&self) -> Option<Vec<OsString>> {
+        Some(vec![OsString::from("--version")])
     }
     fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, crate::DetectionError> {
         let text =

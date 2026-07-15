@@ -57,8 +57,18 @@ pub(super) fn execute_system_bootstrap(
         let Some(policy) = config.harnesses().get(&harness) else {
             continue;
         };
-        let configured = if std::path::Path::new(policy.binary.as_str()).is_absolute() {
-            match AbsolutePath::new(policy.binary.as_str()) {
+        let Some(binary) = policy.binary.as_ref() else {
+            harness_results.push((
+                harness.clone(),
+                HarnessSetupResult::Unavailable {
+                    harness: harness.clone(),
+                    reason: skilltap_harnesses::SetupReason::NotInstalled,
+                },
+            ));
+            continue;
+        };
+        let configured = if std::path::Path::new(binary.as_str()).is_absolute() {
+            match AbsolutePath::new(binary.as_str()) {
                 Ok(path) => ConfiguredBinary::absolute(path),
                 Err(_) => {
                     harness_results.push((
@@ -72,7 +82,7 @@ pub(super) fn execute_system_bootstrap(
                 }
             }
         } else {
-            match NativeId::new(policy.binary.as_str()).and_then(ConfiguredBinary::path_lookup) {
+            match NativeId::new(binary.as_str()).and_then(ConfiguredBinary::path_lookup) {
                 Ok(binary) => binary,
                 Err(_) => {
                     harness_results.push((

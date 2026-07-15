@@ -72,13 +72,14 @@ impl HarnessAdapter for JunieAdapter {
         TargetIdentity {
             id: HarnessId::new("junie").expect("static harness id is valid"),
             display_name: "Junie",
-            default_binary: JUNIE.default_binary,
+            default_binary: Some(JUNIE.default_binary),
             distribution_surface: DistributionSurface::Managed,
+            identity_boundary: crate::TargetIdentityBoundary::Executable,
         }
     }
 
-    fn version_arguments(&self) -> Vec<OsString> {
-        JUNIE.version_arguments.iter().map(OsString::from).collect()
+    fn version_arguments(&self) -> Option<Vec<OsString>> {
+        Some(JUNIE.version_arguments.iter().map(OsString::from).collect())
     }
 
     fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, crate::DetectionError> {

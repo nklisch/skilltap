@@ -59,7 +59,10 @@ pub(super) fn resolve_conditional_profile(
     let Some(policy) = config.harnesses().get(target) else {
         return Ok(None);
     };
-    let configured = configured_binary(policy.binary.as_str())
+    let Some(binary) = policy.binary.as_ref() else {
+        return Ok(None);
+    };
+    let configured = configured_binary(binary.as_str())
         .map_err(|_| ConditionalProfileResolutionError::InvalidConfiguredBinary)?;
     resolve_conditional_profile_for_installation(
         adapter,

@@ -1,15 +1,18 @@
 use std::{collections::BTreeSet, fmt};
 
-/// Candidates whose boundary and admission stories concluded `blocked`.
-///
-/// These reports intentionally contain no native evidence or fake harness
-/// fixture. A blocked candidate must not borrow acceptance evidence from a
-/// registered sibling or acquire a guessed mutation surface.
-pub const BLOCKED_CANDIDATES: [&str; 3] = ["cursor", "zoo", "zcode"];
+/// Candidates admitted to the registry with read-only authority only.
+pub const OBSERVE_ONLY_CANDIDATES: [&str; 3] = ["cursor", "zoo", "zcode"];
 
 /// Evidence required before a candidate can be admitted as a mutable target.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum CandidateAdmissionCheck {
+    /// A reliable target identity exists, even when an installed executable or
+    /// extension version is not available.
+    ReliableTargetIdentity,
+    /// At least one safe, source-documented read surface is available without
+    /// using a cache, editor database, auth state, or guessed command.
+    SafeDocumentedReadSurface,
+    /// Exact installed identity remains a mutation prerequisite.
     ExactInstallationIdentity,
     DocumentedGlobalSkillRoot,
     DocumentedProjectSkillRoot,
@@ -28,7 +31,9 @@ pub enum CandidateAdmissionCheck {
 
 impl CandidateAdmissionCheck {
     /// The complete, stable matrix order used by every candidate runner.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 16] = [
+        Self::ReliableTargetIdentity,
+        Self::SafeDocumentedReadSurface,
         Self::ExactInstallationIdentity,
         Self::DocumentedGlobalSkillRoot,
         Self::DocumentedProjectSkillRoot,
@@ -49,17 +54,9 @@ impl CandidateAdmissionCheck {
     ///
     /// Mutation checks intentionally do not appear here: passing the read-only
     /// surface is enough for an observe-only disposition, never for admission.
-    const READ_ONLY: [Self; 10] = [
-        Self::ExactInstallationIdentity,
-        Self::DocumentedGlobalSkillRoot,
-        Self::DocumentedProjectSkillRoot,
-        Self::CompleteSkillSiblings,
-        Self::SkillPrecedenceAndReload,
-        Self::DocumentedGlobalMcpFile,
-        Self::DocumentedProjectMcpFile,
-        Self::McpSchemaAndPrecedence,
-        Self::EffectiveReloadObservation,
-        Self::CacheIndependentBoundary,
+    const READ_ONLY: [Self; 2] = [
+        Self::ReliableTargetIdentity,
+        Self::SafeDocumentedReadSurface,
     ];
 
     fn read_only_proven(checks: &BTreeSet<Self>) -> bool {
@@ -181,11 +178,42 @@ pub fn candidate_admission_gate(
     }
 }
 
-/// Produce the final aggregate reports for candidates with blocked
-/// dispositions. No target-specific runner exists for these candidates: the
-/// absence of evidence is the tested reason they remain blocked.
-pub fn blocked_candidate_admission_reports() -> [CandidateAdmissionReport; 3] {
-    BLOCKED_CANDIDATES.map(|candidate| candidate_admission_gate(candidate, |_| false))
+/// Produce the final aggregate reports for the three narrow observe-only
+/// candidates. The reports intentionally omit exact installed identity and all
+/// mutation/effective checks; those missing checks remain visible evidence, not
+/// latent authority.
+pub fn observe_only_candidate_admission_reports() -> [CandidateAdmissionReport; 3] {
+    OBSERVE_ONLY_CANDIDATES.map(|candidate| {
+        candidate_admission_gate(candidate, |check| match candidate {
+            "cursor" => matches!(
+                check,
+                CandidateAdmissionCheck::ReliableTargetIdentity
+                    | CandidateAdmissionCheck::SafeDocumentedReadSurface
+                    | CandidateAdmissionCheck::DocumentedGlobalSkillRoot
+                    | CandidateAdmissionCheck::DocumentedProjectSkillRoot
+                    | CandidateAdmissionCheck::DocumentedGlobalMcpFile
+                    | CandidateAdmissionCheck::DocumentedProjectMcpFile
+                    | CandidateAdmissionCheck::McpSchemaAndPrecedence
+            ),
+            "zoo" => matches!(
+                check,
+                CandidateAdmissionCheck::ReliableTargetIdentity
+                    | CandidateAdmissionCheck::SafeDocumentedReadSurface
+                    | CandidateAdmissionCheck::DocumentedGlobalSkillRoot
+                    | CandidateAdmissionCheck::DocumentedProjectSkillRoot
+                    | CandidateAdmissionCheck::DocumentedProjectMcpFile
+            ),
+            "zcode" => matches!(
+                check,
+                CandidateAdmissionCheck::ReliableTargetIdentity
+                    | CandidateAdmissionCheck::SafeDocumentedReadSurface
+                    | CandidateAdmissionCheck::DocumentedGlobalSkillRoot
+                    | CandidateAdmissionCheck::DocumentedGlobalMcpFile
+                    | CandidateAdmissionCheck::DocumentedProjectMcpFile
+            ),
+            _ => false,
+        })
+    })
 }
 
 #[cfg(test)]
@@ -222,31 +250,28 @@ mod tests {
     #[test]
     fn missing_deterministic_observation_blocks_even_with_other_evidence() {
         let report = candidate_admission_gate("zcode", |check| {
-            check != CandidateAdmissionCheck::DocumentedProjectMcpFile
+            check != CandidateAdmissionCheck::SafeDocumentedReadSurface
         });
 
         assert_eq!(report.disposition(), CandidateDisposition::Blocked);
         assert!(report.is_blocked());
         assert_eq!(
             report.missing(),
-            &[CandidateAdmissionCheck::DocumentedProjectMcpFile]
+            &[CandidateAdmissionCheck::SafeDocumentedReadSurface]
         );
     }
 
     #[test]
-    fn missing_installation_identity_blocks_observation() {
+    fn missing_reliable_identity_blocks_observation() {
         let report = candidate_admission_gate("cursor", |check| {
-            check != CandidateAdmissionCheck::ExactInstallationIdentity
-                && check != CandidateAdmissionCheck::ImmediateRepeatNoChange
+            check != CandidateAdmissionCheck::ReliableTargetIdentity
         });
 
         assert_eq!(report.disposition(), CandidateDisposition::Blocked);
-        assert_eq!(
-            report.missing(),
-            &[
-                CandidateAdmissionCheck::ExactInstallationIdentity,
-                CandidateAdmissionCheck::ImmediateRepeatNoChange,
-            ]
+        assert!(
+            report
+                .missing()
+                .contains(&CandidateAdmissionCheck::ReliableTargetIdentity)
         );
     }
 
@@ -262,21 +287,25 @@ mod tests {
     }
 
     #[test]
-    fn blocked_candidate_reports_match_the_final_disposition_matrix() {
-        let reports = blocked_candidate_admission_reports();
+    fn observe_only_candidate_reports_match_the_relaxed_disposition_matrix() {
+        let reports = observe_only_candidate_admission_reports();
 
         assert_eq!(
             reports
                 .iter()
                 .map(CandidateAdmissionReport::candidate)
                 .collect::<Vec<_>>(),
-            BLOCKED_CANDIDATES.to_vec()
+            OBSERVE_ONLY_CANDIDATES.to_vec()
         );
-        assert!(reports.iter().all(CandidateAdmissionReport::is_blocked));
         assert!(
             reports
                 .iter()
-                .all(|report| report.missing().len() == CandidateAdmissionCheck::ALL.len())
+                .all(CandidateAdmissionReport::is_observe_only)
         );
+        assert!(reports.iter().all(|report| {
+            report
+                .missing()
+                .contains(&CandidateAdmissionCheck::ExactInstallationIdentity)
+        }));
     }
 }

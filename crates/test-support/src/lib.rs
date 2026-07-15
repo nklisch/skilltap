@@ -15,9 +15,9 @@ mod native_process;
 #[cfg(unix)]
 pub use barrier::FileBarrier;
 pub use candidate_admission::{
-    BLOCKED_CANDIDATES, CandidateAdmissionCheck, CandidateAdmissionEvidence,
-    CandidateAdmissionReport, CandidateDisposition, blocked_candidate_admission_reports,
-    candidate_admission_gate,
+    CandidateAdmissionCheck, CandidateAdmissionEvidence, CandidateAdmissionReport,
+    CandidateDisposition, OBSERVE_ONLY_CANDIDATES, candidate_admission_gate,
+    observe_only_candidate_admission_reports,
 };
 pub use conditional_profile::{
     ConditionalFixtureCase, ConditionalFixtureRoots, ConditionalTargetFixture,

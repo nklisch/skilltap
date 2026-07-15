@@ -566,13 +566,14 @@ impl skilltap_harnesses::HarnessAdapter for FakeManagedAdapter {
         skilltap_harnesses::TargetIdentity {
             id: fake_target_id(),
             display_name: "Fake Managed",
-            default_binary: "fake-managed",
+            default_binary: Some("fake-managed"),
             distribution_surface: skilltap_harnesses::DistributionSurface::Managed,
+            identity_boundary: skilltap_harnesses::TargetIdentityBoundary::Executable,
         }
     }
 
-    fn version_arguments(&self) -> Vec<OsString> {
-        vec![OsString::from("--version")]
+    fn version_arguments(&self) -> Option<Vec<OsString>> {
+        Some(vec![OsString::from("--version")])
     }
 
     fn decode_version(
