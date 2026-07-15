@@ -5,7 +5,7 @@ stage: done
 tags: []
 parent: epic-expanded-harness-support-configuration-constrained
 depends_on: [epic-expanded-harness-support-configuration-constrained-source]
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/attestation/mistral-skills.md
   - .research/attestation/mistral-mcp.md

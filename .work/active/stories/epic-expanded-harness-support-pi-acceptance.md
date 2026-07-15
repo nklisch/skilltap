@@ -5,13 +5,13 @@ stage: done
 tags: []
 parent: epic-expanded-harness-support-pi
 depends_on: [epic-expanded-harness-support-pi-integration]
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/analysis/campaigns/pi-claude-hook-compatibility/parent.md
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Verify Pi Conditional-Target Acceptance

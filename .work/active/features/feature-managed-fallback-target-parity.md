@@ -5,13 +5,13 @@ stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-cross-harness-materialization, epic-expanded-harness-support-registry]
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/analysis/briefs/harness-adapter-targets-skills-mcp-2026-07-12.md
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-12
-updated: 2026-07-13
+updated: 2026-07-15
 ---
 
 # Complete Managed Fallback Target Parity

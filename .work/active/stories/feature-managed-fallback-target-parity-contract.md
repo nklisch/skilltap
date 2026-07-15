@@ -5,13 +5,13 @@ stage: done
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: []
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/analysis/briefs/harness-adapter-targets-skills-mcp-2026-07-12.md
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-13
-updated: 2026-07-13
+updated: 2026-07-15
 ---
 
 # Managed Projection Port Contract and Pure Types

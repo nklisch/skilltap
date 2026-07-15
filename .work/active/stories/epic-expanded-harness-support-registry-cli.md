@@ -8,12 +8,12 @@ depends_on:
   - epic-expanded-harness-support-registry-contract
   - epic-expanded-harness-support-registry-adapters
   - epic-expanded-harness-support-registry-config
-release_binding: null
+release_binding: 3.1.0
 research_refs: []
 research_origin: null
 gate_origin: null
 created: 2026-07-12
-updated: 2026-07-13
+updated: 2026-07-15
 ---
 
 # CLI Parser, Help, and Composition Dispatch

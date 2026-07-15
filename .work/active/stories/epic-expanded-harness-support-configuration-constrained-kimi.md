@@ -5,7 +5,7 @@ stage: done
 tags: []
 parent: epic-expanded-harness-support-configuration-constrained
 depends_on: [epic-expanded-harness-support-configuration-constrained-source]
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/attestation/kimi-skills.md
   - .research/attestation/kimi-mcp.md

@@ -5,14 +5,14 @@ stage: done
 tags: []
 parent: epic-expanded-harness-support-project-skill-links
 depends_on: []
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/analysis/briefs/current-agent-extension-standards.md
   - .research/analysis/campaigns/marketplace-standards/specialists/agent-skills.md
 research_origin: operator-request-2026-07-14
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Define Project Skill Validation and Layout Contracts

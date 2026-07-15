@@ -6,12 +6,12 @@ tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
   - epic-expanded-harness-support-registry-contract
-release_binding: null
+release_binding: 3.1.0
 research_refs: []
 research_origin: null
 gate_origin: null
 created: 2026-07-12
-updated: 2026-07-12
+updated: 2026-07-15
 ---
 
 # Codex and Claude Adapter Migration

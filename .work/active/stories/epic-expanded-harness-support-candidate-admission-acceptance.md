@@ -5,7 +5,7 @@ stage: done
 tags: [testing]
 parent: epic-expanded-harness-support-candidate-admission
 depends_on: [epic-expanded-harness-support-candidate-admission-zoo-admission, epic-expanded-harness-support-candidate-admission-zcode-admission, epic-expanded-harness-support-candidate-admission-cursor-admission]
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/analysis/briefs/harness-adapter-targets-skills-mcp-2026-07-12.md
   - .research/attestation/cursor-skills.md

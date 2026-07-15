@@ -5,12 +5,12 @@ stage: done
 tags: [infra]
 parent: feature-daemon-marketplace-refresh
 depends_on: []
-release_binding: null
+release_binding: 3.1.0
 research_refs: []
 research_origin: null
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Build the Daemon Native-Update Task Graph

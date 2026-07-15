@@ -5,7 +5,7 @@ stage: done
 tags: []
 parent: epic-expanded-harness-support-native-coexistence
 depends_on: [epic-expanded-harness-support-native-coexistence-contract]
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/analysis/briefs/harness-adapter-targets-skills-mcp-2026-07-12.md
   - .research/attestation/copilot-skills.md

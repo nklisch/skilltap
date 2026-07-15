@@ -5,7 +5,7 @@ stage: done
 tags: []
 parent: epic-expanded-harness-support-file-managed
 depends_on: [epic-expanded-harness-support-file-managed-gemini, epic-expanded-harness-support-file-managed-opencode, epic-expanded-harness-support-file-managed-kiro]
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/analysis/briefs/harness-adapter-targets-skills-mcp-2026-07-12.md
 research_origin: operator-request-2026-07-12

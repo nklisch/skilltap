@@ -5,7 +5,7 @@ stage: done
 tags: []
 parent: null
 depends_on: [epic-cross-harness-materialization, epic-harness-observation-adoption, epic-reconciliation-execution]
-release_binding: null
+release_binding: 3.1.0
 research_refs:
   - .research/analysis/briefs/harness-adapter-targets-skills-mcp-2026-07-12.md
 research_origin: operator-request-2026-07-12
