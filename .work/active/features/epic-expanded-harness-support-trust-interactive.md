@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-trust-interactive
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -23,11 +23,11 @@ updated: 2026-07-15
 
 ## Brief
 
-Deliver complete adapters for Junie and Amp while preserving their native trust,
-interactive-state, skill-local MCP, and runtime-health semantics. Both targets
-provide documented global and project skill and MCP surfaces, but configured
-state is not always proof of effective availability; the adapters must expose
-that distinction through normalized observation and actionable health.
+Deliver declaration-managed adapters for Junie and Amp while preserving their
+native trust, interactive-state, skill-local MCP, and runtime-health semantics.
+Both targets provide documented global and project skill and MCP surfaces, but
+configured state is not proof of effective availability; the adapters expose
+that distinction honestly and never manufacture runtime health.
 
 The adapters consume the shared managed lifecycle, preserve unrelated native
 configuration, and keep native extensions or skill-local MCP representations
@@ -132,13 +132,18 @@ one cohesive Sol xhigh feature owner, not default parallel assignments.
   lock captures one installed release per target in isolated roots and pins exact
   fixtures. Unknown/adjacent versions remain observe-only. A target that cannot
   close the minimum contract stays out of `TargetRegistry::canonical()`.
-- **Minimum effective-observation gate is binding.** Whole-directory skill
-  loading may be verified from the documented loader root plus isolated native
-  acceptance. MCP configuration is emitted as `Declared`; an `Effective` MCP
-  observation requires a deterministic bounded probe. If Junie has no
-  non-interactive probe beyond `/mcp`, its MCP mutation capability remains
-  unverified and the Junie adapter cannot be called complete. We do not drive a
-  TTY, parse a cache as runtime truth, or relabel file presence as effective.
+- **Relaxed declaration-managed amendment (2026-07-15).** The locked evidence
+  closes exact identities, documented declaration paths, codecs, ownership, and
+  preservation, but does not close deterministic effective observation for
+  either target. Junie `/mcp`, extension lifecycle, trust approval, and Amp
+  doctor/auth flows remain interactive or operator state. Therefore both
+  adapters may be registered for declaration-managed projection only: all
+  target mutation/component capabilities are `Unverified`, effective probes and
+  native lifecycle ports are absent, status reports declared/attention/unverified
+  outcomes, foreground writes require the existing acknowledgment path, and
+  unknown versions perform zero writes. This amendment is durable and is not a
+  claim of native load health. We do not drive a TTY, parse a cache as runtime
+  truth, or relabel file presence as effective.
 - **Trust and authentication are health, not drift or authority.** Amp's
   untrusted workspace and both targets' auth-required state leave declared bytes
   observable and owned while effective health is attention-required. Neither
@@ -192,6 +197,35 @@ one cohesive Sol xhigh feature owner, not default parallel assignments.
   blocker fixes, and verification, with no second independent pass. Design-time
   advisory review was skipped because this invocation forbids nested agents and
   peers; design review is non-blocking.
+
+## Relaxed Contract Amendment
+
+Recorded 2026-07-15 after contract-lock review: Junie and Amp are accepted as
+registered declaration-managed targets despite the absence of deterministic
+non-interactive effective-state evidence. This changes the original minimum
+gate only for this feature's two targets; it does not relax the general
+`Effective` observation contract or convert file presence, caches, trust
+approval, OAuth/authentication, `/mcp`, `mcp doctor`, or native extension
+sessions into health evidence.
+
+The durable acceptance boundary is:
+
+- exact known identities and documented global/project declaration paths are
+  mutable through the shared managed projection only;
+- every Junie/Amp component and mutation capability is `Unverified`, and both
+  native lifecycle and effective-state ports are absent;
+- declared projection manifests, ownership, drift, rollback, removal,
+  repeatability, preservation, conflict handling, and `--yes`/daemon/status
+  semantics remain fully enforced;
+- unknown or syntactically valid but unprofiled versions perform zero writes;
+- foreground partial/attention outcomes require the existing acknowledgment,
+  while daemon work never acknowledges partial or overwrites drift; and
+- cache, OAuth, trust, browser, TTY, prompt, operator, and native lifecycle
+  state is read-only or untouched.
+
+This amendment supersedes any child acceptance wording that requires trusted
+healthy effective output for Junie or Amp. A future attested bounded probe may
+raise capabilities in a separate contract change; it is not inferred here.
 
 ## Architectural choice
 
@@ -345,9 +379,9 @@ impl JunieMcpDocument {
 - Native extension declarations are read-only `Declared` plugin evidence.
   Interactive `/extensions` state and cached content never grant install,
   update, remove, or healthy-effective claims.
-- When Unit 1 locks a bounded MCP probe, its decoder emits effective resources
-  and registered health. Otherwise this story remains blocked; it does not
-  substitute file presence.
+- No bounded MCP probe is attested in the relaxed contract. The adapter retains
+  declared file evidence and leaves effective resources unobserved; it does not
+  substitute file presence, cache content, `/mcp`, or doctor/auth state.
 
 **Acceptance criteria**:
 
@@ -417,11 +451,10 @@ impl AmpSettingsDocument {
   paths or lazy loading are required. The adapter records its per-server
   fingerprint in the projection manifest but does not duplicate it into scoped
   settings. Root-level independent MCP declarations use scoped settings.
-- `amp mcp doctor` runs through the shared bounded probe port in the selected
-  project working directory. Trusted healthy servers become `Effective`;
-  untrusted workspace declarations remain `Declared` with `trust.required`.
-- Trust approval, auth flows, and doctor output are observation only. They never
-  enter inventory/state as policy and never widen a compiled capability.
+- Amp's optional `mcp list --json` decoder is finite declaration-state evidence
+  only; it is not an effective probe. Trust approval, auth flows, and doctor
+  output remain observation-only and never enter inventory/state as policy or
+  widen a compiled capability.
 
 **Acceptance criteria**:
 
@@ -431,9 +464,9 @@ impl AmpSettingsDocument {
       only the selected documented portable root and preserve other roots.
 - [ ] User/workspace settings precedence and `amp.mcpServers` merge/remove
       preserve unknown and unmanaged content.
-- [ ] Untrusted workspace status reports declared configuration plus
-      `trust.required`, never effective/healthy or drift; trusted doctor evidence
-      produces exact effective health.
+- [ ] Untrusted/trust-required and authentication/interactive status remains
+      declared plus unverified/attention-required, never effective/healthy or
+      drift; no trust or doctor evidence is required by this relaxed target.
 - [ ] Skill-local MCP retains relative paths and lazy activation without a
       duplicate settings entry; update/removal fingerprints the owned skill and
       MCP identities safely.
@@ -461,14 +494,14 @@ impl AmpSettingsDocument {
 
 - Insert `junie` and `amp` into the canonical registry's product order without a
   second CLI/test target list. First-party bootstrap remains Codex/Claude only.
-- Add profile-carried Junie/Amp layouts and effective-state responses; do not add
-  id matches to `FakeHarnessProfile::layout`.
+- Add profile-carried Junie/Amp layouts and declaration-only responses; do not
+  add target-id branches to `FakeHarnessProfile::layout`.
 - Run the shared adapter and managed-projection matrices for both targets. The
   production-aware callback performs real assertions before returning evidence
-  labels.
-- Exercise declared/effective divergence, Junie interactive/native-extension
-  preservation, Amp trust, and both project-skill projection shapes in compiled
-  CLI tests.
+  labels, including declaration-managed pending status.
+- Exercise declared/effective divergence as an explicit unverified boundary,
+  Junie interactive/native-extension preservation, Amp trust/auth preservation,
+  and both project-skill projection shapes without invoking interactive flows.
 
 **Acceptance criteria**:
 
@@ -483,8 +516,9 @@ impl AmpSettingsDocument {
       acknowledgment, target-local state, recovery, rollback, and repeat
       idempotency.
 - [ ] Plain and JSON status derive from one typed outcome and distinguish
-      declared, effective, trust/auth/interactive-unverified, drift, and
-      conflicts without raw payloads.
+      declared, effective-unobserved, trust/auth/interactive-unverified, drift,
+      and conflicts without raw payloads; Junie/Amp effective status remains
+      explicitly unverified.
 - [ ] Junie extension caches/state and Amp trust/auth state remain unmodified.
 - [ ] Workspace tests, all-feature Clippy with warnings denied, formatting, and
       `git diff --check` pass before standard feature review.
@@ -532,13 +566,13 @@ contract or adapter checkpoint that proves its replacement.
 ## Testing
 
 - **Contract fixtures:** exact version bytes, exact native documents, precedence,
-  effective status states, and interactive-only failure. Protects mutation
-  authority from guessed versions/parsers.
+  declaration-state responses, and interactive-only boundaries. Protects
+  mutation authority from guessed versions/parsers.
 - **Codec tests:** unknown/unowned preservation, same-name conflicts, managed
   entry fingerprints, malformed/duplicate documents, portable references, and
   remove-to-empty behavior. Protects user-authored native config.
-- **Observation tests:** declared/effective pairing, declared-only adoption
-  rejection, trust/auth/failed health, unknown-profile downgrade, and no raw
+- **Observation tests:** declared-only status, effective-unobserved and
+  trust/auth/interactive attention, unknown-profile downgrade, and no raw
   payload fields. Protects honest status.
 - **Project-skill tests:** Junie relative link and Amp canonical no-op, including
   nested projects, repair/removal, complete siblings, and no-follow safety.
@@ -553,26 +587,21 @@ contract or adapter checkpoint that proves its replacement.
 
 ## Risks and contract blockers
 
-- **Junie effective MCP may be interactive-only.** This is the largest blocker.
-  If Unit 1 cannot establish a deterministic bounded non-TTY observation
-  surface, Junie cannot meet the minimum effective-state contract. The fallback
-  is an explicitly observe-only/unregistered target, not cache inference,
-  pseudo-TTY automation, or file-presence-as-effective.
-- **Exact native versions are absent from research.** Neither adapter receives a
-  mutable profile until isolated validation pins exact output. Unavailable
-  binaries or unstable decoders block that target independently.
-- **Amp user path/precedence is under-attested.** The project file and settings
-  key are known, but the selected user settings path and precedence among
-  compatible roots require Unit 1 evidence. The adapter must not write a guessed
-  XDG/home file.
+- **Junie effective MCP is interactive-only.** The durable relaxed amendment
+  records this as an explicit unverified boundary. No cache inference,
+  pseudo-TTY automation, or file-presence-as-effective claim is permitted.
+- **Exact native versions are now fixture-locked.** Adjacent syntactically valid
+  versions remain observe-only and produce no native projection writes.
+- **Amp settings precedence is constrained.** The selected settings path and
+  alternate JSONC file are treated as hard conflicts rather than guessed or
+  silently merged.
 - **Amp skill-local MCP can be accidentally de-lazified.** Moving it to workspace
   settings could change relative path resolution and startup behavior. The
   placement decision is source-shape and semantics aware; ambiguous mappings are
   partial/blocked.
-- **Shared contract is in flight.** The target contract lock is explicitly
-  blocked by `epic-expanded-harness-support-file-managed-contracts`. If that
-  implementation diverges from its approved scope/probe/source contract, amend
-  the shared owner first; do not fork a Junie/Amp-only implementation.
+- **Shared contract is consumed.** The adapters use its source checkout,
+  exact-scope projection, ownership, rollback, and acknowledgement machinery;
+  no target-specific lifecycle or probe fork was added.
 - **Declared success versus effective attention.** Correct owned bytes may be
   installed while trust/auth/reload state remains unresolved. Repeats must stay
   no-op while status remains attention-required; neither destructive rollback
@@ -587,10 +616,22 @@ contract or adapter checkpoint that proves its replacement.
   harness from loading it.
 - **Mitigation:** exact-profile codecs, declared/effective layers, bounded fresh
   probes, and no cache/session authority.
-- **Fallback:** retain honest observation diagnostics and do not register the
-  affected managed mutation capability or complete the target.
+- **Fallback:** retain honest declaration diagnostics and leave component,
+  mutation, trust, OAuth, and effective-health support `Unverified` until a
+  separate attested contract raises it.
 - **Least certain area:** Junie's non-interactive runtime surface and Amp's exact
   user settings/root precedence. Unit 1 isolates both before adapter mutation.
+
+## Implementation completion note
+
+The contract, Junie, Amp, and acceptance checkpoints are verified and staged
+complete. The durable relaxed amendment is the governing boundary: Junie and
+Amp are declaration-managed with `Unverified` component/mutation capabilities,
+no effective-state or native lifecycle ports, finite declaration-only Amp list
+metadata, and explicit version-only native invocation assertions. Unknown
+profiles perform no native projection writes. The parent is intentionally left
+at `stage: review`; no parent review has been performed in this implementation
+pass.
 
 ## Design review note
 
