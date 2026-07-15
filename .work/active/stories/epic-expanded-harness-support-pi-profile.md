@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-pi-profile
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-pi
 depends_on: []
@@ -65,3 +65,33 @@ selection. Existing adapters default to no conditional port.
 
 Foundation checkpoint. The Pi adapter depends on this contract; no Pi adapter is
 registered here.
+
+## Implementation notes
+
+- Added `skilltap-core`'s ephemeral `ProfileComponentObservation`, role-aware
+  `ProfileComponentSet`, `ConditionalComponentReport`, and
+  `ConditionalProfileObservation` contracts.
+- Component ids are normalized and duplicate-safe; MCP and hook companions are
+  independently addressable by id and role. Findings are context-checked for
+  one harness and concrete scope, and the target-bound constructor rejects a
+  mismatched scope.
+- Conditional composition delegates to `CapabilityProfileSelection::narrow`;
+  unknown and observe-only selections cannot acquire mutation authority.
+- Added registered companion/profile finding codes, authored summaries, and a
+  typed `profile_component` field. Companion evidence has no serde/state or
+  resource-graph representation and remains outside adoption.
+- Added the optional `ConditionalProfilePort` to `skilltap-harnesses`; the
+  existing adapter default remains absent, with no Pi adapter or registry entry.
+
+## Verification evidence
+
+- Focused tests: `cargo test -p skilltap-core conditional_profile --lib`,
+  `cargo test -p skilltap-core resource::finding --lib`, and
+  `cargo test -p skilltap-harnesses registry --lib` — all passed.
+- Workspace checks: `cargo check --workspace --all-features`,
+  `cargo test --workspace --all-features` (635 passed), and
+  `cargo clippy --workspace --all-features --all-targets -- -D warnings` — all
+  passed.
+- `cargo fmt --all -- --check` and `git diff --check` passed.
+- No Pi adapter, adapter registration, file-managed/Kiro code, `.work/bin/work-view`,
+  or existing untracked `.pi/` content was included.

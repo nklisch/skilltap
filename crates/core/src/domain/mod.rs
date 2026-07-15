@@ -1,6 +1,7 @@
 mod artifact;
 pub mod capability;
 pub mod compatibility;
+pub mod conditional_profile;
 mod dependency_graph;
 pub mod identity;
 pub mod installation;
@@ -17,6 +18,11 @@ pub use compatibility::{
     CompatibilityClass, CompatibilityError, CompatibilityEvidence, CompatibilityResult,
     ConsequenceCode, ConsequenceSummary, EvidenceCode, EvidenceDetail, MaterialConsequence,
     TransferFidelity,
+};
+pub use conditional_profile::{
+    ConditionalComponentReport, ConditionalProfileError, ConditionalProfileObservation,
+    ProfileComponentActivation, ProfileComponentCompatibility, ProfileComponentObservation,
+    ProfileComponentPresence, ProfileComponentRole, ProfileComponentSet,
 };
 pub use identity::{HarnessId, NativeId, OperationId, ResourceId, ResourceKey};
 pub use installation::{

@@ -6,7 +6,7 @@ use serde::{
     ser::SerializeMap,
 };
 
-use crate::domain::{CapabilityId, HarnessId, ResourceKey, Scope};
+use crate::domain::{CapabilityId, HarnessId, NativeId, ResourceKey, Scope};
 
 use super::{ObservationLayer, ResourceKind};
 
@@ -70,6 +70,11 @@ registered_vocabulary!(ObservationFindingCode, "unregistered observation finding
     SkillLinkBroken => "skill.link.broken",
     SkillLinkDivergent => "skill.link.divergent",
     SkillDestinationUnmanaged => "skill.destination.unmanaged",
+    ProfileComponentMissing => "profile.component.missing",
+    ProfileComponentVersionUnverified => "profile.component.version-unverified",
+    ProfileComponentInactive => "profile.component.inactive",
+    ProfileComponentIncompatible => "profile.component.incompatible",
+    CompoundProfileUnavailable => "profile.compound.unavailable",
 });
 
 registered_vocabulary!(ObservationFieldCode, "unregistered observation field code", {
@@ -84,6 +89,7 @@ registered_vocabulary!(ObservationFieldCode, "unregistered observation field cod
     Reachable => "reachable",
     Required => "required",
     Adoptable => "adoptable",
+    ProfileComponent => "profile_component",
 });
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -117,6 +123,11 @@ pub enum ObservationSummary {
     SkillLinkBroken,
     SkillLinkDivergent,
     SkillDestinationUnmanaged,
+    ProfileComponentMissing,
+    ProfileComponentVersionUnverified,
+    ProfileComponentInactive,
+    ProfileComponentIncompatible,
+    CompoundProfileUnavailable,
 }
 
 impl ObservationSummary {
@@ -147,6 +158,13 @@ impl ObservationSummary {
             Self::SkillDestinationUnmanaged => {
                 "A project skill destination is occupied by unmanaged content."
             }
+            Self::ProfileComponentMissing => "A required profile component is missing.",
+            Self::ProfileComponentVersionUnverified => "A profile component version is unverified.",
+            Self::ProfileComponentInactive => "A required profile component is inactive.",
+            Self::ProfileComponentIncompatible => "A profile component is not compatible.",
+            Self::CompoundProfileUnavailable => {
+                "The conditional profile cannot authorize mutation."
+            }
         }
     }
 
@@ -157,7 +175,7 @@ impl ObservationSummary {
     }
 }
 
-const ALL_SUMMARIES: [ObservationSummary; 19] = [
+const ALL_SUMMARIES: [ObservationSummary; 24] = [
     ObservationSummary::MalformedNativeEntry,
     ObservationSummary::NativeStateUnreadable,
     ObservationSummary::NativeShapeUnsupported,
@@ -177,6 +195,11 @@ const ALL_SUMMARIES: [ObservationSummary; 19] = [
     ObservationSummary::SkillLinkBroken,
     ObservationSummary::SkillLinkDivergent,
     ObservationSummary::SkillDestinationUnmanaged,
+    ObservationSummary::ProfileComponentMissing,
+    ObservationSummary::ProfileComponentVersionUnverified,
+    ObservationSummary::ProfileComponentInactive,
+    ObservationSummary::ProfileComponentIncompatible,
+    ObservationSummary::CompoundProfileUnavailable,
 ];
 
 impl fmt::Display for ObservationSummary {
@@ -252,6 +275,7 @@ pub enum ObservationField {
     Reachable(bool),
     Required(bool),
     Adoptable(bool),
+    ProfileComponent(NativeId),
 }
 
 impl ObservationField {
@@ -268,6 +292,7 @@ impl ObservationField {
             Self::Reachable(_) => ObservationFieldCode::Reachable,
             Self::Required(_) => ObservationFieldCode::Required,
             Self::Adoptable(_) => ObservationFieldCode::Adoptable,
+            Self::ProfileComponent(_) => ObservationFieldCode::ProfileComponent,
         }
     }
 }
@@ -329,6 +354,7 @@ impl Serialize for ObservationFields {
                 | ObservationField::Reachable(value)
                 | ObservationField::Required(value)
                 | ObservationField::Adoptable(value) => map.serialize_entry(code, value)?,
+                ObservationField::ProfileComponent(value) => map.serialize_entry(code, value)?,
             }
         }
         map.end()
@@ -372,6 +398,9 @@ impl<'de> Visitor<'de> for ObservationFieldsVisitor {
                 ObservationFieldCode::Reachable => ObservationField::Reachable(map.next_value()?),
                 ObservationFieldCode::Required => ObservationField::Required(map.next_value()?),
                 ObservationFieldCode::Adoptable => ObservationField::Adoptable(map.next_value()?),
+                ObservationFieldCode::ProfileComponent => {
+                    ObservationField::ProfileComponent(map.next_value()?)
+                }
             };
             if fields.insert(code, field).is_some() {
                 return Err(serde::de::Error::custom("duplicate observation field"));
@@ -498,6 +527,7 @@ mod tests {
     fn authored_finding_round_trips_with_deterministic_typed_fields() {
         let fields = ObservationFields::new([
             ObservationField::ExpectedResourceKind(ResourceKind::Plugin),
+            ObservationField::ProfileComponent(NativeId::new("pi-mcp-adapter").unwrap()),
             ObservationField::AffectedCount(2),
         ])
         .unwrap();
@@ -511,6 +541,7 @@ mod tests {
             encoded.find("affected_count").unwrap()
                 < encoded.find("expected_resource_kind").unwrap()
         );
+        assert!(encoded.contains(r#""profile_component":"pi-mcp-adapter""#));
         assert_eq!(
             finding.subject().scope(),
             &Scope::Project(AbsolutePath::new("/work/project").unwrap())
@@ -564,6 +595,19 @@ mod tests {
         let mut raw_field = base;
         raw_field["fields"] = json!({"stdout":RAW_SECRET});
         assert!(serde_json::from_value::<ObservationFinding>(raw_field).is_err());
+    }
+
+    #[test]
+    fn profile_component_field_rejects_arbitrary_payload_shapes() {
+        let finding = finding(
+            ObservationFields::new([ObservationField::ProfileComponent(
+                NativeId::new("pi-hooks").unwrap(),
+            )])
+            .unwrap(),
+        );
+        let mut payload = serde_json::to_value(finding).unwrap();
+        payload["fields"]["profile_component"] = json!({"stdout":"secret"});
+        assert!(serde_json::from_value::<ObservationFinding>(payload).is_err());
     }
 
     #[test]

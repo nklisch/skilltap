@@ -12,6 +12,7 @@ use skilltap_core::{
 use crate::{
     CanonicalObservation, DetectionError,
     adapters::{ClaudeAdapter, CodexAdapter, GeminiAdapter, OpenCodeAdapter},
+    conditional_profile::ConditionalProfilePort,
     lifecycle::{NativeLifecycleError, NativeLifecycleRequest},
     managed_projection::ManagedProjectionPort,
 };
@@ -133,6 +134,12 @@ pub trait HarnessAdapter: Sync {
     /// Bounded effective MCP status probe, separate from declared-file
     /// observation. The CLI owns executable resolution and process limits.
     fn effective_state_probe(&self) -> Option<&dyn crate::EffectiveStateProbePort> {
+        None
+    }
+
+    /// Optional conditional companion/profile inspection. Existing adapters
+    /// remain unchanged and have no compound-profile port.
+    fn conditional_profile(&self) -> Option<&dyn ConditionalProfilePort> {
         None
     }
 
@@ -413,5 +420,6 @@ mod tests {
         assert!(adapter.native_lifecycle().is_none());
         assert!(adapter.instruction_bridge().is_none());
         assert!(adapter.skill_projection().is_none());
+        assert!(adapter.conditional_profile().is_none());
     }
 }

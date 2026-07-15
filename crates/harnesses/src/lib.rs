@@ -17,6 +17,7 @@ use skilltap_core::{
 
 mod adapter_helpers;
 pub mod adapters;
+pub mod conditional_profile;
 pub use adapters::{
     ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection, CodexAdapter,
     CodexInstructionBridge, CodexLifecycle, CodexManagedProjection, CodexSkillProjection,
@@ -26,6 +27,7 @@ pub use adapters::{
 };
 
 mod plugin_graph;
+pub use conditional_profile::{ConditionalProfileContext, ConditionalProfilePort};
 pub use plugin_graph::{ClaudePluginGraphReader, CodexPluginGraphReader};
 mod managed_codex_project;
 pub use managed_codex_project::{ManagedCodexCatalog, ManagedCodexCatalogError};
