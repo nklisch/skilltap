@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-candidate-admission-zcode-admission
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-candidate-admission
 depends_on: [epic-expanded-harness-support-candidate-admission-zcode-boundary, epic-expanded-harness-support-file-managed-contracts]
@@ -46,7 +46,47 @@ production adapter, constants, fixture, or registry entry.
 - [ ] Observe-only/blocked outcomes cannot reach managed or native execution.
 - [ ] Import databases, editor caches, and credentials remain untouched.
 
+## Disposition rationale
+
+**Blocked**, exactly as recorded by the ZCode boundary at commit `0b56a448`
+under the candidate-admission gate at commit `8137cbd2`. The corrected boundary
+evidence reference is
+`.work/active/stories/epic-expanded-harness-support-candidate-admission-zcode-boundary.md`.
+
+The boundary establishes the documented global `~/.zcode/skills` root and exact
+native user/workspace MCP files, but does not establish an exact project skill
+root, deterministic non-UI installation/version observation, a redirectable
+isolated profile, or a headless effective-state/reload surface. Without exact
+installation identity or safe effective observation, the shared gate cannot
+return `observe_only`; the remaining mutation checks also prevent `admitted`.
+Therefore this story adds no production adapter, profile, port, path constant,
+fixture, candidate test, or registry entry.
+
+## Implementation notes
+
+- Files changed: this story only.
+- No ZCode adapter, profile, port, or registry entry was added.
+- No production or test-support source was changed.
+- No browser, authentication, login, native state, or nested agent was used.
+
+## Verification
+
+- Confirmed the boundary evidence at `0b56a448` records the exact `blocked`
+  disposition and the missing installation, project-skill, isolation, and
+  effective-observation contracts.
+- Confirmed the candidate-admission gate at `8137cbd2` prevents incomplete
+  deterministic observation from reaching `observe_only` or `admitted`.
+- Searched `crates/harnesses/src/adapters`, `crates/harnesses/src`,
+  `crates/test-support/src`, and `crates/harnesses/tests`; no ZCode adapter,
+  profile, port, or registry entry exists. The only source `zcode` match is the
+  generic candidate-admission test fixture.
+- Confirmed the corrected boundary-story path above is the evidence reference.
+
 ## Ordering
 
 Depends on ZCode's boundary result and the shared file-managed contracts. It is
 independent of Zoo and Cursor admission.
+
+## Disposition
+
+blocked
