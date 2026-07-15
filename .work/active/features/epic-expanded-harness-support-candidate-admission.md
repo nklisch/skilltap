@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-candidate-admission
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links]
@@ -35,6 +35,20 @@ adapter contract and receives its own verified mutable profile and acceptance
 evidence. One successful candidate never grants authority to the other two, and
 an unresolved platform path or editor-internal dependency remains an explicit
 block rather than a guessed configuration location.
+
+## Implementation result
+
+All three independent tracks resolved honestly to `blocked`: Cursor lacks an
+installed exact runtime and redirectable editor/CLI profile; Zoo Code lacks a
+standalone process plus documented cross-platform global MCP and non-UI
+effective observation; ZCode lacks deterministic installation identity, its
+exact project skill path, and a non-UI reload observer. The shared
+`VerifiedObserveOnly` authority and candidate admission matrix landed without
+registering any candidate. Aggregate acceptance proves Cursor, Zoo Code, and
+ZCode remain absent from the registry, help, mutation, and `--target all`
+surfaces, while Codex/Claude bootstrap behavior and sibling isolation remain
+unchanged. Workspace verification passed 656 tests with strict Clippy,
+formatting, and diff checks.
 
 ## Epic context
 
