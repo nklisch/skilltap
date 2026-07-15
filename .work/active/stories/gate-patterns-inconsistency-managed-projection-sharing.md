@@ -4,7 +4,7 @@ kind: story
 stage: drafting
 tags: [refactor]
 parent: null
-depends_on: [gate-cruft-unify-file-managed-skill-planning]
+depends_on: []
 release_binding: null
 gate_origin: patterns
 created: 2026-07-15
