@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-candidate-admission-gate
 kind: story
-stage: implementing
+stage: done
 tags: [testing]
 parent: epic-expanded-harness-support-candidate-admission
 depends_on: []
@@ -48,15 +48,43 @@ switch is introduced.
 
 ## Acceptance evidence
 
-- [ ] Verified observe-only profiles round-trip, expose their id and scoped
+- [x] Verified observe-only profiles round-trip, expose their id and scoped
       observation capabilities, and never expose mutation capabilities.
-- [ ] Narrowing cannot promote verified observe-only or unknown profiles.
-- [ ] Every exhaustive profile renderer handles the new variant accurately.
-- [ ] The candidate matrix rejects a false `Admitted` result with one missing
+- [x] Narrowing cannot promote verified observe-only or unknown profiles.
+- [x] Every exhaustive profile renderer handles the new variant accurately.
+- [x] The candidate matrix rejects a false `Admitted` result with one missing
       check and a false `ObserveOnly` result without safe observation.
-- [ ] Existing profile tests remain green without assertion weakening.
-- [ ] No production executor imports `CandidateDisposition` or the test-support
+- [x] Existing profile tests remain green without assertion weakening.
+- [x] No production executor imports `CandidateDisposition` or the test-support
       admission matrix.
+
+## Implementation Notes
+
+- Added `VerifiedObserveOnly` and `verified_observe_only` in the core profile
+  contract. It retains exact profile identity and scoped observation evidence,
+  maps to `ProfileAuthority::ObserveOnly`, exposes no mutation capability set,
+  and preserves its authority and identity through narrowing.
+- Added the dependency-neutral test-support candidate matrix with all fourteen
+  checks. Exact identity plus the complete documented/cache-independent
+  observation surface is required for `ObserveOnly`; any missing observation
+  prerequisite is `Blocked`, while complete evidence is `Admitted`.
+- Updated only the test-support module export and core profile contract. No
+  candidate adapter, path, executor, registry entry, or production disposition
+  import was added. Existing CLI renderers already render the shared
+  `ProfileAuthority::ObserveOnly` value correctly for both observe-only forms.
+
+## Verification
+
+- Focused tests passed: `cargo test -p skilltap-core domain::installation`,
+  `cargo test -p skilltap-test-support candidate_admission`,
+  `cargo test -p skilltap entrypoint::tests`,
+  `cargo test -p skilltap output::tests`, and
+  `cargo test -p skilltap application::tests`.
+- Workspace verification passed: `cargo check --workspace --all-features`,
+  `cargo test --workspace --all-features`, and
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
+- `cargo fmt --all -- --check` and `git diff --check` passed. A production-tree
+  search found no import or use of the test-only candidate disposition matrix.
 
 ## Ordering
 

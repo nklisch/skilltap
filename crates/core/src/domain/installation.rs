@@ -264,6 +264,10 @@ pub enum CapabilityProfileSelection {
         id: CapabilityProfileId,
         capabilities: ScopedCapabilitySets,
     },
+    VerifiedObserveOnly {
+        id: CapabilityProfileId,
+        capabilities: ScopedCapabilitySets,
+    },
     UnknownVersion {
         capabilities: ScopedCapabilitySets,
     },
@@ -274,6 +278,13 @@ impl CapabilityProfileSelection {
         Self::VerifiedCompiled { id, capabilities }
     }
 
+    pub const fn verified_observe_only(
+        id: CapabilityProfileId,
+        capabilities: ScopedCapabilitySets,
+    ) -> Self {
+        Self::VerifiedObserveOnly { id, capabilities }
+    }
+
     pub const fn unknown_version(capabilities: ScopedCapabilitySets) -> Self {
         Self::UnknownVersion { capabilities }
     }
@@ -281,29 +292,31 @@ impl CapabilityProfileSelection {
     pub const fn authority(&self) -> ProfileAuthority {
         match self {
             Self::VerifiedCompiled { .. } => ProfileAuthority::VerifiedCompiled,
-            Self::UnknownVersion { .. } => ProfileAuthority::ObserveOnly,
+            Self::VerifiedObserveOnly { .. } | Self::UnknownVersion { .. } => {
+                ProfileAuthority::ObserveOnly
+            }
         }
     }
 
     pub const fn profile_id(&self) -> Option<&CapabilityProfileId> {
         match self {
-            Self::VerifiedCompiled { id, .. } => Some(id),
+            Self::VerifiedCompiled { id, .. } | Self::VerifiedObserveOnly { id, .. } => Some(id),
             Self::UnknownVersion { .. } => None,
         }
     }
 
     pub const fn observation_capabilities(&self) -> &ScopedCapabilitySets {
         match self {
-            Self::VerifiedCompiled { capabilities, .. } | Self::UnknownVersion { capabilities } => {
-                capabilities
-            }
+            Self::VerifiedCompiled { capabilities, .. }
+            | Self::VerifiedObserveOnly { capabilities, .. }
+            | Self::UnknownVersion { capabilities } => capabilities,
         }
     }
 
     pub const fn mutation_capabilities(&self) -> Option<&ScopedCapabilitySets> {
         match self {
             Self::VerifiedCompiled { capabilities, .. } => Some(capabilities),
-            Self::UnknownVersion { .. } => None,
+            Self::VerifiedObserveOnly { .. } | Self::UnknownVersion { .. } => None,
         }
     }
 
@@ -311,6 +324,10 @@ impl CapabilityProfileSelection {
         let capabilities = self.observation_capabilities().narrow(narrowing)?;
         Ok(match self {
             Self::VerifiedCompiled { id, .. } => Self::VerifiedCompiled {
+                id: id.clone(),
+                capabilities,
+            },
+            Self::VerifiedObserveOnly { id, .. } => Self::VerifiedObserveOnly {
                 id: id.clone(),
                 capabilities,
             },
@@ -456,6 +473,65 @@ mod tests {
             r#"{"authority":"unknown_version","id":"codex-v3","capabilities":{"global":{"capabilities":{}},"project":{"capabilities":{}}}}"#
         )
         .is_err());
+    }
+
+    #[test]
+    fn verified_observe_only_profiles_preserve_identity_and_wire_shape() {
+        let profile = CapabilityProfileSelection::verified_observe_only(
+            CapabilityProfileId::new("cursor-v1").unwrap(),
+            sets(CapabilitySupport::Supported),
+        );
+
+        assert_eq!(profile.authority(), ProfileAuthority::ObserveOnly);
+        assert_eq!(profile.profile_id().unwrap().as_str(), "cursor-v1");
+        assert_eq!(
+            profile
+                .observation_capabilities()
+                .for_scope_kind(CapabilityScope::Global)
+                .support(&capability("plugin.install")),
+            Some(CapabilitySupport::Supported)
+        );
+        assert!(profile.mutation_capabilities().is_none());
+
+        let encoded = serde_json::to_string(&profile).unwrap();
+        assert!(encoded.contains(r#""authority":"verified_observe_only""#));
+        assert!(encoded.contains(r#""id":"cursor-v1""#));
+        assert_eq!(
+            serde_json::from_str::<CapabilityProfileSelection>(&encoded).unwrap(),
+            profile
+        );
+    }
+
+    #[test]
+    fn verified_observe_only_narrowing_preserves_observe_only_authority() {
+        let profile = CapabilityProfileSelection::verified_observe_only(
+            CapabilityProfileId::new("cursor-v1").unwrap(),
+            sets(CapabilitySupport::Supported),
+        );
+        let narrowed = profile
+            .narrow(&sets(CapabilitySupport::Unsupported))
+            .unwrap();
+
+        assert_eq!(narrowed.authority(), ProfileAuthority::ObserveOnly);
+        assert_eq!(narrowed.profile_id().unwrap().as_str(), "cursor-v1");
+        assert!(narrowed.mutation_capabilities().is_none());
+        assert_eq!(
+            narrowed
+                .observation_capabilities()
+                .for_scope_kind(CapabilityScope::Global)
+                .support(&capability("plugin.install")),
+            Some(CapabilitySupport::Unsupported)
+        );
+
+        let unsupported = CapabilityProfileSelection::verified_observe_only(
+            CapabilityProfileId::new("cursor-v2").unwrap(),
+            sets(CapabilitySupport::Unsupported),
+        );
+        assert!(
+            unsupported
+                .narrow(&sets(CapabilitySupport::Supported))
+                .is_err()
+        );
     }
 
     #[test]

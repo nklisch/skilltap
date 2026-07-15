@@ -2,6 +2,7 @@
 
 #[cfg(unix)]
 mod barrier;
+mod candidate_admission;
 #[cfg(unix)]
 mod external_tree;
 #[cfg(unix)]
@@ -12,6 +13,10 @@ mod native_process;
 
 #[cfg(unix)]
 pub use barrier::FileBarrier;
+pub use candidate_admission::{
+    CandidateAdmissionCheck, CandidateAdmissionEvidence, CandidateAdmissionReport,
+    CandidateDisposition, candidate_admission_gate,
+};
 #[cfg(unix)]
 pub use external_tree::{ExternalTreeFixture, InjectedIoFault, ReplacementRace};
 #[cfg(unix)]
