@@ -237,15 +237,19 @@ Harness support is runtime-versioned.
 
 An adapter resolves the configured binary to one canonical executable identity,
 reads its opaque version, and selects a compiled capability profile whose
-support may differ between global and project scope. Compiled verified profiles
-are the only source of native-command mutation authority. Managed publication
-authority is separately bounded by attested load paths, ownership, drift
-checks, and filesystem contracts.
+support may differ by component and between global and project scope. Compiled
+verified profiles are the only source of mutation authority. Native commands
+require `Supported`. Managed publication may additionally consume an
+`Unverified` capability only through a declaration contract bounded by attested
+load paths, lossless preservation, ownership, conflict and drift checks,
+rollback, filesystem confinement, and explicit foreground acknowledgment.
 
 Runtime probes may confirm that compiled support remains usable or narrow it to
 unsupported or unverified. They cannot add a capability or widen support. An
 unknown harness version has no verified profile and is observe-only when its
-documented state remains parseable.
+documented state remains parseable. Registration, scope support, and component
+support are independent; an unsupported component does not erase a sibling
+capability.
 
 The maintained capability profiles and native contracts live in [HARNESS-CONTRACTS.md](./HARNESS-CONTRACTS.md).
 
@@ -274,6 +278,12 @@ Observation produces a normalized snapshot without changing the machine.
 Each adapter reads native CLI JSON output where available, documented native configuration, installed resource manifests, managed artifact fingerprints, and harness and plugin versions.
 
 Observations include malformed and unmanaged resources as health findings rather than silently omitting them.
+
+Declared state and effective state remain distinct. A declaration-managed
+adapter may observe documented files and skilltap ownership without a native
+health probe; it reports effective state as unverified and never synthesizes
+healthy, loaded, trust, or authentication results from file presence. A
+side-effectful or interactive native command is not an observation port.
 
 Snapshots are ephemeral. Declared/effective resources, selected capability
 evidence, and findings from `status` or `adopt` are not written to `state.json`.
@@ -316,7 +326,7 @@ inventory, last-applied state, fresh observations, verified scoped capability
 profiles, compatibility evidence, requested targets and selectors, and user
 acknowledgment flags.
 
-The planner emits a dependency graph of semantic operations classified as safe native, safe faithful equivalent, safe materialization, partial and acknowledgment-required, unsupported, conflict, or no-op.
+The planner emits a dependency graph of semantic operations classified as safe native, safe faithful equivalent, safe materialization, declaration-managed and acknowledgment-required, other partial and acknowledgment-required, unsupported, conflict, or no-op. Declaration-managed operations carry a typed consequence that the owned bytes are verifiable while harness loading or activation is not.
 
 A plan contains enough information for human and JSON renderers without
 exposing adapter-internal implementation objects. Every operation and
@@ -386,10 +396,12 @@ The component graph preserves source dependencies. Omission of a required compon
 
 Materialized plugins live under `managed/` and are registered with the target through a documented native mechanism. Harness caches are never used as a write API.
 
-For a harness without native plugin registration, the adapter projects the
-faithful skill and MCP components into documented load paths and observes their
-effective state. The managed projection is the installation; it does not
-pretend to be a native marketplace package.
+For a harness without native plugin registration, the adapter projects faithful
+skill and MCP components into documented load paths. When a deterministic native
+observer exists, it verifies effective state. Otherwise the projection may be
+declaration-managed: the managed declaration is the installation record,
+effective state remains unverified, foreground acknowledgment is required, and
+the adapter does not pretend to be a native marketplace package.
 
 ## Standalone Skills
 

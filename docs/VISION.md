@@ -54,14 +54,23 @@ skilltap uses a harness's native marketplace, plugin, and configuration mechanis
 A resource crosses harness boundaries only when skilltap can represent it faithfully. When a native plugin is unavailable for a target harness, skilltap may materialize compatible components into that harness's supported locations.
 
 A harness does not need its own marketplace or plugin lifecycle to participate.
-The minimum target contract is faithful whole-directory skill loading plus MCP
-configuration through documented global and project surfaces. When native
-lifecycle is absent, skilltap owns source acquisition, managed installation,
-update, drift detection, and removal. Hooks, instructions, agents, commands,
-and other extension types are capability-detected rather than admission
-requirements.
+Support is admitted per component and concrete scope rather than all-or-nothing
+per target. A documented complete-directory skill or MCP declaration surface may
+participate even when another component or scope is unsupported.
 
-Partial or lossy materialization is visible and blocked by default. The user can approve the proposed result as a whole or choose components individually. Unsupported behavior is never silently discarded.
+When native lifecycle is absent, skilltap may own source acquisition, managed
+installation, update, declaration drift detection, and removal through a
+version-known documented file surface. If the harness has no safe deterministic
+effective-state observer, skilltap labels the result declaration-managed and
+effective-unverified. Such foreground mutations are partial, require explicit
+acknowledgment, never run from the daemon, and never claim that the harness
+loaded or activated the declaration. Hooks, instructions, agents, commands, and
+other extension types remain independently capability-detected.
+
+Partial, lossy, or effective-unverified materialization is visible and blocked
+by default. The user can approve the exact proposed result as a whole or choose
+components individually. Unsupported behavior and missing effective evidence
+are never silently discarded.
 
 ## Agent Forward
 
@@ -106,7 +115,7 @@ Its state describes one computer. Repositories and collaborators do not need to 
 6. **Idempotent reconciliation.** Synchronizing an unchanged environment produces no changes.
 7. **No hidden decisions.** Drift and conflicts are reported for resolution rather than silently merged.
 8. **Agent-readable operation.** Output makes the next safe action clear.
-9. **Deep support over broad claims.** A harness is supported only when skilltap can model, observe, and reconcile its promised skill and MCP surfaces faithfully.
+9. **Precise support over broad claims.** A harness exposes only the components and scopes skilltap can model and reconcile faithfully; declared state is never mislabeled as effective state.
 
 ## Success
 
@@ -139,14 +148,16 @@ skilltap does not:
   elevated privileges and never bypasses acknowledgment, drift, or conflict
   safeguards.
 - Provide an interactive dashboard or setup wizard.
-- Claim support for a harness through undocumented cache copying or without
-  observable skill and MCP load behavior.
+- Claim that a harness loaded or activated a resource from file presence alone,
+  or write through undocumented caches.
 
 Codex and Claude Code are the first supported harnesses. The intended expanded
 set includes Factory Droid, Qwen Code, GitHub Copilot CLI, Gemini CLI, Junie,
-Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, Amp, and a
-compound Pi profile with compatible MCP and Claude-hook extensions. Cursor,
-Zoo Code, and ZCode join only after their supported write boundaries are
-verified. Every added harness must meet the same faithfulness, ownership,
-observation, and reconciliation contract; native marketplace and plugin
-lifecycle support improves an adapter but is not required.
+Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, Amp, Cursor, Zoo
+Code, ZCode, and a compound Pi profile with compatible MCP and Claude-hook
+extensions. Every adapter is admitted per component and scope. Effectively
+verified components support ordinary reconciliation; version-known documented
+file surfaces without a deterministic load observer may support acknowledged
+foreground declaration management; unavailable surfaces remain explicitly
+unsupported. Native marketplace and plugin lifecycle support improves an
+adapter but is not required.

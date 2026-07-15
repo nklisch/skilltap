@@ -129,7 +129,7 @@ No skilltap metadata is written into a project. A plan lists any native project 
 
 Only commands for which a flag is meaningful accept it. `--project` and `--all-scopes` are mutually exclusive.
 
-`--yes` acknowledges a reported partial or lossy foreground operation. It does not bypass invalid configuration, missing dependencies, unsupported required components, local drift, or native harness policy.
+`--yes` acknowledges a reported partial, lossy, or effective-unverified foreground operation. For declaration-managed resources it acknowledges that skilltap can verify its owned file result but cannot verify harness loading or activation. It does not bypass invalid configuration, missing dependencies, unsupported required components or scopes, unknown versions, local drift, conflicts, authentication, trust, or native harness policy.
 
 `--include` and `--exclude` are repeatable. Exclusion wins when both match the same resource or component.
 
@@ -297,10 +297,17 @@ Summary
 
 `sync` applies safe operations and reports blocked resources. A non-empty plan exits `2`.
 
-Native mutation is available only through a verified compiled capability
-profile for the detected executable version and concrete scope. Runtime probes
-may narrow that profile. Unknown versions remain observable but mutation is
-reported as blocked.
+Native mutation is available only through a verified compiled `Supported`
+capability for the detected executable version, component, and concrete scope.
+Runtime probes may narrow that profile. Unknown versions remain observable but
+mutation is reported as blocked.
+
+A verified compiled `Unverified` capability may expose a documented managed file
+projection as declaration-managed. `plan` labels it `effective unverified`,
+lists the exact files and preservation boundary, and requires `--yes`. Successful
+foreground application reports `declared` rather than `loaded` or `healthy` and
+leaves status attention-required until a native effective observer is available.
+Unsupported sibling components or scopes are reported independently.
 
 ```console
 $ skilltap sync --project
@@ -485,7 +492,7 @@ Result: completed
 
 On macOS, the service is reported as `launchd`.
 
-The daemon never confirms partial updates, overwrites local drift, or resolves conflicts. `daemon run` runs the same update process in the foreground for diagnostics.
+The daemon never confirms partial or declaration-managed updates, overwrites local drift, or resolves conflicts. Effective-unverified changes remain pending for acknowledged foreground execution. `daemon run` runs the same update process in the foreground for diagnostics but does not acquire acknowledgment authority.
 
 ## JSON Output
 

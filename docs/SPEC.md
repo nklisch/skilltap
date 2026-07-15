@@ -87,10 +87,10 @@ stable document derived from the same outcome as plain output.
 
 A supported agent runtime selected from skilltap's typed target registry. The
 intended identifiers are `codex`, `claude`, `droid`, `qwen`, `copilot`,
-`gemini`, `junie`, `kimi`, `opencode`, `kilo`, `vibe`, `kiro`, `amp`, and
-`pi`. Candidate identifiers `cursor`, `zoo`, and `zcode` remain observe-only
-until their supported write boundaries are verified. `all` is a selector, not
-a harness identifier.
+`gemini`, `junie`, `kimi`, `opencode`, `kilo`, `vibe`, `kiro`, `amp`, `pi`,
+`cursor`, `zoo`, and `zcode`. Registration does not imply uniform capability:
+each target reports support independently by component, concrete scope, and
+verification level. `all` is a selector, not a harness identifier.
 
 **Desired inventory**
 
@@ -126,6 +126,19 @@ A target representation that preserves the source component's behavior and requi
 **Partial materialization**
 
 A representation that omits or changes one or more source components.
+
+**Declaration-managed resource**
+
+A resource written through a documented, version-known file surface with
+skilltap ownership, preservation, rollback, and disk-level idempotence, but no
+safe deterministic proof that the harness loaded or activated it. Its effective
+state is unverified and foreground mutation requires explicit acknowledgment.
+
+**Effective state**
+
+The harness-reported loaded, active, disabled, failed, trust-required, or
+authentication-required result for a declaration. File presence alone is not
+effective-state evidence.
 
 **Drift**
 
@@ -336,9 +349,15 @@ skilltap plan [--target <target>] [--project [<path>] | --all-scopes] [--json]
 
 `plan` compares desired inventory, last-applied state, fresh native
 observations, and the capabilities selected from a verified compiled profile
-for each concrete scope. Runtime probes may preserve or narrow compiled
-support; they never grant mutation authority. Unknown harness versions remain
-observe-only.
+for each concrete scope and component. Runtime probes may preserve or narrow
+compiled support; they never grant undocumented authority. Unknown harness
+versions remain observe-only.
+
+A `Supported` capability may produce an effectively verified operation. An
+`Unverified` capability may authorize only a documented managed file projection
+whose declaration ownership and write safety are verified; the resulting
+operation is partial and acknowledgment-required. Native commands always
+require `Supported`. `Unsupported` capabilities cannot produce operations.
 
 Every planned operation includes:
 
@@ -373,12 +392,17 @@ skilltap sync
 Without `--yes`:
 
 - Native operations apply when they are fully supported.
-- Faithful equivalents apply.
-- Partial or lossy resource operations remain blocked.
+- Effectively verified faithful equivalents apply.
+- Partial, lossy, or effective-unverified declaration operations remain blocked.
 - Unrelated safe operations may still apply.
 - Output explains every blocked operation.
 
-With `--yes`, partial operations may apply using the exact component set shown in the plan. `--yes` acknowledges the reported loss; it does not make unsupported components functional.
+With `--yes`, partial operations may apply using the exact component set and
+verification consequences shown in the plan. For declaration-managed resources,
+this acknowledges that skilltap can verify its owned file result but cannot
+verify harness loading or activation. `--yes` does not make unsupported
+components functional, bypass drift or conflicts, approve trust, authenticate,
+or widen an unknown-version profile.
 
 `--include` and `--exclude` constrain the operation set. Input selectors may
 address a logical resource or one component within the command's selected
@@ -435,12 +459,16 @@ For each target, installation preference is:
 4. Report a partial plan and require `--yes`.
 5. Block the operation.
 
-A target harness is eligible when it can faithfully load complete skill
-directories and MCP configuration from documented global and project surfaces
-that skilltap can observe. Marketplace registration and plugin lifecycle are
-capabilities, not prerequisites. When they are unavailable, skilltap owns the
-managed artifact and its source, revision, update, drift, and removal lifecycle.
-It never substitutes writes to undocumented caches.
+Target eligibility is per component and concrete scope. A target may support a
+global skill surface while project skills are unsupported, or managed MCP while
+native plugin lifecycle is unsupported. Marketplace registration and plugin
+lifecycle are capabilities, not prerequisites.
+
+For an effectively verified component, skilltap observes the harness load result.
+For a declaration-managed component, skilltap owns the managed artifact and its
+source, revision, declaration fingerprint, update, rollback, and removal
+lifecycle while reporting effective state as unverified. It never substitutes
+writes to undocumented caches or treats declaration bytes as runtime health.
 
 `plugin list` lists installed and desired plugins only. It does not expose an available-plugin catalog.
 
@@ -566,7 +594,7 @@ and never auto-apply a major-version change unless the user explicitly opts
 in. Plugin guidance and the website use this lifecycle rather than inventing a
 separate updater.
 
-The daemon never supplies `--yes`, accepts partial materialization, overwrites local drift, resolves conflicts, or modifies unmanaged resources. An update requiring judgment remains pending for foreground review.
+The daemon never supplies `--yes`, accepts partial or effective-unverified declaration operations, overwrites local drift, resolves conflicts, or modifies unmanaged resources. Declaration-managed updates remain pending for acknowledged foreground review even when their owned file patch is otherwise deterministic.
 
 Per-resource update policy and pins override global update policy.
 

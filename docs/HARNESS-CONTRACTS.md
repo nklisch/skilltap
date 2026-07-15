@@ -3,10 +3,12 @@
 This document defines the native capabilities skilltap relies on for every
 supported target harness, along with the mappings skilltap considers faithful.
 
-A harness contract describes current supported behavior. Verified compiled
-profiles grant mutation authority for known versions and scopes. Runtime
-detection binds that profile to one executable and may narrow its support
-before skilltap mutates anything.
+A harness contract describes current supported behavior per component and
+concrete scope. Verified compiled profiles grant version-bounded authority.
+`Supported` capabilities may authorize effectively verified behavior;
+`Unverified` capabilities may authorize only acknowledged foreground management
+of documented file declarations. Runtime detection binds the profile to one
+executable and may narrow support before skilltap mutates anything.
 
 ## Contract Rules
 
@@ -23,6 +25,16 @@ before skilltap mutates anything.
 9. Observation findings expose only registered codes, authored summaries, typed
    subjects, and bounded typed scalar fields; raw native payloads never cross
    the adapter boundary.
+10. Admission is per component and concrete scope; one unsupported scope or
+    native lifecycle does not erase independently safe surfaces.
+11. A declaration-managed operation requires exact-version authority, a
+    documented file schema, lossless unrelated-field preservation, explicit
+    skilltap ownership, conflict detection, rollback, and disk-level idempotence.
+12. Declaration-managed operations require foreground acknowledgment, never run
+    in the daemon, and never report declaration presence as loaded or healthy.
+13. Native lifecycle commands require `Supported`; `Unverified` never authorizes
+    a native command, interactive flow, authentication, trust approval, or
+    side-effectful status probe.
 
 ## Common Capability Model
 
@@ -64,10 +76,22 @@ component.executable
 component.settings
 ```
 
-Capabilities may vary by harness version and scope. A compiled verified profile
-is the mutation allowlist. Runtime probes may preserve or narrow its support;
-they never grant an undocumented capability or widen an unverified or
-unsupported capability.
+Capabilities may vary by harness version, component, and scope. A compiled
+verified profile is the authority ceiling. Runtime probes may preserve or narrow
+its support; they never grant an undocumented capability or widen an unverified
+or unsupported capability.
+
+- `Supported` means the operation and its required effective verification are
+  safe without acknowledgment.
+- `Unverified` means only a documented managed file declaration may be planned,
+  as a partial foreground operation requiring acknowledgment; effective state
+  remains unknown.
+- `Unsupported` means no operation may be constructed.
+
+Native lifecycle dispatch accepts only `Supported`. Managed projection and
+standalone complete-skill publication may accept `Unverified` only when the
+adapter supplies a declaration contract and the planner records the exact
+verification consequence.
 
 ## Scope Mapping
 
@@ -133,17 +157,18 @@ Kiro CLI
 Amp
 ```
 
-Each direct adapter must provide documented global and project skill roots,
-global and project MCP configuration, effective-state observation, a verified
-version profile, ownership-safe update and removal, and the common acceptance
-tests described under Adding Another Harness. Native marketplace and plugin
-lifecycle capabilities are preferred where available but are not admission
-requirements.
+Each direct adapter reports the independently established global/project skill,
+MCP, marketplace, and plugin capabilities. A target may be registered with
+unsupported scopes or components. Mutation still requires a verified exact
+version profile plus either effective verification or a declaration-managed
+file contract with ownership-safe update/removal and the applicable acceptance
+matrix.
 
-Cursor, Zoo Code, and ZCode are boundary-validation candidates. They remain
-observe-only until isolated validation identifies their exact supported global
-and project write files, verifies reload and precedence, and establishes that
-skilltap does not need to mutate an editor or extension cache.
+Cursor, Zoo Code, and ZCode participate through the same per-component model.
+Documented read surfaces may be observe-only; documented version-known file
+surfaces may be declaration-managed; missing project roots, editor-storage
+locations, executable identity, or preservation contracts remain unsupported
+rather than blocking unrelated target capabilities.
 
 Pi is a conditional compound target. A mutable Pi profile requires the Pi
 runtime plus compatible user-installed MCP and Claude Code hook-compatibility
@@ -455,18 +480,22 @@ If verification fails, status remains available and mutation is blocked with a h
 
 ## Adding Another Harness
 
-A harness is not supported until its adapter can provide reliable installation
-detection, stable observation, explicit global and project scope behavior,
-faithful complete-directory skill loading, MCP configuration and load
-observation, update identity, complete fixture-based contract tests, and clear
+A target may enter the registry when its adapter can provide reliable target
+identity and at least one safe documented observation surface. Each mutable
+component then independently requires explicit scope behavior, an exact verified
+version profile, update identity, fixture-based contract tests, and clear
 unsupported-component reporting.
 
 Native marketplace, plugin lifecycle, hooks, instructions, agents, and other
 extension components are optional capabilities. When native lifecycle is
-absent, skilltap may own acquisition, managed projection, update, drift, and
-removal through documented skill and MCP load paths. Filesystem copying without
-a supported load contract, effective-state observation, ownership tracking,
-and idempotent reconciliation is not a harness integration.
+absent, skilltap may own acquisition, managed projection, declaration drift,
+rollback, and removal through documented skill and MCP paths. Effective-state
+observation promotes that component to ordinary verified reconciliation. When
+it is unavailable, a lossless documented file projection may instead be
+`Unverified`, acknowledgment-required, foreground-only, and explicitly reported
+as declaration-managed. Filesystem copying without a documented load path,
+ownership tracking, conflict preservation, and disk-level idempotence is not a
+harness integration.
 
 ## Authoritative References
 

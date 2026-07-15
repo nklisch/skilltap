@@ -4,7 +4,7 @@ kind: feature
 stage: implementing
 tags: []
 parent: epic-expanded-harness-support
-depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links]
+depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
 release_binding: null
 research_refs:
   - .research/analysis/briefs/current-agent-extension-standards.md
@@ -16,7 +16,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-12
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Trust- and Interactive-State Adapters for Junie and Amp

@@ -11,7 +11,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-12
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Expanded Harness Support
@@ -115,11 +115,11 @@ not flatten their schemas or lifecycle behavior into a universal plugin format.
 ## Decomposition
 
 The existing managed-fallback feature remains the shared publication
-foundation. Nine additional features split the work by capability: one
-registry and adapter contract, one shared project-skill link contract, four
-independent direct-adapter families, a Pi contract research prerequisite, the
-Pi compound adapter, and independent candidate admission. Ten children exceed
-the usual epic target because this scope spans fifteen harnesses; collapsing
+foundation. Ten additional features split the work by capability: one
+registry and adapter contract, one shared project-skill link contract, one
+declaration-managed authority contract, four independent direct-adapter
+families, a Pi contract research prerequisite, the Pi compound adapter, and
+independent candidate admission. Eleven children exceed the usual epic target because this scope spans fifteen harnesses; collapsing
 them further would combine unrelated native contracts or hand oversized
 features to the next design pass.
 
@@ -137,6 +137,12 @@ features to the next design pass.
   per-skill relative symlinks — depends on:
   `[epic-standalone-skill-lifecycle,
   epic-expanded-harness-support-registry]`.
+- `epic-expanded-harness-support-declaration-managed` — per-component,
+  per-scope acknowledged management of documented declarations whose effective
+  state cannot be safely observed — depends on:
+  `[epic-expanded-harness-support-registry,
+  feature-managed-fallback-target-parity,
+  epic-expanded-harness-support-project-skill-links]`.
 - `epic-expanded-harness-support-file-managed` — Gemini, OpenCode, and Kiro
   adapters — depends on: `[epic-expanded-harness-support-registry,
   feature-managed-fallback-target-parity,
@@ -180,6 +186,9 @@ features to the next design pass.
 - `epic-expanded-harness-support-project-skill-links` replaces duplicate
   project skill trees with one validated canonical tree and per-skill relative
   links while preserving native-only siblings.
+- `epic-expanded-harness-support-declaration-managed` reuses `Unverified` as a
+  narrow, foreground-only managed declaration authority instead of adding a
+  second planner or executor.
 - Concrete adapter features reuse bounded execution, target-local state,
   rollback, and effective-load verification while retaining only target-owned
   codecs, probes, paths, and lifecycle semantics.
