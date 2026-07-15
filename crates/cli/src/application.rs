@@ -1676,7 +1676,11 @@ fn plan_managed_lifecycle(
     } else {
         &managed_projections
     };
-    let mut requirements = vec![managed_requirement.clone()];
+    let mut requirements = if removal {
+        Vec::new()
+    } else {
+        vec![managed_requirement.clone()]
+    };
     // Removal only retracts skilltap-owned declarations. It does not claim
     // that the harness will load the component, so effective component
     // uncertainty must not strand an owned projection without a removal

@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-configuration-constrained-projection-scope
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-configuration-constrained
 depends_on: [epic-expanded-harness-support-configuration-constrained-contract-lock]
@@ -11,7 +11,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Generalize and Gate Managed Projection
@@ -20,28 +20,27 @@ updated: 2026-07-14
 
 Make the delivered managed-projection lifecycle operate on one concrete global
 or project `Scope`, require an exact verified adapter profile before any
-managed/skill mutation, and add one bounded read-only activation probe used by
-post-apply and status observation.
+managed/skill mutation, and expose declaration ownership separately from
+runtime activation. The relaxed profiles do not add an activation probe: load,
+trust, authentication, and reload remain unverified or pending unless a target
+has an independently attested observation path.
 
 ## Design element
 
 Apply Unit 2 from the parent feature:
 
-- change `ManagedProjectionContext.project` to `scope` and add
-  `ManagedProjectionPort::supports_scope` plus `activation_probe`;
-- replace `managed_project_lifecycle()` with port-owned scope support;
-- rename project-only CLI execution types/functions to scope-neutral managed
-  projection names without changing revalidation, rollback, or residual rules;
-- add profile detection independent of `NativeLifecycleVector`, using compiled
-  `managed.projection` and `component.skill` capabilities;
-- add typed activation identities/states and registered reload/auth findings;
-- let `AdapterObservationPaths` carry bounded authored findings and merge them
-  with profile evidence in status;
-- retain Codex managed fallback at project scope only and preserve its tests.
+- bind `ManagedProjectionContext` to one explicit `Scope` and keep the
+  operation-owned, lock-revalidated execution port;
+- gate managed projection through compiled `managed.projection` and
+  `component.skill` capabilities;
+- retain Codex managed fallback at project scope only and preserve its tests;
+- let each constrained adapter expose declaration files and complete skill
+  trees without claiming native runtime activation.
 
-Declared writes remain journaled when a trusted/auth/reload gate leaves the
-native effective state attention-required. The probe is read-only and cannot
-grant mutation capability.
+Declared writes remain journaled when an effective-state gate is unavailable or
+attention-required. No probe is read-only by implication: the constrained
+adapters simply do not register a probe, so no production process can be
+invoked for status or mutation.
 
 ## Acceptance evidence
 
@@ -51,12 +50,22 @@ grant mutation capability.
   regression-identical; Codex global still selects native lifecycle.
 - Project skill and managed plugin mutation both honor their compiled capability
   before touching canonical/native paths.
-- Reload/trust/auth are typed effective health, not drift; repeat operations do
+- Reload/trust/auth are never inferred from declaration bytes; they remain
+  typed effective health or pending/unverified state, and repeat operations do
   not rewrite correct declared state.
 - All mutation remains operation-bound, lock-revalidated, root-confined, and
   target-local.
 
-## Ordering
+## Implementation notes
 
-Depends on the locked profile/probe evidence. The private source planner and all
-three concrete adapters depend on this scope/authority contract.
+- Execution capability: highest; the authority contract is implemented at the
+  shared mutation boundary and consumed by all three targets.
+- The registry exposes `kimi`, `vibe`, and `kilo` without changing bootstrap or
+  existing native lifecycle selection.
+- Verification: `cargo test --workspace --all-targets` passes, including the
+  compiled global/project capability paths and no-probe assertions.
+
+## Completion
+
+This story is `done`; the private source planner and concrete adapters consume
+this scope/authority contract.

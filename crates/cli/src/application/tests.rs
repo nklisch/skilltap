@@ -33,6 +33,7 @@ use skilltap_test_support::{
 
 use super::*;
 use crate::command::{OutputArgs, ScopeArgs, TargetArgs};
+use skilltap_harnesses::TargetRegistry;
 
 struct RecordingFaultFileSystem {
     delegate: SystemFileSystem,
@@ -316,6 +317,8 @@ impl Environment for FixtureEnvironment {
             EnvironmentVariable::XdgCacheHome => Some(self.cache.clone()),
             EnvironmentVariable::CodexHome
             | EnvironmentVariable::ClaudeConfigDir
+            | EnvironmentVariable::KimiShareDir
+            | EnvironmentVariable::VibeHome
             | EnvironmentVariable::KiroHome
             | EnvironmentVariable::PiPackageDir => None,
             EnvironmentVariable::Path => std::env::var_os("PATH"),
@@ -1218,6 +1221,9 @@ fn managed_projection_profiles_pass_the_shared_acceptance_matrix_repeatedly() {
     let opencode = ManagedProjectionProfile::opencode();
     let kiro = ManagedProjectionProfile::kiro();
     let copilot = ManagedProjectionProfile::copilot();
+    let kimi = ManagedProjectionProfile::kimi();
+    let vibe = ManagedProjectionProfile::vibe();
+    let kilo = ManagedProjectionProfile::kilo();
     for run in 0..2 {
         for profile in [
             codex,
@@ -1226,6 +1232,9 @@ fn managed_projection_profiles_pass_the_shared_acceptance_matrix_repeatedly() {
             &opencode,
             &kiro,
             &copilot,
+            &kimi,
+            &vibe,
+            &kilo,
         ] {
             let report = managed_acceptance_matrix(profile, exercise_managed_acceptance)
                 .unwrap_or_else(|error| panic!("matrix run {run} failed: {error}"));
@@ -1245,12 +1254,30 @@ fn exercise_managed_acceptance(
         "fake-managed" | "gemini" | "opencode" | "kiro" | "copilot" => {
             exercise_fake_managed_acceptance(scenario)
         }
+        "kimi" | "vibe" | "kilo" => exercise_declaration_managed_acceptance(profile, scenario),
         other => panic!("no managed acceptance runner registered for {other}"),
     }
 }
 
 fn evidence(checks: impl IntoIterator<Item = ManagedAcceptanceCheck>) -> ManagedAcceptanceEvidence {
     ManagedAcceptanceEvidence::new(checks)
+}
+
+fn exercise_declaration_managed_acceptance(
+    profile: &ManagedProjectionProfile,
+    scenario: ManagedAcceptanceScenario,
+) -> ManagedAcceptanceEvidence {
+    assert!(profile.declaration_managed());
+    if scenario == ManagedAcceptanceScenario::FreshLoadVerification {
+        let registry = TargetRegistry::canonical();
+        let adapter = registry
+            .adapter(&HarnessId::new(profile.id()).unwrap())
+            .expect("declaration-managed target is registered");
+        assert!(adapter.effective_state_probe().is_none());
+        assert!(adapter.native_lifecycle().is_none());
+        return evidence([ManagedAcceptanceCheck::DeclarationStatusPending]);
+    }
+    exercise_fake_managed_acceptance(scenario)
 }
 
 struct FakeManagedFixture {

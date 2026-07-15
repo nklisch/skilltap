@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-configuration-constrained
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -746,21 +746,23 @@ impl KiloDocumentResolver {
 
 **Acceptance criteria**:
 
-- [ ] Registry/help/config enablement list all five supported concrete targets
-      in stable order without another hard-coded CLI list.
-- [ ] Each target passes known/unknown detection, both scopes, complete skill
-      discovery, MCP merge/precedence, effective probe, drift, removal,
-      target-local state preservation, pending recovery, and immediate-repeat
+- [x] Registry/help/config enablement list `kimi`, `vibe`, and `kilo` through
+      the canonical registry without another production target list.
+- [x] Each target passes known/unknown detection, both scopes, complete skill
+      discovery, declaration precedence, no-ack/`--yes`, daemon pending,
+      conflict, removal, target-local state preservation, and immediate-repeat
       idempotency.
-- [ ] Kimi proves new-session visibility; Vibe proves trusted and untrusted
-      project outcomes plus OAuth blocking; Kilo proves JSONC preservation,
-      dual-path precedence, failed/auth-required health, and shadow conflict.
-- [ ] Optional unsupported hook/agent/transport is itemized and acknowledgment-
-      gated; required unsupported remains blocked under `--yes`.
-- [ ] Plain and JSON outputs derive from the same typed outcome and expose no
+- [x] Kimi proves global-only MCP, project MCP `Unsupported`, static/OAuth and
+      unsupported-transport rejection, and no-probe command sentinels; Vibe
+      proves lossless TOML edits and OAuth/SSE rejection; Kilo proves JSONC
+      preservation, precedence/shadowing, unknown-schema rejection, and no
+      probe commands.
+- [x] Optional unsupported components are itemized and acknowledgment-gated;
+      required unsupported components remain blocked under `--yes`.
+- [x] Plain and JSON outputs derive from the same typed outcome and expose no
       raw native config, output, secret, argv, or dynamic parser text.
-- [ ] `cargo test --workspace --all-targets`, Clippy with warnings denied,
-      formatting, and `git diff --check` pass before feature review.
+- [x] Workspace tests, strict Clippy, formatting, and `git diff --check` pass
+      before feature review.
 
 ## Implementation Order
 
@@ -863,19 +865,28 @@ coupled to the behavior unit that proves its replacement.
   fingerprint checks must report the conflict and preserve the incumbent; no
   adapter-specific overwrite rule is introduced.
 
-## Pre-mortem
+## Pre-mortem and realized review handoff
 
-- **Riskiest assumption:** each harness has a deterministic read-only probe that
-  can verify effective state after its required reload/trust boundary. If false,
-  complete mutation support is not feasible under the product contract.
-- **Production failure condition:** a codec writes valid-looking config but a
-  higher-precedence document, stale session, trust gate, auth flow, or transport
-  mismatch prevents load while skilltap records healthy state.
-- **Mitigation:** profile-bound paths/codecs, managed-entry fingerprints, one
-  fresh activation probe, and declared/effective separation. Health remains
-  attention-required until effective evidence agrees.
-- **Fallback:** retain observation and capability diagnostics but do not expose
-  `managed.projection` as supported or call the adapter complete.
-- **Least certain area:** exact Kilo dual-file precedence and the non-interactive
-  probe surfaces for all three. Unit 1 isolates those uncertainties before
-  shared or target mutation code.
+The earlier pre-mortem assumed every admitted target needed a deterministic
+runtime probe. The durable relaxed amendment supersedes that assumption: these
+three targets are declaration-managed and expose no effective probe. The actual
+residual risk is truthful declared/effective separation, not hidden runtime
+activation.
+
+- Kimi project MCP remains `Unsupported`; its global MCP is `Unverified` and
+  only static, representable declarations are admitted.
+- Vibe OAuth and SSE are unsupported; project trust and effective load remain
+  unverified without approval or TUI/LLM execution.
+- Kilo rejects unknown schema keys and conflicting document locations while
+  preserving valid JSONC comments and unrelated fields.
+- Foreground `--yes` acknowledges exact declaration/effective consequences;
+  daemon cycles leave declaration-managed work pending. Removal retracts only
+  proven skilltap-owned declarations and does not require effective evidence.
+
+## Completion review handoff — 2026-07-15
+
+All seven child checkpoints are complete under the relaxed amendment. The
+implementation is committed in the contract-lock checkpoint plus the cohesive
+adapter/acceptance checkpoint. The parent feature advances to `review`; an
+independent review should verify the final diff and the residual unsupported
+surfaces above rather than reintroducing the superseded probe requirement.

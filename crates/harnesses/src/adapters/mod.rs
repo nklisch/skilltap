@@ -1,6 +1,7 @@
 mod claude;
 mod codex;
 mod codex_managed;
+mod configuration_constrained;
 mod copilot;
 mod copilot_managed;
 mod factory;
@@ -8,6 +9,8 @@ mod factory_managed;
 mod file_managed;
 mod gemini;
 mod gemini_managed;
+mod kilo;
+mod kimi;
 mod kiro;
 mod kiro_managed;
 mod opencode;
@@ -17,6 +20,7 @@ mod pi_profile;
 mod pi_settings;
 mod qwen;
 mod qwen_managed;
+mod vibe;
 
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
@@ -33,6 +37,8 @@ pub use factory::{
 pub use factory_managed::FactoryManagedProjection;
 pub use gemini::{GeminiAdapter, GeminiEffectiveStateProbe, GeminiSkillProjection};
 pub use gemini_managed::GeminiManagedProjection;
+pub use kilo::{KiloAdapter, KiloManagedProjection, KiloSkillProjection};
+pub use kimi::{KimiAdapter, KimiManagedProjection, KimiSkillProjection};
 pub use kiro::{KiroAdapter, KiroSkillProjection};
 pub use kiro_managed::KiroManagedProjection;
 pub use opencode::{OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeSkillProjection};
@@ -44,6 +50,7 @@ pub use qwen::{
     QwenNativeDistribution, QwenSkillProjection, decode_qwen_extensions, decode_qwen_mcp_status,
 };
 pub use qwen_managed::QwenManagedProjection;
+pub use vibe::{VibeAdapter, VibeManagedProjection, VibeSkillProjection};
 
 #[cfg(test)]
 mod tests {

@@ -12,8 +12,8 @@ use skilltap_core::{
 use crate::{
     CanonicalObservation, DetectionError,
     adapters::{
-        ClaudeAdapter, CodexAdapter, CopilotAdapter, FactoryAdapter, GeminiAdapter, KiroAdapter,
-        OpenCodeAdapter, PiAdapter, QwenAdapter,
+        ClaudeAdapter, CodexAdapter, CopilotAdapter, FactoryAdapter, GeminiAdapter, KiloAdapter,
+        KimiAdapter, KiroAdapter, OpenCodeAdapter, PiAdapter, QwenAdapter, VibeAdapter,
     },
     conditional_profile::ConditionalProfilePort,
     lifecycle::{
@@ -286,6 +286,9 @@ impl TargetRegistry {
             QwenAdapter::static_ref(),
             OpenCodeAdapter::static_ref(),
             KiroAdapter::static_ref(),
+            KimiAdapter::static_ref(),
+            VibeAdapter::static_ref(),
+            KiloAdapter::static_ref(),
             PiAdapter::static_ref(),
         ])
     }
@@ -338,7 +341,9 @@ impl fmt::Debug for TargetRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use skilltap_core::domain::{CapabilitySet, ScopedCapabilitySets};
+    use skilltap_core::domain::{
+        CapabilityId, CapabilityScope, CapabilitySet, CapabilitySupport, ScopedCapabilitySets,
+    };
 
     struct TestAdapter {
         id: &'static str,
@@ -446,15 +451,70 @@ mod tests {
         assert_eq!(
             registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
             [
-                "codex", "claude", "droid", "copilot", "gemini", "qwen", "opencode", "kiro", "pi"
+                "codex", "claude", "droid", "copilot", "gemini", "qwen", "opencode", "kiro",
+                "kimi", "vibe", "kilo", "pi"
             ]
         );
-        assert_eq!(registry.iter().count(), 9);
+        assert_eq!(registry.iter().count(), 12);
         assert_eq!(registry.first_party_targets().count(), 2);
         assert!(
             registry
                 .adapter(&HarnessId::new("gemini").unwrap())
                 .is_some()
+        );
+    }
+
+    #[test]
+    fn constrained_targets_are_compiled_for_both_scopes_without_effective_probes() {
+        let registry = TargetRegistry::canonical();
+        for (id, version_output) in [
+            ("kimi", "kimi, version 1.48.0\n"),
+            ("vibe", "vibe 2.19.1\n"),
+            ("kilo", "7.4.7\n"),
+        ] {
+            let adapter = registry
+                .adapter(&HarnessId::new(id).unwrap())
+                .expect("constrained target is registered");
+            let version = adapter.decode_version(version_output.as_bytes()).unwrap();
+            let selection = adapter.select_profile(&version);
+            let capabilities = selection
+                .mutation_capabilities()
+                .expect("locked profile grants declared mutation capabilities");
+            for scope in [CapabilityScope::Global, CapabilityScope::Project] {
+                assert_eq!(
+                    capabilities
+                        .for_scope_kind(scope)
+                        .support(&CapabilityId::new("managed.projection").unwrap()),
+                    Some(CapabilitySupport::Unverified)
+                );
+            }
+            assert!(adapter.managed_projection().is_some());
+            assert!(
+                adapter
+                    .managed_declaration_contract(CapabilityScope::Global)
+                    .is_some()
+            );
+            assert!(
+                adapter
+                    .managed_declaration_contract(CapabilityScope::Project)
+                    .is_some()
+            );
+            assert!(adapter.effective_state_probe().is_none());
+            assert!(adapter.native_lifecycle().is_none());
+
+            let unknown = adapter.select_profile(&NativeVersion::new("99.0.0").unwrap());
+            assert!(unknown.mutation_capabilities().is_none());
+        }
+
+        let kimi = registry.adapter(&HarnessId::new("kimi").unwrap()).unwrap();
+        let kimi_version = NativeVersion::new("1.48.0").unwrap();
+        let kimi_selection = kimi.select_profile(&kimi_version);
+        let kimi_capabilities = kimi_selection.mutation_capabilities().unwrap();
+        assert_eq!(
+            kimi_capabilities
+                .for_scope_kind(CapabilityScope::Project)
+                .support(&CapabilityId::new("component.mcp").unwrap()),
+            Some(CapabilitySupport::Unsupported)
         );
     }
 

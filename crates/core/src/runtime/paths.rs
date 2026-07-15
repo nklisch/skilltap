@@ -79,8 +79,9 @@ impl PlatformPaths {
         let claude_home =
             optional_environment_path(environment, EnvironmentVariable::ClaudeConfigDir)?
                 .map_or_else(|| join(&home, ".claude", PathRole::ClaudeHome), Ok)?;
-        let kimi_share_dir = optional_environment_path(environment, EnvironmentVariable::KimiShareDir)?
-            .map_or_else(|| join(&home, ".kimi", PathRole::KimiShareDir), Ok)?;
+        let kimi_share_dir =
+            optional_environment_path(environment, EnvironmentVariable::KimiShareDir)?
+                .map_or_else(|| join(&home, ".kimi", PathRole::KimiShareDir), Ok)?;
         let vibe_home = optional_environment_path(environment, EnvironmentVariable::VibeHome)?
             .map_or_else(|| join(&home, ".vibe", PathRole::VibeHome), Ok)?;
         let kiro_home = optional_environment_path(environment, EnvironmentVariable::KiroHome)?
@@ -429,7 +430,10 @@ mod tests {
             environment[OsStr::new("CLAUDE_CONFIG_DIR")],
             "/opt/claude/nathan"
         );
-        assert_eq!(environment[OsStr::new("KIMI_SHARE_DIR")], "/opt/kimi/nathan");
+        assert_eq!(
+            environment[OsStr::new("KIMI_SHARE_DIR")],
+            "/opt/kimi/nathan"
+        );
         assert_eq!(environment[OsStr::new("VIBE_HOME")], "/opt/vibe/nathan");
         assert_eq!(environment[OsStr::new("KIRO_HOME")], "/opt/kiro/nathan");
         assert_eq!(

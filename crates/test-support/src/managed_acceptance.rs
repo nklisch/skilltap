@@ -27,7 +27,10 @@ impl ManagedAcceptanceScenario {
         Self::ImmediateRepeat,
     ];
 
-    const fn required_evidence(self) -> &'static [ManagedAcceptanceCheck] {
+    const fn required_evidence(
+        self,
+        declaration_managed: bool,
+    ) -> &'static [ManagedAcceptanceCheck] {
         use ManagedAcceptanceCheck as Check;
 
         match self {
@@ -47,7 +50,13 @@ impl ManagedAcceptanceScenario {
                 Check::TargetStateIsolated,
             ],
             Self::PendingRecovery => &[Check::PendingRetry, Check::RetryNoChange],
-            Self::FreshLoadVerification => &[Check::FreshLoadObserved],
+            Self::FreshLoadVerification => {
+                if declaration_managed {
+                    &[Check::DeclarationStatusPending]
+                } else {
+                    &[Check::FreshLoadObserved]
+                }
+            }
             Self::ImmediateRepeat => &[
                 Check::ImmediateRepeatNoChange,
                 Check::NoDuplicateArtifacts,
@@ -77,6 +86,7 @@ pub enum ManagedAcceptanceCheck {
     PendingRetry,
     RetryNoChange,
     FreshLoadObserved,
+    DeclarationStatusPending,
     ImmediateRepeatNoChange,
     NoDuplicateArtifacts,
     NoDuplicateState,
@@ -109,6 +119,7 @@ pub struct ManagedProjectionProfile {
     catalog_destinations: &'static [&'static str],
     mcp_destination: Option<&'static str>,
     skill_destination: &'static str,
+    declaration_managed: bool,
 }
 
 impl ManagedProjectionProfile {
@@ -159,6 +170,42 @@ impl ManagedProjectionProfile {
         )
     }
 
+    pub const fn kimi() -> Self {
+        Self::declaration(
+            "kimi",
+            &[
+                ".agents/plugins/marketplace.json",
+                ".claude-plugin/marketplace.json",
+            ],
+            Some("mcp.json"),
+            ".agents/skills",
+        )
+    }
+
+    pub const fn vibe() -> Self {
+        Self::declaration(
+            "vibe",
+            &[
+                ".agents/plugins/marketplace.json",
+                ".claude-plugin/marketplace.json",
+            ],
+            Some("config.toml"),
+            ".agents/skills",
+        )
+    }
+
+    pub const fn kilo() -> Self {
+        Self::declaration(
+            "kilo",
+            &[
+                ".agents/plugins/marketplace.json",
+                ".claude-plugin/marketplace.json",
+            ],
+            Some("kilo/kilo.jsonc"),
+            ".agents/skills",
+        )
+    }
+
     /// Construct a dependency-neutral profile for a test adapter or a future
     /// concrete adapter acceptance suite.
     pub const fn new(
@@ -172,6 +219,22 @@ impl ManagedProjectionProfile {
             catalog_destinations,
             mcp_destination,
             skill_destination,
+            declaration_managed: false,
+        }
+    }
+
+    pub const fn declaration(
+        id: &'static str,
+        catalog_destinations: &'static [&'static str],
+        mcp_destination: Option<&'static str>,
+        skill_destination: &'static str,
+    ) -> Self {
+        Self {
+            id,
+            catalog_destinations,
+            mcp_destination,
+            skill_destination,
+            declaration_managed: true,
         }
     }
 
@@ -189,6 +252,10 @@ impl ManagedProjectionProfile {
 
     pub const fn skill_destination(&self) -> &'static str {
         self.skill_destination
+    }
+
+    pub const fn declaration_managed(&self) -> bool {
+        self.declaration_managed
     }
 }
 
@@ -272,7 +339,7 @@ pub fn managed_acceptance_matrix(
     for scenario in ManagedAcceptanceScenario::ALL {
         let evidence = exercise(profile, scenario);
         let missing = scenario
-            .required_evidence()
+            .required_evidence(profile.declaration_managed)
             .iter()
             .copied()
             .filter(|required| !evidence.checks.contains(required))
@@ -305,7 +372,7 @@ mod tests {
             if scenario == ManagedAcceptanceScenario::ApplyProjection {
                 ManagedAcceptanceEvidence::new([ManagedAcceptanceCheck::OneApplyCheckout])
             } else {
-                ManagedAcceptanceEvidence::new(scenario.required_evidence().iter().copied())
+                ManagedAcceptanceEvidence::new(scenario.required_evidence(false).iter().copied())
             }
         })
         .unwrap_err();
@@ -322,7 +389,7 @@ mod tests {
     fn complete_matrix_reports_every_scenario_and_check() {
         let report =
             managed_acceptance_matrix(&ManagedProjectionProfile::codex(), |_, scenario| {
-                ManagedAcceptanceEvidence::new(scenario.required_evidence().iter().copied())
+                ManagedAcceptanceEvidence::new(scenario.required_evidence(false).iter().copied())
             })
             .unwrap();
 
@@ -330,5 +397,30 @@ mod tests {
         assert_eq!(report.profile_id(), "codex");
         assert_eq!(report.scenarios().count(), 8);
         assert_eq!(report.checks().count(), 19);
+    }
+
+    #[test]
+    fn constrained_profiles_keep_documented_declaration_destinations() {
+        assert_eq!(ManagedProjectionProfile::kimi().id(), "kimi");
+        assert_eq!(
+            ManagedProjectionProfile::kimi().mcp_destination(),
+            Some("mcp.json")
+        );
+        assert_eq!(
+            ManagedProjectionProfile::vibe().mcp_destination(),
+            Some("config.toml")
+        );
+        assert_eq!(
+            ManagedProjectionProfile::kilo().mcp_destination(),
+            Some("kilo/kilo.jsonc")
+        );
+        for profile in [
+            ManagedProjectionProfile::kimi(),
+            ManagedProjectionProfile::vibe(),
+            ManagedProjectionProfile::kilo(),
+        ] {
+            assert_eq!(profile.skill_destination(), ".agents/skills");
+            assert_eq!(profile.catalog_destinations().len(), 2);
+        }
     }
 }

@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-configuration-constrained-kilo
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-configuration-constrained
 depends_on: [epic-expanded-harness-support-configuration-constrained-source]
@@ -13,7 +13,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Implement the Kilo Code Adapter
@@ -21,7 +21,8 @@ updated: 2026-07-14
 ## Checkpoint
 
 Deliver `KiloAdapter`, its profile-bound project document resolver, and private
-lossless JSONC projection/activation codec.
+lossless JSON/JSONC managed-declaration codec. Runtime activation is not
+probed.
 
 ## Design element
 
@@ -29,16 +30,18 @@ Implement Unit 6 from the parent feature:
 
 - registry id `kilo`, global native root `<config-home>/kilo`, managed
   distribution, no sidebar/UI lifecycle;
-- exact version profile and both-scope managed/skill capabilities;
+- exact `7.4.7` version profile and both-scope managed/skill capabilities;
 - canonical `.agents/skills` destination while observing `.kilo/skills`;
-- global `kilo/kilo.jsonc` and exactly one effective project document selected
-  from `kilo.jsonc`/`.kilo/kilo.jsonc` by the locked precedence;
+- global `kilo/kilo.json`/`kilo.jsonc` and exactly one project document selected
+  from the documented JSON/JSONC locations by locked precedence;
 - block an unmanaged higher-precedence shadow instead of writing both files;
 - token/span-preserving `KiloJsoncDocument` that patches only owned MCP members
   and retains comments, trailing commas, order, quote style where unchanged,
   and unknown content;
-- exact locked local/remote transport mapping and activation decoding for
-  loaded, failed, and authentication-required state.
+- exact locked local/remote transport mapping, with unsupported schema keys
+  and authentication outcomes failing closed;
+- no `debug config`, `mcp list`, `mcp auth`, cache, `.kilo`, or `.gitignore`
+  creation as an observation side effect.
 
 A serde JSON round-trip, UI automation, or cache mutation is not an acceptable
 fallback.
@@ -46,16 +49,22 @@ fallback.
 ## Acceptance evidence
 
 - Known/unknown versions, global path, both project candidates, precedence, and
-  shadow conflict match locked fixtures.
+  shadow conflict match locked fixtures without invoking Kilo.
 - Project skills use only the canonical `.agents` tree.
 - JSONC install/update/remove preserves unrelated bytes/comments and detects
   drift only in owned entries.
-- Supported transport maps faithfully; failed/auth-required effective state is
-  attention-required rather than drift, and auth material never enters state.
+- Supported transport maps faithfully; effective load/authentication is not
+  inferred from file bytes, and auth material never enters state.
 - Every mutation immediately repeats as a byte/inode/plan/state no-op.
 
-## Ordering
+## Implementation notes
 
-Consumes the shared source planner. Independent of Kimi/Vibe in the dependency
-graph; normally implemented last among the three because its lossless codec and
-dual-path precedence carry the highest target-local complexity.
+- Execution capability: high; Kilo keeps a private span patcher and resolves
+  valid global/project documents through the bounded filesystem port.
+- Verification: JSONC comment/unrelated-field preservation, unknown-schema and
+  precedence rejection, exact version, and no-probe tests pass.
+
+## Completion
+
+This story is `done` under the relaxed Kilo contract. Effective human output
+and side-effectful native probes remain explicitly unused.

@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-configuration-constrained-source
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-configuration-constrained
 depends_on: [epic-expanded-harness-support-configuration-constrained-projection-scope]
@@ -12,7 +12,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Normalize Portable Source Components Privately
@@ -53,7 +53,16 @@ normalized server is faithful and encodes its own native document privately.
   components retain exact omission evidence.
 - No Kimi/Vibe/Kilo path or wire vocabulary appears in core or CLI.
 
-## Ordering
+## Implementation notes
 
-Depends on scope-generic managed projection. All three concrete target stories
-consume this source contract and may then proceed independently.
+- Execution capability: high; normalization is bounded and target-neutral while
+  each adapter retains its own codec and precedence rules.
+- Source credentials are accepted only as references; literal secrets and
+  source-relative command paths fail closed before target planning.
+- Verification: source normalization tests pass for stdio, remote transport,
+  OAuth classification, and literal-header rejection.
+
+## Completion
+
+This story is `done`. Kimi, Vibe, and Kilo consume the normalized source
+contract without placing target-specific wire vocabulary in core or CLI.

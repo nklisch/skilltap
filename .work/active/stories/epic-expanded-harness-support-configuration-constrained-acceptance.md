@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-configuration-constrained-acceptance
 kind: story
-stage: implementing
+stage: done
 tags: [testing]
 parent: epic-expanded-harness-support-configuration-constrained
 depends_on: [epic-expanded-harness-support-configuration-constrained-kimi, epic-expanded-harness-support-configuration-constrained-vibe, epic-expanded-harness-support-configuration-constrained-kilo]
@@ -11,7 +11,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Prove Configuration-Constrained Adapter Acceptance
@@ -19,39 +19,59 @@ updated: 2026-07-14
 ## Checkpoint
 
 Close the feature with isolated registry, adapter, managed-projection,
-project-skill, activation, and compiled CLI evidence for Kimi, Vibe, and Kilo.
-This is one integrated acceptance checkpoint, not three new implementations.
+project-skill, declaration-status, and compiled CLI evidence for Kimi, Vibe,
+and Kilo. This is one integrated acceptance checkpoint, not three new
+implementations. Effective activation is deliberately not asserted for this
+family.
 
 ## Design element
 
-Extend `FakeHarnessProfile` and `ManagedProjectionProfile` with scope-specific
-load locations and exact activation responses. Register profile runners without
-adding target switches outside profile constructors/the acceptance dispatcher.
-Run the existing `acceptance_matrix` and `managed_acceptance_matrix`, then add
-compiled-binary scenarios for each target under isolated home/XDG/project roots.
+Extend `ManagedProjectionProfile` with the exact Kimi/Vibe/Kilo declaration
+locations and a declaration-managed status boundary. Run the existing managed
+acceptance matrix for each target twice, covering no-ack versus `--yes`,
+daemon pending, unknown versions, repeat, removal, conflict, ownership, and
+rollback/recovery evidence. The compiled-binary suite then exercises global and
+project installs under isolated home/XDG/project roots, preserves unrelated
+native bytes, rejects conflicts, and verifies that unknown versions do not
+write.
 
 Exercise the review-ready project skill contract explicitly: because all three
 consume `.agents/skills`, projection health is `not_required` and no duplicate
-native-root tree appears.
+native-root tree appears. No test invokes Kimi MCP commands, Vibe TUI/LLM
+flows, Kilo debug/auth commands, or a browser.
 
 ## Acceptance evidence
 
 - Registry/help/config enablement expose `kimi`, `vibe`, and `kilo` from the
   canonical registry in stable order; no second production target list exists.
-- Each target proves known/unknown detection, both scopes, complete skills, MCP
-  precedence, effective probing, drift, removal, pending recovery, target-local
-  sibling preservation, and immediate-repeat idempotency.
-- Kimi proves fresh-session visibility; Vibe proves trust and OAuth outcomes;
-  Kilo proves JSONC preservation, dual-file precedence/shadowing, and
-  failed/auth-required health.
+- Each target proves known/unknown detection, both scopes, complete skills,
+  declaration precedence, no-ack/`--yes`, daemon pending, conflict, removal,
+  target-local sibling preservation, and immediate-repeat idempotency.
+- Kimi proves global-only MCP, project MCP `Unsupported`, static/OAuth
+  rejection, and no-probe command sentinels; Vibe proves lossless TOML edits,
+  OAuth/SSE rejection, and unverified trust; Kilo proves JSONC preservation,
+  dual-file precedence/shadowing, unknown-schema rejection, and no-probe
+  command sentinels.
 - Optional unsupported components are exact acknowledgment-gated omissions;
   required unsupported blocks under `--yes`.
 - Plain/JSON outputs agree and expose no raw native document/output/argv/secret.
-- `cargo test --workspace --all-targets`, Clippy with warnings denied,
+- `cargo test --workspace --all-targets`, strict Clippy with warnings denied,
   formatting, and `git diff --check` pass.
 
-## Ordering
+## Implementation notes
 
-Depends on all three target adapters. Green verification advances this child
-directly to `done`; the parent feature then receives one standard independent
-feature-level review pass.
+- Execution capability: highest; this checkpoint now uses both the shared
+  acceptance matrix and compiled CLI processes with isolated fake binaries.
+- The matrix distinguishes `DeclarationStatusPending` from a fresh effective
+  load probe. Kimi, Vibe, and Kilo all register no effective probe.
+- Removal authorization no longer requires effective activation evidence: it
+  retracts only proven skilltap-owned declarations and remains safe for
+  declaration-managed profiles.
+- Verification: the constrained compiled test passes for all three targets,
+  including global/project install, no-ack/`--yes`, daemon pending, unknown
+  versions, repeat, removal, conflict, and no-process invocation sentinels.
+
+## Completion
+
+This story is `done` under the relaxed amendment. The parent feature is ready
+for its independent review pass.

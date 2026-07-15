@@ -248,6 +248,42 @@ fn write_opencode_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
     executable
 }
 
+fn write_constrained_harness(
+    machine: &IsolatedMachine,
+    binary_name: &str,
+    version_output: &str,
+) -> PathBuf {
+    let executable = machine.working_directory().join(binary_name);
+    let log = executable.with_extension("invocations");
+    fs::write(
+        &executable,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\nif [ \"$#\" -ne 1 ] || [ \"$1\" != \"--version\" ]; then exit 91; fi\nprintf '%s\\n' {}\n",
+            shell_quote(&log),
+            toml_string(Path::new(version_output))
+        ),
+    )
+    .expect("write constrained version fixture");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(&executable)
+            .expect("read constrained version fixture")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&executable, permissions)
+            .expect("make constrained version fixture executable");
+    }
+    executable
+}
+
+fn constrained_config(target: &str, binary: &Path) -> String {
+    format!(
+        "schema = 1\n\n[harnesses.{target}]\nenabled = true\nbinary = {}\n\n[instructions]\nclaude_mode = \"symlink\"\n\n[updates]\nmode = \"apply-safe\"\ninterval = \"6h\"\n\n[bootstrap]\nmode = \"off\"\nallow_major = false\n",
+        toml_string(binary)
+    )
+}
+
 fn write_kiro_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
     let executable = machine.working_directory().join("kiro-cli");
     let log = machine.working_directory().join("kiro-cli.invocations");
@@ -2375,6 +2411,278 @@ fn opencode_exact_profile_manages_scoped_plugins_and_unknown_versions_do_not_wri
             b"native cache must remain untouched"
         );
         assert!(!config_root(&machine).join("state.json").exists());
+    }
+}
+
+#[test]
+fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_checks() {
+    for (target, binary_name, version_output) in [
+        ("kimi", "kimi", "kimi, version 1.48.0"),
+        ("vibe", "vibe", "vibe 2.19.1"),
+        ("kilo", "kilo", "7.4.7"),
+    ] {
+        let machine = machine();
+        let executable = write_constrained_harness(&machine, binary_name, version_output);
+        write_owned(
+            &machine,
+            "config.toml",
+            &constrained_config(target, &executable),
+        );
+        let source = write_gemini_marketplace(&machine);
+        fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+        match target {
+            "kimi" => fs::create_dir_all(machine.home().join(".kimi")).unwrap(),
+            "vibe" => fs::create_dir_all(machine.home().join(".vibe")).unwrap(),
+            "kilo" => fs::create_dir_all(machine.configuration_home().join("kilo")).unwrap(),
+            _ => unreachable!(),
+        }
+        let add = run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                source.to_str().unwrap(),
+                "--name",
+                "team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&add, 0);
+
+        let mut install_args = vec![
+            "plugin",
+            "install",
+            "demo@team",
+            "--target",
+            target,
+            "--json",
+        ];
+        let install = run(&machine, &install_args);
+        assert_code(&install, 2);
+        assert!(
+            json(&install)["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|error| error["code"] == "partial_operation_requires_acknowledgment")
+        );
+        install_args.insert(5, "--yes");
+        let accepted_install = run(&machine, &install_args);
+        if accepted_install.status.code() != Some(0) {
+            eprintln!(
+                "{target} invocation log: {}",
+                fs::read_to_string(executable.with_extension("invocations"))
+                    .unwrap_or_else(|error| format!("<unreadable: {error}>"))
+            );
+        }
+        assert_code(&accepted_install, 0);
+        assert_eq!(json(&accepted_install)["result"], "completed");
+        let repeat = run(&machine, &install_args);
+        assert_code(&repeat, 0);
+        assert_eq!(json(&repeat)["summary"]["changed"], false);
+        let daemon = run(&machine, &["daemon", "run", "--json"]);
+        assert_code(&daemon, 2);
+        assert_eq!(json(&daemon)["result"], "attention_required");
+        let remove_args = vec![
+            "plugin",
+            "remove",
+            "demo@team",
+            "--target",
+            target,
+            "--json",
+        ];
+        let remove = run(&machine, &remove_args);
+        assert_code(&remove, 0);
+        assert_eq!(json(&remove)["result"], "completed");
+
+        let project = machine.home().join("constrained-project");
+        fs::create_dir_all(project.join(".agents/skills")).unwrap();
+        if target == "vibe" {
+            fs::create_dir_all(project.join(".vibe")).unwrap();
+        }
+        let add_project = run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                source.to_str().unwrap(),
+                "--name",
+                "project-team",
+                "--project",
+                project.to_str().unwrap(),
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&add_project, 0);
+        let mut install_project = vec![
+            "plugin",
+            "install",
+            "demo@project-team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            target,
+            "--json",
+        ];
+        install_project.insert(7, "--yes");
+        let installed_project = run(&machine, &install_project);
+        assert_code(&installed_project, 0);
+        assert_eq!(json(&installed_project)["result"], "completed");
+        let removed_project = run(
+            &machine,
+            &[
+                "plugin",
+                "remove",
+                "demo@project-team",
+                "--project",
+                project.to_str().unwrap(),
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&removed_project, 0);
+
+        let conflict_machine = IsolatedMachine::new("skilltap-compiled-constrained-conflict")
+            .expect("create constrained conflict machine");
+        let conflict_executable =
+            write_constrained_harness(&conflict_machine, binary_name, version_output);
+        write_owned(
+            &conflict_machine,
+            "config.toml",
+            &constrained_config(target, &conflict_executable),
+        );
+        let conflict_source = write_gemini_marketplace(&conflict_machine);
+        match target {
+            "kimi" => {
+                fs::create_dir_all(conflict_machine.home().join(".kimi")).unwrap();
+                fs::write(
+                    conflict_machine.home().join(".kimi/mcp.json"),
+                    br#"{"mcpServers":{"demo-docs":{"command":"foreign"}}}"#,
+                )
+                .unwrap();
+            }
+            "vibe" => {
+                fs::create_dir_all(conflict_machine.home().join(".vibe")).unwrap();
+                fs::write(
+                    conflict_machine.home().join(".vibe/config.toml"),
+                    "[[mcp_servers]]\nname = \"demo-docs\"\ncommand = \"foreign\"\n",
+                )
+                .unwrap();
+            }
+            "kilo" => {
+                fs::create_dir_all(conflict_machine.configuration_home().join("kilo")).unwrap();
+                fs::write(
+                    conflict_machine
+                        .configuration_home()
+                        .join("kilo/kilo.jsonc"),
+                    br#"{"mcp":{"demo-docs":{"type":"local","command":["foreign"]}}}"#,
+                )
+                .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let conflict_add = run(
+            &conflict_machine,
+            &[
+                "marketplace",
+                "add",
+                conflict_source.to_str().unwrap(),
+                "--name",
+                "conflict-team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&conflict_add, 0);
+        let conflict_install = run(
+            &conflict_machine,
+            &[
+                "plugin",
+                "install",
+                "demo@conflict-team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&conflict_install, 2);
+        let conflict_value = json(&conflict_install);
+        assert!(
+            conflict_value["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|error| error["code"] == "managed_project_mcp_conflict")
+        );
+
+        let unknown_machine = IsolatedMachine::new("skilltap-compiled-constrained-unknown")
+            .expect("create constrained unknown machine");
+        let unknown_version = match target {
+            "kimi" => "kimi, version 1.48.1",
+            "vibe" => "vibe 2.19.2",
+            "kilo" => "7.4.8",
+            _ => unreachable!(),
+        };
+        let unknown_executable =
+            write_constrained_harness(&unknown_machine, binary_name, unknown_version);
+        write_owned(
+            &unknown_machine,
+            "config.toml",
+            &constrained_config(target, &unknown_executable),
+        );
+        let unknown_source = write_gemini_marketplace(&unknown_machine);
+        fs::create_dir_all(unknown_machine.home().join(".agents/skills")).unwrap();
+        let unknown_native_root = match target {
+            "kimi" => unknown_machine.home().join(".kimi"),
+            "vibe" => unknown_machine.home().join(".vibe"),
+            "kilo" => unknown_machine.configuration_home().join("kilo"),
+            _ => unreachable!(),
+        };
+        fs::create_dir_all(&unknown_native_root).unwrap();
+        let before = [
+            snapshot_native_tree(&unknown_machine.home().join(".agents/skills")),
+            snapshot_native_tree(&unknown_native_root),
+        ];
+        let unknown_add = run(
+            &unknown_machine,
+            &[
+                "marketplace",
+                "add",
+                unknown_source.to_str().unwrap(),
+                "--name",
+                "unknown-team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&unknown_add, 2);
+        let unknown_install = run(
+            &unknown_machine,
+            &[
+                "plugin",
+                "install",
+                "demo@unknown-team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&unknown_install, 2);
+        assert_eq!(
+            [
+                snapshot_native_tree(&unknown_machine.home().join(".agents/skills")),
+                snapshot_native_tree(&unknown_native_root),
+            ],
+            before,
+            "unknown {target} profile wrote a native surface"
+        );
     }
 }
 
