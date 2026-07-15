@@ -631,6 +631,13 @@ The Kiro and integrated acceptance stories are done. This feature is now at
 review; the parent `epic-expanded-harness-support` is intentionally not
 reviewed by this implementation checkpoint.
 
+## Checkpoint commits
+
+- `0245ac42` — `implement: epic-expanded-harness-support-file-managed-kiro`
+- `7896f73a` — `implement: epic-expanded-harness-support-file-managed-acceptance`
+- The parent feature checkpoint follows this amendment as
+  `implement: epic-expanded-harness-support-file-managed`.
+
 ## Simplification
 
 - Replace `managed_project_lifecycle`/`plan_managed_project_lifecycle` and their
