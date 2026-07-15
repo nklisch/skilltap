@@ -893,6 +893,7 @@ impl NativeObservation {
             }
         };
         let mut result = Self::default();
+        let filesystem = SystemFileSystem;
         let mut requests = Vec::new();
         let mut outcomes = Vec::new();
         let mut metadata = Vec::new();
@@ -956,8 +957,51 @@ impl NativeObservation {
                 result.failed_targets += scope.resolved.len();
                 continue;
             };
-            let profile = adapter.select_profile(native_version);
             for current_scope in &scope.resolved {
+                let mut profile = adapter.select_profile(native_version);
+                let conditional = if adapter.conditional_profile().is_some() {
+                    match super::conditional_profile::resolve_conditional_profile(
+                        registry,
+                        &documents.config,
+                        target,
+                        current_scope,
+                        &paths,
+                        process_limits,
+                        json_limits,
+                        &filesystem,
+                    ) {
+                        Ok(Some(resolved)) => {
+                            profile = resolved.observation.profile().clone();
+                            render_conditional_profile_rows(
+                                &mut result.resources,
+                                target,
+                                current_scope,
+                                &resolved.core_version,
+                                &resolved.observation,
+                            );
+                            result.next_actions.push(
+                                super::conditional_profile::conditional_profile_next_action(),
+                            );
+                            Some(resolved.observation)
+                        }
+                        Ok(None) => None,
+                        Err(error) => {
+                            result.warnings.push(
+                                super::conditional_profile::conditional_profile_warning(
+                                    target,
+                                    current_scope,
+                                    &error,
+                                ),
+                            );
+                            result.next_actions.push(
+                                super::conditional_profile::conditional_profile_next_action(),
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
                 let evidence = match ObservationEvidence::new(&installation, profile.clone()) {
                     Ok(value) => value,
                     Err(_) => {
@@ -997,7 +1041,7 @@ impl NativeObservation {
                                 0,
                             )
                         }));
-                        let findings = if profile.authority() == ProfileAuthority::ObserveOnly {
+                        let mut findings = if profile.authority() == ProfileAuthority::ObserveOnly {
                             vec![ObservationFinding::new(
                                 ObservationFindingCode::CapabilityUnverified,
                                 ObservationSummary::CapabilityUnverified,
@@ -1011,6 +1055,9 @@ impl NativeObservation {
                         } else {
                             Vec::new()
                         };
+                        if let Some(conditional) = conditional {
+                            findings.extend(conditional.findings().iter().cloned());
+                        }
                         match HarnessObservation::new(request.clone(), resources, findings) {
                             Ok(observation) => {
                                 outcomes.push(HarnessObservationOutcome::observed(observation));
@@ -1668,6 +1715,144 @@ fn capability_count(
         .iter()
         .filter(|(_, value)| *value == support)
         .count()
+}
+
+fn render_conditional_profile_rows(
+    resources: &mut Vec<OutputEntry>,
+    target: &HarnessId,
+    scope: &Scope,
+    core_version: &skilltap_core::domain::NativeVersion,
+    observation: &skilltap_core::domain::ConditionalProfileObservation,
+) {
+    let profile = observation.profile();
+    let profile_id = profile
+        .profile_id()
+        .map_or_else(|| "unknown".to_owned(), |id| id.as_str().to_owned());
+    let authority = profile_authority(profile.authority());
+    let mutation_authorized = profile.mutation_capabilities().is_some_and(|capabilities| {
+        capabilities
+            .for_scope(scope)
+            .iter()
+            .any(|(_, support)| support == CapabilitySupport::Supported)
+    });
+    resources.push(
+        OutputEntry::new(format!("{target}:core"), "observed")
+            .with_field("harness", target.as_str())
+            .with_field("component", "core")
+            .with_field("role", "core")
+            .with_field("package", "pi")
+            .with_field("version", core_version.as_str())
+            .with_field("scope", scope_label(scope))
+            .with_field(
+                "activation",
+                if profile.profile_id().is_some() {
+                    "effective"
+                } else {
+                    "unverified"
+                },
+            )
+            .with_field(
+                "compatibility",
+                if profile.profile_id().is_some() {
+                    "compatible"
+                } else {
+                    "unverified"
+                },
+            )
+            .with_field("ownership", "harness")
+            .with_field("required", true)
+            .with_field("adoptable", false)
+            .with_field("mutation_authorized", mutation_authorized),
+    );
+
+    for component in observation
+        .components()
+        .iter()
+        .map(|(_, component)| component)
+    {
+        let status = match component.presence {
+            skilltap_core::domain::ProfileComponentPresence::Present => "present",
+            skilltap_core::domain::ProfileComponentPresence::Missing => "missing",
+        };
+        let declared_scope = component.declared_scope.map_or_else(
+            || "unknown".to_owned(),
+            |scope| match scope {
+                skilltap_core::domain::CapabilityScope::Global => "global".to_owned(),
+                skilltap_core::domain::CapabilityScope::Project => "project".to_owned(),
+            },
+        );
+        let mut row = OutputEntry::new(format!("{target}:{}", component.package.as_str()), status)
+            .with_field("harness", target.as_str())
+            .with_field("component", component.package.as_str())
+            .with_field("role", profile_component_role(component.role))
+            .with_field("package", component.package.as_str())
+            .with_field("scope", scope_label(scope))
+            .with_field("declared_scope", declared_scope)
+            .with_field(
+                "activation",
+                profile_component_activation(component.activation),
+            )
+            .with_field(
+                "compatibility",
+                profile_component_compatibility(component.compatibility),
+            )
+            .with_field("ownership", ownership_label(component.ownership))
+            .with_field("required", component.required)
+            .with_field("adoptable", false)
+            .with_field("mutation_authorized", mutation_authorized);
+        if let Some(version) = component.version.as_ref() {
+            row = row.with_field("version", version.as_str());
+        }
+        resources.push(row);
+    }
+
+    resources.push(
+        OutputEntry::new(format!("{target}:compound_profile"), authority)
+            .with_field("harness", target.as_str())
+            .with_field("component", "compound_profile")
+            .with_field("role", "compound_profile")
+            .with_field("package", "pi")
+            .with_field("profile_id", profile_id)
+            .with_field("scope", scope_label(scope))
+            .with_field("activation", "conditional")
+            .with_field("compatibility", authority)
+            .with_field("ownership", "unmanaged")
+            .with_field("required", true)
+            .with_field("adoptable", false)
+            .with_field("mutation_authorized", mutation_authorized),
+    );
+}
+
+fn profile_component_role(role: skilltap_core::domain::ProfileComponentRole) -> &'static str {
+    match role {
+        skilltap_core::domain::ProfileComponentRole::McpCompanion => "mcp_companion",
+        skilltap_core::domain::ProfileComponentRole::HookCompanion => "hook_companion",
+    }
+}
+
+fn profile_component_activation(
+    activation: skilltap_core::domain::ProfileComponentActivation,
+) -> &'static str {
+    match activation {
+        skilltap_core::domain::ProfileComponentActivation::Inert => "inert",
+        skilltap_core::domain::ProfileComponentActivation::ConfiguredUnverified => {
+            "configured_unverified"
+        }
+        skilltap_core::domain::ProfileComponentActivation::Effective => "effective",
+        skilltap_core::domain::ProfileComponentActivation::TrustRequired => "trust_required",
+        skilltap_core::domain::ProfileComponentActivation::Unverified => "unverified",
+    }
+}
+
+fn profile_component_compatibility(
+    compatibility: skilltap_core::domain::ProfileComponentCompatibility,
+) -> &'static str {
+    match compatibility {
+        skilltap_core::domain::ProfileComponentCompatibility::Compatible => "compatible",
+        skilltap_core::domain::ProfileComponentCompatibility::Partial => "partial",
+        skilltap_core::domain::ProfileComponentCompatibility::Incompatible => "incompatible",
+        skilltap_core::domain::ProfileComponentCompatibility::Unverified => "unverified",
+    }
 }
 
 fn finding_warning(finding: &ObservationFinding) -> Warning {

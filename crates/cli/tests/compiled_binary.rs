@@ -119,6 +119,37 @@ fn native_config_with_opencode(codex: &Path, claude: &Path, opencode: &Path) -> 
     )
 }
 
+fn native_config_with_pi_and_siblings(codex: &Path, claude: &Path, pi: &Path) -> String {
+    format!(
+        "{}\n[harnesses.pi]\nenabled = true\nbinary = {}\n",
+        native_config(codex, claude),
+        toml_string(pi),
+    )
+}
+
+fn native_config_with_pi(pi: &Path) -> String {
+    format!(
+        r#"schema = 1
+
+[harnesses.pi]
+enabled = true
+binary = {}
+
+[instructions]
+claude_mode = "symlink"
+
+[updates]
+mode = "apply-safe"
+interval = "6h"
+
+[bootstrap]
+mode = "off"
+allow_major = false
+"#,
+        toml_string(pi),
+    )
+}
+
 fn write_gemini_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
     let executable = machine.working_directory().join("gemini");
     fs::write(
@@ -512,19 +543,19 @@ fn compiled_invalid_invocations_use_safe_channels_and_boundaries() {
         "skilltap plugin remove --help"
     );
 
-    let plain = run(&machine, &["status", "--target", "pi"]);
+    let plain = run(&machine, &["status", "--target", "not-real"]);
     assert_code(&plain, 1);
     assert!(plain.stdout.is_empty());
     let plain_error = stderr(&plain);
     assert!(plain_error.contains("Code: target_not_registered"));
-    assert!(plain_error.contains("harness  pi"));
+    assert!(plain_error.contains("harness  not-real"));
 
-    let json_output = run(&machine, &["status", "--target", "pi", "--json"]);
+    let json_output = run(&machine, &["status", "--target", "not-real", "--json"]);
     assert_code(&json_output, 1);
     let value = json(&json_output);
     assert_eq!(value["command"], "status");
     assert_eq!(value["errors"][0]["code"], "target_not_registered");
-    assert_eq!(value["errors"][0]["context"]["harness"], "pi");
+    assert_eq!(value["errors"][0]["context"]["harness"], "not-real");
 
     let source = run(
         &machine,
@@ -540,6 +571,232 @@ fn compiled_invalid_invocations_use_safe_channels_and_boundaries() {
     assert_eq!(source_value["command"], "marketplace add");
     assert!(!stdout(&source).contains("user:token"));
     assert!(!stdout(&source).contains("example.invalid"));
+}
+
+#[test]
+fn pi_status_separates_core_companions_and_compound_profile_without_adoption_resources() {
+    let machine = machine();
+    let pi = fake_harness(&machine, &FakeHarnessProfile::pi());
+    let pi_home = machine.home().join(".pi/agent");
+    let package_root = pi_home.join("npm/node_modules");
+    fs::create_dir_all(package_root.join("pi-mcp-adapter")).unwrap();
+    fs::create_dir_all(package_root.join("@hsingjui/pi-hooks")).unwrap();
+    fs::write(
+        pi_home.join("settings.json"),
+        br#"{"packages":["npm:pi-mcp-adapter","npm:@hsingjui/pi-hooks"],"hooks":{}}"#,
+    )
+    .unwrap();
+    fs::write(
+        package_root.join("pi-mcp-adapter/package.json"),
+        br#"{"name":"pi-mcp-adapter","version":"2.11.0","pi":{"extensions":["./index.ts"]}}"#,
+    )
+    .unwrap();
+    fs::write(
+        package_root.join("@hsingjui/pi-hooks/package.json"),
+        br#"{"name":"@hsingjui/pi-hooks","version":"0.0.2","pi":{"extensions":["./src/pi-hooks.ts"]}}"#,
+    )
+    .unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config_with_pi(pi.executable()),
+    );
+
+    let status = run(&machine, &["status", "--target", "pi", "--json"]);
+    assert_code(&status, 2);
+    let value = json(&status);
+    let rows = value["resources"].as_array().unwrap();
+    let components = rows
+        .iter()
+        .filter_map(|row| row["fields"]["component"].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        components,
+        [
+            "core",
+            "@hsingjui/pi-hooks",
+            "pi-mcp-adapter",
+            "compound_profile"
+        ]
+    );
+    for row in rows
+        .iter()
+        .filter(|row| row["fields"]["harness"] == "pi" && row["fields"]["component"].is_string())
+    {
+        assert_eq!(row["fields"]["adoptable"], false);
+        assert_eq!(row["fields"]["mutation_authorized"], false);
+    }
+    let row_for = |component: &str| {
+        rows.iter()
+            .find(|row| row["fields"]["component"] == component)
+            .unwrap()
+    };
+    assert_eq!(row_for("pi-mcp-adapter")["fields"]["version"], "2.11.0");
+    assert_eq!(
+        row_for("@hsingjui/pi-hooks")["fields"]["compatibility"],
+        "partial"
+    );
+    assert_eq!(
+        row_for("compound_profile")["fields"]["profile_id"],
+        "pi-0-80-6-mcp-2-11-0-hooks-0-0-2"
+    );
+    assert!(
+        value["next_actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|action| {
+                action["summary"]
+                    .as_str()
+                    .is_some_and(|summary| summary.contains("remains partial"))
+            })
+    );
+    let plain = run(&machine, &["status", "--target", "pi"]);
+    assert_code(&plain, 2);
+    let plain_output = captured_stdout(&plain).unwrap();
+    for component in [
+        "core",
+        "pi-mcp-adapter",
+        "@hsingjui/pi-hooks",
+        "compound_profile",
+    ] {
+        assert!(
+            plain_output.contains(component),
+            "missing plain component {component}"
+        );
+    }
+
+    let adoption = run(&machine, &["adopt", "--from", "pi", "--json"]);
+    assert!(matches!(adoption.status.code(), Some(0) | Some(2)));
+    let adoption_value = json(&adoption);
+    assert!(!adoption_value.to_string().contains("pi-mcp-adapter"));
+    assert!(!adoption_value.to_string().contains("hsingjui"));
+}
+
+#[test]
+fn pi_skill_and_plugin_mutations_block_before_inventory_or_native_projection() {
+    let machine = machine();
+    let pi = fake_harness(&machine, &FakeHarnessProfile::pi());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config_with_pi(pi.executable()),
+    );
+    let source = machine.working_directory().join("pi-skill");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: pi-skill\ndescription: Pi mutation guard fixture\n---\n\nUse this skill.\n",
+    )
+    .unwrap();
+    let config_before = fs::read(config_root(&machine).join("config.toml")).unwrap();
+    let native_before =
+        skilltap_test_support::snapshot_tree(&machine.home().join(".agents")).unwrap();
+
+    let skill = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source.to_str().unwrap(),
+            "--target",
+            "pi",
+            "--json",
+        ],
+    );
+    assert_code(&skill, 2);
+    let skill_value = json(&skill);
+    assert_eq!(
+        skill_value["errors"][0]["code"],
+        "conditional_profile_mutation_unauthorized"
+    );
+    assert!(!config_root(&machine).join("inventory.toml").exists());
+    assert!(!config_root(&machine).join("state.json").exists());
+    assert_eq!(
+        fs::read(config_root(&machine).join("config.toml")).unwrap(),
+        config_before
+    );
+    assert_eq!(
+        skilltap_test_support::snapshot_tree(&machine.home().join(".agents")).unwrap(),
+        native_before
+    );
+
+    let plugin = run(
+        &machine,
+        [
+            "plugin",
+            "install",
+            "formatter@example",
+            "--target",
+            "pi",
+            "--json",
+        ]
+        .as_slice(),
+    );
+    assert_eq!(plugin.status.code(), Some(2));
+    assert!(!config_root(&machine).join("inventory.toml").exists());
+    assert!(!config_root(&machine).join("state.json").exists());
+}
+
+#[test]
+fn target_all_applies_authorized_siblings_without_persisting_pi_binding() {
+    let machine = machine();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
+    let pi = fake_harness(&machine, &FakeHarnessProfile::pi());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config_with_pi_and_siblings(
+            codex.executable(),
+            claude.executable(),
+            pi.executable(),
+        ),
+    );
+    let source = machine.working_directory().join("all-target-skill");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: all-target-skill\ndescription: sibling fixture\n---\n\nUse this skill.\n",
+    )
+    .unwrap();
+
+    let result = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source.to_str().unwrap(),
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&result, 2);
+    let value = json(&result);
+    assert!(
+        value["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| { error["code"] == "conditional_profile_mutation_unauthorized" })
+    );
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/all-target-skill/SKILL.md")
+            .is_file()
+    );
+    assert!(
+        machine
+            .home()
+            .join(".claude/skills/all-target-skill/SKILL.md")
+            .is_file()
+    );
+    let inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(!inventory.contains("    \"pi\","));
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(!state.contains("\\\"pi\\\""));
 }
 
 #[test]
@@ -5944,16 +6201,16 @@ fn json_and_plain_modes_use_stable_channels_and_exit_classes() {
     assert!(stdout(&plan).contains("Result: attention required"));
     assert!(!stdout(&plan).contains("\u{1b}["));
 
-    let invalid = run(&machine, &["status", "--target", "pi"]);
+    let invalid = run(&machine, &["status", "--target", "not-real"]);
     assert_code(&invalid, 1);
     assert!(invalid.stdout.is_empty());
     assert!(stderr(&invalid).contains("Code: target_not_registered"));
-    assert!(stderr(&invalid).contains("harness  pi"));
+    assert!(stderr(&invalid).contains("harness  not-real"));
 
     for arguments in [
         &["status", "--json"][..],
         &["plan", "--json"][..],
-        &["status", "--target", "pi", "--json"][..],
+        &["status", "--target", "not-real", "--json"][..],
         &["status", "--project", "--all-scopes", "--json"][..],
         &["status", "--yes", "--json"][..],
         &["plugin", "install", "not-a-selector", "--json"][..],

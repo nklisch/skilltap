@@ -98,6 +98,28 @@ impl FakeHarnessProfile {
         }
     }
 
+    pub const fn pi() -> Self {
+        Self {
+            id: "pi",
+            version_response: VersionResponse::TextSuffix {
+                version: "0.80.6",
+                suffix: "",
+            },
+            lifecycle_dialect: LifecycleDialect::None,
+            managed_projection: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Home,
+                global_mcp_base: LayoutBase::Home,
+                global_skill: ".agents/skills/contract-skill",
+                global_mcp: ".pi/agent/mcp.json",
+                project_skill: ".agents/skills/contract-skill",
+                project_mcp: ".mcp.json",
+                mcp_initial: b"{}",
+                mcp_reloaded: b"{}",
+            },
+        }
+    }
+
     pub const fn claude() -> Self {
         Self {
             id: "claude",

@@ -412,7 +412,7 @@ fn blocked_candidate_reports_match_registry_absence_and_first_party_bootstrap_sc
     let registry = TargetRegistry::canonical();
     assert_eq!(
         registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
-        ["codex", "claude", "gemini", "opencode"]
+        ["codex", "claude", "gemini", "opencode", "pi"]
     );
     assert_eq!(
         registry

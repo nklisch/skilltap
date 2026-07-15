@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-pi-integration
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-pi
 depends_on: [epic-expanded-harness-support-pi-profile, epic-expanded-harness-support-pi-adapter]
@@ -81,6 +81,15 @@ not prevent unrelated authorized targets from applying.
   ownership transfer.
 - Next actions explain that current `pi-hooks` is partial; they never promise
   installing it will enable mutation.
+
+## Implementation evidence
+
+- Added the shared CLI conditional-profile resolver and fail-closed scoped mutation guard.
+- Registered Pi as a managed target while preserving the Codex/Claude-only bootstrap surface.
+- Added typed core, companion, and compound status rows; companion evidence remains outside normalized resources and adoption.
+- Guarded lifecycle preview, native lifecycle, project skill publication/link/removal, reconciliation, daemon planning, and managed projection planning before operation construction.
+- Added isolated compiled-binary coverage for exact Pi status, plain/JSON output, adoption exclusion, Pi-only mutation immutability, and target-all sibling application.
+- Verification: workspace tests, all-feature strict Clippy, format check, and diff check pass.
 
 ## Ordering
 

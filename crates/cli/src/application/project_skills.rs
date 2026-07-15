@@ -10,17 +10,18 @@ use std::collections::{BTreeMap, BTreeSet};
 use sha2::{Digest, Sha256};
 use skilltap_core::{
     domain::{
-        AbsolutePath, CompatibilityClass, ComponentGraph, DesiredOrigin, DesiredResource,
-        Fingerprint, FingerprintAlgorithm, GitCommit, HarnessId, HarnessSet, NativeId,
-        OperationAction, OperationDependency, OperationId, Ownership, Provenance, ResourceId,
-        ResourceKey, ResourceKind, Scope, Source, UpdateIntent,
+        AbsolutePath, CapabilityId, CompatibilityClass, ComponentGraph, DesiredOrigin,
+        DesiredResource, Fingerprint, FingerprintAlgorithm, GitCommit, HarnessId, HarnessSet,
+        NativeId, OperationAction, OperationDependency, OperationId, Ownership, Provenance,
+        ResourceId, ResourceKey, ResourceKind, Scope, Source, UpdateIntent,
     },
     project_skill::{
         ProjectSkillLinkHealth, TargetProjectSkillProjection, project_skill_projection,
     },
     runtime::{
         ConfigurationLockGuard, ConfinedEntryObservation, ConfinedFileSystem, DirectoryIdentity,
-        DirectoryTreeFileSystem, ExternalTreeLimits, RuntimeError, SystemFileSystem,
+        DirectoryTreeFileSystem, ExternalTreeLimits, JsonLimits, ProcessLimits, RuntimeError,
+        SystemFileSystem,
     },
     skill::{SkillTreeError, ValidatedSkillTree},
     skill_compatibility::{
@@ -28,8 +29,8 @@ use skilltap_core::{
         validate_agent_skill,
     },
     storage::{
-        ArtifactTree, DocumentState, InventoryDocument, ResourceState, StateDocument,
-        StateRepository, TargetResourceState, Timestamp,
+        ArtifactTree, ConfigDocument, DocumentState, InventoryDocument, ResourceState,
+        StateDocument, StateRepository, TargetResourceState, Timestamp,
     },
 };
 
@@ -602,6 +603,19 @@ fn execute_project_skill_source_less(
     let limits =
         ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
             .expect("bounded project skill limits are valid");
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded conditional profile process limits are valid");
+    let json_limits =
+        JsonLimits::new(256 * 1024, 64).expect("bounded conditional profile JSON limits are valid");
+    let config = application
+        .config
+        .load()
+        .ok()
+        .and_then(|document| match document {
+            DocumentState::Present(document) => Some(document),
+            DocumentState::Missing => None,
+        })
+        .unwrap_or_else(ConfigDocument::defaults);
     let state_document = application
         .state
         .load()
@@ -619,13 +633,29 @@ fn execute_project_skill_source_less(
         let Scope::Project(project) = concrete_scope else {
             continue;
         };
-        let selected = HarnessSet::new(
+        let selected_requested = HarnessSet::new(
             targets
                 .iter()
                 .filter(|target| resource.targets().contains(target))
                 .cloned(),
         )
         .expect("selected project skill targets are unique");
+        let (selected, next_outcome) = super::conditional_profile::filter_targets_for_capability(
+            application.registry,
+            &config,
+            &selected_requested,
+            concrete_scope,
+            &paths,
+            process_limits,
+            json_limits,
+            &filesystem,
+            &CapabilityId::new("skill.install").expect("static skill capability is valid"),
+            outcome,
+        );
+        outcome = next_outcome;
+        let Some(selected) = selected else {
+            continue;
+        };
         let observed = match observe_project_skill(
             application.registry,
             &filesystem,
@@ -1065,6 +1095,19 @@ pub(super) fn execute_project_skill_install(
     let limits =
         ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
             .expect("bounded project skill limits are valid");
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded conditional profile process limits are valid");
+    let json_limits =
+        JsonLimits::new(256 * 1024, 64).expect("bounded conditional profile JSON limits are valid");
+    let config = application
+        .config
+        .load()
+        .ok()
+        .and_then(|document| match document {
+            DocumentState::Present(document) => Some(document),
+            DocumentState::Missing => None,
+        })
+        .unwrap_or_else(ConfigDocument::defaults);
     let mut inventory = application
         .inventory
         .load()
@@ -1077,6 +1120,7 @@ pub(super) fn execute_project_skill_install(
             InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
                 .expect("empty inventory is valid")
         });
+    let original_inventory = inventory.clone();
     let state_document = application
         .state
         .load()
@@ -1105,6 +1149,23 @@ pub(super) fn execute_project_skill_install(
                 ));
             }
         };
+        let (mutating_targets, next_outcome) =
+            super::conditional_profile::filter_targets_for_capability(
+                application.registry,
+                &config,
+                &targets.resolved,
+                concrete_scope,
+                &paths,
+                process_limits,
+                json_limits,
+                &filesystem,
+                &CapabilityId::new("skill.install").expect("static skill capability is valid"),
+                outcome,
+            );
+        outcome = next_outcome;
+        let Some(mutating_targets) = mutating_targets else {
+            continue;
+        };
         let existing_resource = inventory.resources().get(&key);
         if let Some(existing) = existing_resource
             && existing
@@ -1124,7 +1185,7 @@ pub(super) fn execute_project_skill_install(
         let mut desired_targets = existing_resource
             .map(|resource| resource.targets().iter().cloned().collect::<Vec<_>>())
             .unwrap_or_default();
-        desired_targets.extend(targets.iter().cloned());
+        desired_targets.extend(mutating_targets.iter().cloned());
         let desired_targets = match HarnessSet::new(desired_targets) {
             Ok(targets) => targets,
             Err(_) => {
@@ -1239,11 +1300,11 @@ pub(super) fn execute_project_skill_install(
                 canonical_destination.as_str()
             ))
             .expect("canonical skill path is valid");
-            let target = desired_targets
+            let target = mutating_targets
                 .iter()
                 .next()
                 .cloned()
-                .expect("non-empty targets");
+                .expect("non-empty mutation targets");
             let operation = match skilltap_core::lifecycle_operation::faithful_file_operation(
                 operation_id.clone(),
                 target,
@@ -1282,7 +1343,7 @@ pub(super) fn execute_project_skill_install(
         }
 
         let mut seen_destinations = BTreeSet::new();
-        for target in targets.iter() {
+        for target in mutating_targets.iter() {
             let Some(adapter) = application.registry.adapter(target) else {
                 continue;
             };
@@ -1415,7 +1476,7 @@ pub(super) fn execute_project_skill_install(
                 .as_ref()
                 .and_then(|state| state.resources().get(&key))
                 .and_then(|state| state.target(target))
-                && !targets.resolved.contains(target)
+                && !mutating_targets.contains(target)
             {
                 bindings.push(existing.clone());
                 continue;
@@ -1471,7 +1532,7 @@ pub(super) fn execute_project_skill_install(
             .with_summary("operations", 0_u64)
             .with_summary("changed", false);
     }
-    if application.inventory.replace(&inventory).is_err() {
+    if inventory != original_inventory && application.inventory.replace(&inventory).is_err() {
         outcome.result = ResultClass::Invalid;
         return outcome.with_error(ErrorDetail::new(
             "inventory_publish_failed",
@@ -1684,6 +1745,19 @@ pub(super) fn execute_project_skill_remove(
     let limits =
         ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
             .expect("bounded project skill limits are valid");
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded conditional profile process limits are valid");
+    let json_limits =
+        JsonLimits::new(256 * 1024, 64).expect("bounded conditional profile JSON limits are valid");
+    let config = application
+        .config
+        .load()
+        .ok()
+        .and_then(|document| match document {
+            DocumentState::Present(document) => Some(document),
+            DocumentState::Missing => None,
+        })
+        .unwrap_or_else(ConfigDocument::defaults);
     let inventory = application
         .inventory
         .load()
@@ -1711,12 +1785,31 @@ pub(super) fn execute_project_skill_remove(
     let mut canonical_entries = BTreeMap::new();
     let mut link_entries = BTreeMap::new();
     let mut target_projection_keys = BTreeSet::new();
+    let mut authorized_targets = Vec::new();
     let mut blocked = false;
 
     for concrete_scope in &scope.resolved {
         let Scope::Project(project) = concrete_scope else {
             continue;
         };
+        let (mutating_targets, next_outcome) =
+            super::conditional_profile::filter_targets_for_capability(
+                application.registry,
+                &config,
+                &targets.resolved,
+                concrete_scope,
+                &paths,
+                process_limits,
+                json_limits,
+                &filesystem,
+                &CapabilityId::new("skill.remove").expect("static skill capability is valid"),
+                outcome,
+            );
+        outcome = next_outcome;
+        let Some(mutating_targets) = mutating_targets else {
+            continue;
+        };
+        authorized_targets.extend(mutating_targets.iter().cloned());
         let Some(key) = ResourceId::new(format!("skill:{}", name.as_str()))
             .ok()
             .map(|id| ResourceKey::new(id, concrete_scope.clone()))
@@ -1779,7 +1872,7 @@ pub(super) fn execute_project_skill_remove(
         let mut link_ids = Vec::new();
         let mut seen_destinations = BTreeSet::new();
         let mut selected_safe = true;
-        for target in targets.iter() {
+        for target in mutating_targets.iter() {
             let Some(target_state) = state.target(target) else {
                 selected_safe = false;
                 outcome = outcome.with_warning(
@@ -1910,10 +2003,11 @@ pub(super) fn execute_project_skill_remove(
             blocked = true;
             continue;
         }
-        let remaining = resource
-            .targets()
-            .iter()
-            .any(|target| !targets.resolved.contains(target));
+        let remaining = resource.targets().iter().any(|target| {
+            !authorized_targets
+                .iter()
+                .any(|authorized| authorized == target)
+        });
         let canonical_owned = matches!(resource.origin(), DesiredOrigin::Direct)
             && state.targets().values().any(|target| {
                 target.provenance() == Provenance::Direct
@@ -1924,12 +2018,13 @@ pub(super) fn execute_project_skill_remove(
             && let Some(canonical) = canonical
         {
             let operation_id = project_canonical_remove_operation_id(&key);
-            let target = resource
-                .targets()
+            let Some(target) = authorized_targets
                 .iter()
-                .next()
+                .find(|target| resource.targets().contains(target))
                 .cloned()
-                .expect("non-empty targets");
+            else {
+                continue;
+            };
             let dependencies = link_ids.iter().cloned().map(OperationDependency::new);
             let path = AbsolutePath::new(format!(
                 "{}/{}",
@@ -1972,6 +2067,14 @@ pub(super) fn execute_project_skill_remove(
         }
         target_projection_keys.insert(key);
     }
+    let authorized_targets = HarnessSet::new(authorized_targets)
+        .expect("authorized project skill targets remain unique");
+    if authorized_targets.iter().next().is_none() {
+        outcome.result = ResultClass::AttentionRequired;
+        return outcome
+            .with_summary("operations", 0_u64)
+            .with_summary("changed", false);
+    }
 
     if blocked || (!acknowledged && !outcome.warnings.is_empty()) {
         outcome.result = ResultClass::AttentionRequired;
@@ -1983,7 +2086,7 @@ pub(super) fn execute_project_skill_remove(
         let next = match super::project_inventory_targets(
             &inventory,
             &target_projection_keys,
-            &targets.resolved,
+            &authorized_targets,
         ) {
             Ok(next) => next,
             Err(_) => {
@@ -1998,7 +2101,7 @@ pub(super) fn execute_project_skill_remove(
             || super::project_state_targets_after_remove(
                 application.state,
                 &target_projection_keys,
-                &targets.resolved,
+                &authorized_targets,
             )
             .is_err()
         {
@@ -2089,7 +2192,7 @@ pub(super) fn execute_project_skill_remove(
         let next = match super::project_inventory_targets(
             &inventory,
             &target_projection_keys,
-            &targets.resolved,
+            &authorized_targets,
         ) {
             Ok(next) => next,
             Err(_) => {
@@ -2104,7 +2207,7 @@ pub(super) fn execute_project_skill_remove(
             || super::project_state_targets_after_remove(
                 application.state,
                 &target_projection_keys,
-                &targets.resolved,
+                &authorized_targets,
             )
             .is_err()
         {

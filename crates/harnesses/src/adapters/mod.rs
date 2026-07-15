@@ -166,7 +166,11 @@ mod tests {
             .adapter(&HarnessId::new("opencode").unwrap())
             .unwrap();
 
-        assert!(registry.adapter(&HarnessId::new("pi").unwrap()).is_none());
+        let pi = registry.adapter(&HarnessId::new("pi").unwrap()).unwrap();
+        assert_eq!(pi.identity(), super::PiAdapter::static_ref().identity());
+        assert!(pi.native_lifecycle().is_none());
+        assert!(pi.managed_projection().is_none());
+        assert!(pi.skill_projection().is_some());
         assert_eq!(codex.identity(), CodexAdapter::static_ref().identity());
         assert_eq!(claude.identity(), ClaudeAdapter::static_ref().identity());
         assert_eq!(gemini.identity(), GeminiAdapter::static_ref().identity());

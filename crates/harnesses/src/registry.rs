@@ -11,7 +11,7 @@ use skilltap_core::{
 
 use crate::{
     CanonicalObservation, DetectionError,
-    adapters::{ClaudeAdapter, CodexAdapter, GeminiAdapter, OpenCodeAdapter},
+    adapters::{ClaudeAdapter, CodexAdapter, GeminiAdapter, OpenCodeAdapter, PiAdapter},
     conditional_profile::ConditionalProfilePort,
     lifecycle::{NativeLifecycleError, NativeLifecycleRequest},
     managed_projection::ManagedProjectionPort,
@@ -244,6 +244,7 @@ impl TargetRegistry {
             ClaudeAdapter::static_ref(),
             GeminiAdapter::static_ref(),
             OpenCodeAdapter::static_ref(),
+            PiAdapter::static_ref(),
         ])
     }
 
@@ -402,9 +403,9 @@ mod tests {
 
         assert_eq!(
             registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
-            ["codex", "claude", "gemini", "opencode"]
+            ["codex", "claude", "gemini", "opencode", "pi"]
         );
-        assert_eq!(registry.iter().count(), 4);
+        assert_eq!(registry.iter().count(), 5);
         assert_eq!(registry.first_party_targets().count(), 2);
         assert!(
             registry

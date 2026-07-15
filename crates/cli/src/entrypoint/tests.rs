@@ -37,14 +37,14 @@ fn first_use_plain_status_is_an_attention_report_on_stdout() {
 
 #[test]
 fn unregistered_targets_are_rejected_at_composition_before_dispatch() {
-    let execution = run_from(["skilltap", "status", "--target", "pi", "--json"]);
+    let execution = run_from(["skilltap", "status", "--target", "not-real", "--json"]);
 
     assert_eq!(execution.exit_code, 1);
     assert_eq!(execution.channel, OutputChannel::Stdout);
     let value: Value = serde_json::from_str(&execution.document).unwrap();
     assert_eq!(value["result"], "invalid");
     assert_eq!(value["errors"][0]["code"], "target_not_registered");
-    assert_eq!(value["errors"][0]["context"]["harness"], "pi");
+    assert_eq!(value["errors"][0]["context"]["harness"], "not-real");
     assert_eq!(execution.document.lines().count(), 1);
 }
 

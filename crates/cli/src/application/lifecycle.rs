@@ -553,6 +553,66 @@ impl StatusApplication<'_> {
         dependencies: BTreeSet<OperationDependency>,
         outcome: &mut Outcome,
     ) -> Option<OperationId> {
+        if self
+            .registry
+            .adapter(target)
+            .is_some_and(|adapter| adapter.conditional_profile().is_some())
+        {
+            let capability_name = match kind {
+                NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
+                NativeLifecycleKind::PluginUpdate => "plugin.update",
+                NativeLifecycleKind::MarketplaceAdd
+                | NativeLifecycleKind::MarketplaceRemove
+                | NativeLifecycleKind::PluginInstall
+                | NativeLifecycleKind::PluginRemove => "daemon.unsupported",
+            };
+            let capability = CapabilityId::new(capability_name)
+                .expect("static daemon capability identifier is valid");
+            match super::conditional_profile::resolve_conditional_profile(
+                self.registry,
+                &documents.config,
+                target,
+                resource.scope(),
+                paths,
+                process_limits,
+                json_limits,
+                &SystemFileSystem,
+            ) {
+                Ok(resolved) => {
+                    if let Err(error) =
+                        super::conditional_profile::require_target_mutation_capability(
+                            resolved.as_ref(),
+                            &capability,
+                            resource.scope(),
+                        )
+                    {
+                        *outcome = outcome
+                            .clone()
+                            .with_error(error.with_context("target", target.as_str()))
+                            .with_next_action(
+                                super::conditional_profile::conditional_profile_next_action(),
+                            );
+                        outcome.result =
+                            merge_result(outcome.result, ResultClass::AttentionRequired);
+                        return None;
+                    }
+                }
+                Err(error) => {
+                    *outcome = outcome
+                        .clone()
+                        .with_warning(super::conditional_profile::conditional_profile_warning(
+                            target,
+                            resource.scope(),
+                            &error,
+                        ))
+                        .with_next_action(
+                            super::conditional_profile::conditional_profile_next_action(),
+                        );
+                    outcome.result = merge_result(outcome.result, ResultClass::AttentionRequired);
+                    return None;
+                }
+            }
+        }
         let operation_id = lifecycle_operation_id(kind, target, resource.scope(), resource.key());
         let request = match NativeLifecycleSpec::parse(kind, None, Some(name.as_str())) {
             Ok(request) => request,
@@ -887,9 +947,46 @@ impl StatusApplication<'_> {
         };
         let source = source.unwrap_or("not supplied");
         let name = name.unwrap_or("derived by lifecycle adapter");
+        let paths = match self.lifecycle_platform_paths() {
+            Ok(paths) => paths,
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return outcome.with_error(ErrorDetail::new(
+                    "platform_paths_unavailable",
+                    "The configuration paths could not be resolved for lifecycle planning.",
+                ));
+            }
+        };
+        let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+            .expect("bounded lifecycle preview process limits are valid");
+        let json_limits = JsonLimits::new(256 * 1024, 64)
+            .expect("bounded lifecycle preview JSON limits are valid");
+        let capability = CapabilityId::new(match kind {
+            ResourceKind::Marketplace => "marketplace.register",
+            ResourceKind::Plugin => "plugin.install",
+            _ => "skill.install",
+        })
+        .expect("static lifecycle preview capability is valid");
         let mut operation_count = 0_u64;
         for concrete_scope in &scope.resolved {
-            for harness in targets.iter() {
+            let (authorized_targets, next_outcome) =
+                super::conditional_profile::filter_targets_for_capability(
+                    self.registry,
+                    &documents.config,
+                    &targets.resolved,
+                    concrete_scope,
+                    &paths,
+                    process_limits,
+                    json_limits,
+                    &SystemFileSystem,
+                    &capability,
+                    outcome,
+                );
+            outcome = next_outcome;
+            let Some(authorized_targets) = authorized_targets else {
+                continue;
+            };
+            for harness in authorized_targets.iter() {
                 operation_count += 1;
                 let presence = lifecycle_preview_presence(
                     self.registry,
@@ -1037,8 +1134,37 @@ impl StatusApplication<'_> {
             }
         };
         let timestamp = Timestamp::from_system_time(std::time::SystemTime::now()).map_err(|_| ());
+        let capability_name = match kind {
+            NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
+            NativeLifecycleKind::MarketplaceRemove => "marketplace.remove",
+            NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
+            NativeLifecycleKind::PluginInstall => "plugin.install",
+            NativeLifecycleKind::PluginRemove => "plugin.remove",
+            NativeLifecycleKind::PluginUpdate => "plugin.update",
+        };
+        let capability = CapabilityId::new(capability_name)
+            .expect("static lifecycle capability identifier is valid");
+        let mut authorized_targets = Vec::new();
 
         for concrete_scope in &scope.resolved {
+            let (mutating_targets, next_outcome) =
+                super::conditional_profile::filter_targets_for_capability(
+                    self.registry,
+                    &documents.config,
+                    &targets.resolved,
+                    concrete_scope,
+                    &paths,
+                    process_limits,
+                    json_limits,
+                    &SystemFileSystem,
+                    &capability,
+                    outcome,
+                );
+            outcome = next_outcome;
+            let Some(mutating_targets) = mutating_targets else {
+                continue;
+            };
+            authorized_targets.extend(mutating_targets.iter().cloned());
             let scope_requests = match request.as_ref() {
                 Some(request) => vec![request.clone()],
                 None => inventory
@@ -1077,7 +1203,7 @@ impl StatusApplication<'_> {
                     };
                     match inventory.resources().get(&key) {
                         Some(existing) => existing.clone(),
-                        None => match request.desired_resource(concrete_scope, &targets.resolved) {
+                        None => match request.desired_resource(concrete_scope, &mutating_targets) {
                             Ok(resource) => resource,
                             Err(error) => {
                                 outcome.result = ResultClass::Invalid;
@@ -1086,7 +1212,7 @@ impl StatusApplication<'_> {
                         },
                     }
                 } else {
-                    let proposed = match request.desired_resource(concrete_scope, &targets.resolved)
+                    let proposed = match request.desired_resource(concrete_scope, &mutating_targets)
                     {
                         Ok(resource) => resource,
                         Err(error) => {
@@ -1166,7 +1292,7 @@ impl StatusApplication<'_> {
                     })
                     .unwrap_or_default();
                 let mut native_route_selected = false;
-                for target_id in targets.iter() {
+                for target_id in mutating_targets.iter() {
                     if self.registry.adapter(target_id).is_some_and(|adapter| {
                         adapter.supports_managed_projection(
                             skilltap_core::domain::CapabilityScope::from(concrete_scope),
@@ -1607,6 +1733,13 @@ impl StatusApplication<'_> {
             }
         }
 
+        let authorized_targets = HarnessSet::new(authorized_targets).ok();
+        if authorized_targets.is_none() {
+            return outcome
+                .with_summary("operations", 0_u64)
+                .with_summary("changed", false);
+        }
+        let authorized_targets = authorized_targets.expect("checked above");
         let inventory_changed = inventory != original_inventory;
         if operations.is_empty() && !outcome.errors.is_empty() {
             let operation_count = outcome.operations.len() as u64;
@@ -1626,7 +1759,7 @@ impl StatusApplication<'_> {
                 inventory = match project_inventory_targets(
                     &inventory,
                     &target_projection_keys,
-                    &targets.resolved,
+                    &authorized_targets,
                 ) {
                     Ok(inventory) => inventory,
                     Err(()) => {
@@ -1659,7 +1792,7 @@ impl StatusApplication<'_> {
                 && project_state_targets_after_remove(
                     self.state,
                     &target_projection_keys,
-                    &targets.resolved,
+                    &authorized_targets,
                 )
                 .is_err()
             {
@@ -2186,6 +2319,11 @@ impl StatusApplication<'_> {
         let mut entries = BTreeMap::new();
         let mut seeds = BTreeMap::new();
         let mut old_revision = None;
+        let conditional_process_limits =
+            ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+                .expect("bounded conditional profile process limits are valid");
+        let conditional_json_limits = JsonLimits::new(256 * 1024, 64)
+            .expect("bounded conditional profile JSON limits are valid");
         let timestamp = match Timestamp::from_system_time(std::time::SystemTime::now()) {
             Ok(timestamp) => timestamp,
             Err(_) => {
@@ -2197,6 +2335,23 @@ impl StatusApplication<'_> {
             }
         };
         for concrete_scope in &scope.resolved {
+            let (mutating_targets, next_outcome) =
+                super::conditional_profile::filter_targets_for_capability(
+                    self.registry,
+                    &documents.config,
+                    &targets.resolved,
+                    concrete_scope,
+                    &paths,
+                    conditional_process_limits,
+                    conditional_json_limits,
+                    &filesystem,
+                    &CapabilityId::new("skill.install").expect("static skill capability is valid"),
+                    outcome,
+                );
+            outcome = next_outcome;
+            let Some(mutating_targets) = mutating_targets else {
+                continue;
+            };
             let key = ResourceKey::new(
                 match ResourceId::new(format!("skill:{}", name.as_str())) {
                     Ok(id) => id,
@@ -2228,7 +2383,7 @@ impl StatusApplication<'_> {
                 .resources()
                 .get(&key)
                 .map(|resource| resource.targets().clone())
-                .unwrap_or_else(|| targets.resolved.clone());
+                .unwrap_or_else(|| mutating_targets.clone());
             let desired = match DesiredResource::new(
                 key.clone(),
                 ResourceKind::StandaloneSkill,
@@ -2326,7 +2481,7 @@ impl StatusApplication<'_> {
                 self.registry,
                 &paths,
                 concrete_scope,
-                &targets.resolved,
+                &mutating_targets,
                 &destination,
             ) {
                 Some(destinations) => destinations,
@@ -2943,7 +3098,31 @@ impl StatusApplication<'_> {
         let mut entries = BTreeMap::new();
         let seeds = BTreeMap::new();
         let mut target_projection_keys = BTreeSet::new();
+        let mut authorized_targets = Vec::new();
+        let conditional_process_limits =
+            ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+                .expect("bounded conditional profile process limits are valid");
+        let conditional_json_limits = JsonLimits::new(256 * 1024, 64)
+            .expect("bounded conditional profile JSON limits are valid");
         for concrete_scope in &scope.resolved {
+            let (mutating_targets, next_outcome) =
+                super::conditional_profile::filter_targets_for_capability(
+                    self.registry,
+                    &documents.config,
+                    &targets.resolved,
+                    concrete_scope,
+                    &paths,
+                    conditional_process_limits,
+                    conditional_json_limits,
+                    &filesystem,
+                    &CapabilityId::new("skill.remove").expect("static skill capability is valid"),
+                    outcome,
+                );
+            outcome = next_outcome;
+            let Some(mutating_targets) = mutating_targets else {
+                continue;
+            };
+            authorized_targets.extend(mutating_targets.iter().cloned());
             let Some(key) = ResourceId::new(format!("skill:{}", name.as_str()))
                 .ok()
                 .map(|id| ResourceKey::new(id, concrete_scope.clone()))
@@ -2969,7 +3148,7 @@ impl StatusApplication<'_> {
                 );
                 continue;
             };
-            if !targets.resolved.iter().any(|target| {
+            if !mutating_targets.iter().any(|target| {
                 state
                     .target(target)
                     .is_some_and(|binding| binding.ownership() == Ownership::Skilltap)
@@ -2989,7 +3168,7 @@ impl StatusApplication<'_> {
                 self.registry,
                 &paths,
                 concrete_scope,
-                &targets.resolved,
+                &mutating_targets,
                 &destination,
             ) {
                 Some(destinations) => destinations,
@@ -3115,6 +3294,8 @@ impl StatusApplication<'_> {
                 target_projection_keys.insert(key);
             }
         }
+        let authorized_targets = HarnessSet::new(authorized_targets)
+            .expect("authorized standalone skill targets remain unique");
         if !acknowledged && !outcome.warnings.is_empty() {
             return outcome
                 .with_summary("operations", 0_u64)
@@ -3124,7 +3305,7 @@ impl StatusApplication<'_> {
             inventory = match project_inventory_targets(
                 &inventory,
                 &target_projection_keys,
-                &targets.resolved,
+                &authorized_targets,
             ) {
                 Ok(inventory) => inventory,
                 Err(()) => {
@@ -3232,7 +3413,7 @@ impl StatusApplication<'_> {
             inventory = match project_inventory_targets(
                 &inventory,
                 &target_projection_keys,
-                &targets.resolved,
+                &authorized_targets,
             ) {
                 Ok(inventory) => inventory,
                 Err(()) => {

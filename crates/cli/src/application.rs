@@ -143,6 +143,7 @@ use crate::{
     },
 };
 
+mod conditional_profile;
 mod execution;
 mod instructions;
 mod lifecycle;
@@ -1294,7 +1295,29 @@ fn configured_adapter_profile(
     else {
         return Ok(None);
     };
-    let profile = adapter.select_profile(native_version);
+    let profile = if adapter.conditional_profile().is_some() {
+        match PlatformPaths::resolve(&ProcessEnvironment)
+            .ok()
+            .and_then(|paths| {
+                conditional_profile::resolve_conditional_profile(
+                    registry,
+                    config,
+                    target,
+                    request.scope,
+                    &paths,
+                    request.process_limits,
+                    request.json_limits,
+                    &SystemFileSystem,
+                )
+                .ok()
+                .flatten()
+            }) {
+            Some(resolved) => resolved.observation.profile().clone(),
+            None => adapter.select_profile(native_version),
+        }
+    } else {
+        adapter.select_profile(native_version)
+    };
     let Some(capability_id) = CapabilityId::new(request.capability_name).ok() else {
         return Ok(None);
     };
@@ -1427,6 +1450,15 @@ fn plan_managed_lifecycle(
     profile: ConfiguredAdapterProfile,
     context: ManagedProjectPlanContext<'_>,
 ) -> Result<PlannedManagedProjectLifecycle, ErrorDetail> {
+    if profile.capability != CapabilitySupport::Supported {
+        return Err(ErrorDetail::new(
+            "conditional_profile_mutation_unauthorized",
+            "The selected managed projection is not mutation-authorized for this target and scope.",
+        )
+        .with_context("target", target.as_str())
+        .with_context("scope", scope_label(resource.scope()))
+        .with_next_action(conditional_profile::conditional_profile_next_action()));
+    }
     let adapter = registry.adapter(target).ok_or_else(|| {
         managed_project_error(
             "managed_project_target_unregistered",
