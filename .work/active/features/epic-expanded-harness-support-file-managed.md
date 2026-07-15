@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-file-managed
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -31,6 +31,16 @@ to be useful. The feature includes each target's isolated native validation,
 agent-facing help/status exposure, and shared acceptance-contract evidence. It
 does not broaden first-party plugin bootstrap or treat project trust as proof of
 effective load.
+
+## Review result
+
+The required standard independent pass approved the completed family with no
+material findings. Focused Kiro, declaration-authority, daemon, compiled CLI,
+and Gemini/OpenCode parity tests passed. Kiro is registered only through the
+new exact-version declaration-managed path; its original attestation correctly
+retains the unresolved native effective-observation result. A future research
+refresh may add a forward pointer, and the generic compiled-test shell quoting
+helper may move when another fixture needs it; neither affects behavior.
 
 ## Epic context
 
