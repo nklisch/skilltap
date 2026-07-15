@@ -1,7 +1,7 @@
 ---
 id: story-fix-clean-runner-harness-fixtures
 kind: story
-stage: review
+stage: done
 tags: [bug, testing]
 parent: null
 depends_on: []
@@ -37,3 +37,7 @@ The existing managed-projection acceptance matrix and compiled standalone-skill 
 - **Full confirmation:** `cargo test --locked --workspace --all-targets`, strict workspace Clippy, formatting, and diff checks pass.
 - **Original symptom:** clean Linux and macOS CI no longer require developer-installed Codex or Claude binaries.
 - **Adjacent work:** none bundled or parked.
+
+## Review
+
+Bounded standalone-story review found no material issues. The patch changes test composition only, binds every verified Codex/Claude path to an isolated exact-profile fake, retains each fixture for the full test lifetime, and removes all use of the ambient `ENABLED_CONFIG`. Scrubbed-path reproduction, the full locked workspace suite, strict Clippy, formatting, and diff checks confirm the repair without weakening assertions.
