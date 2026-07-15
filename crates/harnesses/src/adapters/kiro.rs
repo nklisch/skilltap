@@ -55,7 +55,10 @@ fn declaration_capabilities() -> ScopedCapabilitySets {
     let capabilities = CapabilitySet::new([
         capability("harness.observe", CapabilitySupport::Supported),
         capability("managed.projection", CapabilitySupport::Unverified),
-        capability("component.skill", CapabilitySupport::Unverified),
+        // Standalone complete skills have a deterministic documented tree
+        // contract; declaration uncertainty applies to managed plugin files
+        // and MCP, not the canonical skill lifecycle.
+        capability("component.skill", CapabilitySupport::Supported),
         capability("component.mcp", CapabilitySupport::Unverified),
         // Standalone Agent Skills use the shared canonical skill lifecycle.
         // Kiro's documented native root is still an attested projection path;
@@ -234,7 +237,7 @@ mod tests {
             assert_eq!(
                 capabilities
                     .support(&skilltap_core::domain::CapabilityId::new("component.skill").unwrap()),
-                Some(CapabilitySupport::Unverified)
+                Some(CapabilitySupport::Supported)
             );
             assert_eq!(
                 capabilities

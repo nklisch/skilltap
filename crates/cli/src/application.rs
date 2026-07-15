@@ -401,10 +401,12 @@ fn skill_install_can_complete(outcome: &Outcome, acknowledged: bool) -> bool {
     outcome.errors.is_empty()
         && (outcome.warnings.is_empty()
             || (acknowledged
-                && outcome
-                    .warnings
-                    .iter()
-                    .all(|warning| warning.code == "skill_frontmatter_warning")))
+                && outcome.warnings.iter().all(|warning| {
+                    matches!(
+                        warning.code.as_str(),
+                        "skill_frontmatter_warning" | "skill_effective_unverified"
+                    )
+                })))
 }
 
 fn scope_args_for_scope(scope: &Scope) -> ScopeArgs {
@@ -1669,6 +1671,48 @@ fn plan_managed_lifecycle(
         CapabilityId::new("managed.projection").expect("static capability id is valid"),
         [],
     );
+    let component_source: &[ManagedProjection] = if removal {
+        prior_projections
+    } else {
+        &managed_projections
+    };
+    let mut requirements = vec![managed_requirement.clone()];
+    // Removal only retracts skilltap-owned declarations. It does not claim
+    // that the harness will load the component, so effective component
+    // uncertainty must not strand an owned projection without a removal
+    // acknowledgment channel.
+    if !removal {
+        let skill_components = component_source
+            .iter()
+            .filter_map(|projection| match projection {
+                ManagedProjection::Skill { id, .. } => {
+                    ComponentId::new(format!("skill:{}", id.as_str())).ok()
+                }
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        if !skill_components.is_empty() {
+            requirements.push(CapabilityRequirement::new(
+                CapabilityId::new("component.skill").expect("static capability id is valid"),
+                skill_components,
+            ));
+        }
+        let mcp_components = component_source
+            .iter()
+            .filter_map(|projection| match projection {
+                ManagedProjection::Mcp { id, .. } => {
+                    ComponentId::new(format!("mcp:{}", id.as_str())).ok()
+                }
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        if !mcp_components.is_empty() {
+            requirements.push(CapabilityRequirement::new(
+                CapabilityId::new("component.mcp").expect("static capability id is valid"),
+                mcp_components,
+            ));
+        }
+    }
     let authorization = if surfaces.is_empty() {
         MutationAuthorization::Supported
     } else {
@@ -1676,7 +1720,7 @@ fn plan_managed_lifecycle(
             profile: &profile.profile,
             scope,
             channel: MutationChannel::ManagedProjection,
-            required: std::slice::from_ref(&managed_requirement),
+            required: &requirements,
             surfaces: &surface_kinds,
             declaration: profile.declaration_contract.as_ref(),
         })
@@ -1801,7 +1845,7 @@ fn plan_managed_lifecycle(
             files,
             trees,
             profile,
-            requirements: vec![managed_requirement],
+            requirements,
             surfaces: surface_kinds,
             authorization,
         },

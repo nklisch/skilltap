@@ -541,6 +541,23 @@ static FAKE_MANAGED_PROJECTION: FakeManagedProjection = FakeManagedProjection;
 static FAKE_APPLY_PLANS: AtomicUsize = AtomicUsize::new(0);
 static FAKE_REMOVE_PLANS: AtomicUsize = AtomicUsize::new(0);
 
+fn fake_managed_capabilities() -> skilltap_core::domain::CapabilitySet {
+    skilltap_core::domain::CapabilitySet::new([
+        (
+            skilltap_core::domain::CapabilityId::new("managed.projection").unwrap(),
+            skilltap_core::domain::CapabilitySupport::Supported,
+        ),
+        (
+            skilltap_core::domain::CapabilityId::new("component.skill").unwrap(),
+            skilltap_core::domain::CapabilitySupport::Supported,
+        ),
+        (
+            skilltap_core::domain::CapabilityId::new("component.mcp").unwrap(),
+            skilltap_core::domain::CapabilitySupport::Supported,
+        ),
+    ])
+}
+
 impl skilltap_harnesses::HarnessAdapter for FakeManagedAdapter {
     fn identity(&self) -> skilltap_harnesses::TargetIdentity {
         skilltap_harnesses::TargetIdentity {
@@ -573,17 +590,9 @@ impl skilltap_harnesses::HarnessAdapter for FakeManagedAdapter {
         &self,
         version: &skilltap_core::domain::NativeVersion,
     ) -> skilltap_core::domain::CapabilityProfileSelection {
-        let capability = skilltap_core::domain::CapabilityId::new("managed.projection")
-            .expect("test capability is valid");
         let capabilities = skilltap_core::domain::ScopedCapabilitySets::new(
-            skilltap_core::domain::CapabilitySet::new([(
-                capability.clone(),
-                skilltap_core::domain::CapabilitySupport::Supported,
-            )]),
-            skilltap_core::domain::CapabilitySet::new([(
-                capability,
-                skilltap_core::domain::CapabilitySupport::Supported,
-            )]),
+            fake_managed_capabilities(),
+            fake_managed_capabilities(),
         );
         if version.as_str() == "0.144.1" {
             skilltap_core::domain::CapabilityProfileSelection::verified(

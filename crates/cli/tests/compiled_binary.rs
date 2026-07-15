@@ -148,6 +148,29 @@ fn native_config_with_kiro(kiro: &Path) -> String {
     )
 }
 
+fn native_config_with_copilot(copilot: &Path) -> String {
+    format!(
+        r#"schema = 1
+
+[harnesses.copilot]
+enabled = true
+binary = {}
+
+[instructions]
+claude_mode = "symlink"
+
+[updates]
+mode = "apply-safe"
+interval = "6h"
+
+[bootstrap]
+mode = "off"
+allow_major = false
+"#,
+        toml_string(copilot),
+    )
+}
+
 fn native_config_with_pi_and_siblings(codex: &Path, claude: &Path, pi: &Path) -> String {
     format!(
         "{}\n[harnesses.pi]\nenabled = true\nbinary = {}\n",
@@ -2911,6 +2934,388 @@ fn unsupported_only_managed_project_plugin_stays_blocked_with_acknowledgment() {
         assert!(!project.join(".codex/config.toml").exists());
         assert!(!machine.codex_home().join("plugins/cache").exists());
     }
+}
+
+#[test]
+fn copilot_compiled_managed_plugin_preserves_scopes_conflicts_and_repeats() {
+    let machine = machine();
+    let copilot = fake_harness(&machine, &FakeHarnessProfile::copilot());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config_with_copilot(copilot.executable()),
+    );
+    let project = machine.working_directory().join("copilot-project");
+    fs::create_dir_all(project.join(".agents/skills/sibling")).unwrap();
+    fs::write(
+        project.join(".agents/skills/sibling/SKILL.md"),
+        b"---\nname: sibling\ndescription: unmanaged sibling\n---\n",
+    )
+    .unwrap();
+    fs::create_dir_all(machine.home().join(".agents/skills/sibling")).unwrap();
+    fs::write(
+        machine.home().join(".agents/skills/sibling/SKILL.md"),
+        b"---\nname: sibling\ndescription: unmanaged sibling\n---\n",
+    )
+    .unwrap();
+    fs::create_dir_all(machine.home().join(".copilot")).unwrap();
+    fs::write(
+        machine.home().join(".copilot/mcp-config.json"),
+        br#"{"future":{"keep":true}}"#,
+    )
+    .unwrap();
+    fs::create_dir_all(project.join(".github")).unwrap();
+    fs::write(
+        project.join(".github/mcp.json"),
+        br#"{"mcpServers":{"demo-docs":{"command":"shadow"}}}"#,
+    )
+    .unwrap();
+    let source = write_gemini_marketplace(&machine);
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        br#"{"mcpServers":{"demo-docs":{"type":"stdio","command":"demo-mcp","args":["serve"],"env":{"TOKEN":"${MCP_TOKEN}"}}}}"#,
+    )
+    .unwrap();
+
+    for scope in [None, Some(project.as_path())] {
+        let mut add = vec![
+            "marketplace",
+            "add",
+            source.to_str().unwrap(),
+            "--name",
+            "team",
+            "--target",
+            "copilot",
+            "--json",
+        ];
+        if let Some(project) = scope {
+            add.splice(5..5, ["--project", project.to_str().unwrap()]);
+        }
+        let output = run(&machine, &add);
+        assert_code(&output, 0);
+        assert_eq!(json(&output)["result"], "completed");
+    }
+
+    let global_before = snapshot_native_tree(&machine.home().join(".agents"));
+    let project_before = snapshot_native_tree(&project);
+    for scope in [None, Some(project.as_path())] {
+        let mut install = vec!["plugin", "install", "demo@team", "--target", "copilot"];
+        if let Some(project) = scope {
+            install.extend(["--project", project.to_str().unwrap()]);
+        }
+        install.push("--json");
+        let output = run(&machine, &install);
+        assert_code(&output, 2);
+        assert_eq!(json(&output)["result"], "attention_required");
+    }
+    assert_eq!(
+        snapshot_native_tree(&machine.home().join(".agents")),
+        global_before
+    );
+    assert_eq!(snapshot_native_tree(&project), project_before);
+
+    let install_global = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--target",
+            "copilot",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&install_global, 0);
+    assert_eq!(json(&install_global)["summary"]["changed"], true);
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/demo/SKILL.md")
+            .is_file()
+    );
+    let global_mcp: Value =
+        serde_json::from_slice(&fs::read(machine.home().join(".copilot/mcp-config.json")).unwrap())
+            .unwrap();
+    assert_eq!(global_mcp["future"]["keep"], true);
+    assert_eq!(
+        global_mcp["mcpServers"]["demo-docs"]["env"]["TOKEN"],
+        "${MCP_TOKEN}"
+    );
+
+    let conflicting = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "copilot",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&conflicting, 2);
+    assert_eq!(json(&conflicting)["summary"]["changed"], false);
+    assert_eq!(snapshot_native_tree(&project), project_before);
+    fs::remove_file(project.join(".github/mcp.json")).unwrap();
+
+    let install_project = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "copilot",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&install_project, 0);
+    assert_eq!(json(&install_project)["summary"]["changed"], true);
+    assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
+    assert!(project.join(".mcp.json").is_file());
+
+    let repeat_global = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--target",
+            "copilot",
+            "--yes",
+            "--json",
+        ],
+    );
+    let repeat_project = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "copilot",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&repeat_global, 0);
+    assert_code(&repeat_project, 0);
+    assert_eq!(json(&repeat_global)["summary"]["changed"], false);
+    assert_eq!(json(&repeat_project)["summary"]["changed"], false);
+
+    for scope in [None, Some(project.as_path())] {
+        let mut remove = vec!["plugin", "remove", "demo@team", "--target", "copilot"];
+        if let Some(project) = scope {
+            remove.extend(["--project", project.to_str().unwrap()]);
+        }
+        remove.push("--json");
+        let output = run(&machine, &remove);
+        assert_code(&output, 0);
+    }
+    assert!(!machine.home().join(".agents/skills/demo").exists());
+    assert!(!project.join(".agents/skills/demo").exists());
+    assert!(machine.home().join(".agents/skills/sibling").is_dir());
+    assert!(project.join(".agents/skills/sibling").is_dir());
+    assert!(
+        copilot
+            ._fixture
+            .captured_invocations()
+            .unwrap()
+            .iter()
+            .all(|invocation| invocation.arguments() == [b"--version".as_slice()])
+    );
+}
+
+#[test]
+fn copilot_compiled_standalone_skills_require_foreground_ack_and_use_canonical_roots() {
+    let machine = machine();
+    let copilot = fake_harness(&machine, &FakeHarnessProfile::copilot());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config_with_copilot(copilot.executable()),
+    );
+    let source = machine.home().join("copilot-standalone");
+    fs::create_dir_all(source.join("references")).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        b"---\nname: copilot-standalone\ndescription: Copilot standalone fixture\n---\nbody\n",
+    )
+    .unwrap();
+    fs::write(source.join("references/example.md"), b"reference\n").unwrap();
+    let project = machine
+        .working_directory()
+        .join("copilot-standalone-project");
+    fs::create_dir_all(project.join(".agents/skills/sibling")).unwrap();
+    fs::write(
+        project.join(".agents/skills/sibling/SKILL.md"),
+        b"---\nname: sibling\ndescription: sibling\n---\n",
+    )
+    .unwrap();
+    fs::create_dir_all(machine.home().join(".agents/skills/sibling")).unwrap();
+    fs::write(
+        machine.home().join(".agents/skills/sibling/SKILL.md"),
+        b"---\nname: sibling\ndescription: sibling\n---\n",
+    )
+    .unwrap();
+    let global_before = snapshot_native_tree(&machine.home().join(".agents"));
+    let project_before = snapshot_native_tree(&project);
+
+    for scope in [None, Some(project.as_path())] {
+        let mut install = vec![
+            "skill",
+            "install",
+            source.to_str().unwrap(),
+            "--target",
+            "copilot",
+        ];
+        if let Some(project) = scope {
+            install.extend(["--project", project.to_str().unwrap()]);
+        }
+        install.push("--json");
+        let output = run(&machine, &install);
+        assert_code(&output, 2);
+        assert_eq!(json(&output)["result"], "attention_required");
+    }
+    assert_eq!(
+        snapshot_native_tree(&machine.home().join(".agents")),
+        global_before
+    );
+    assert_eq!(snapshot_native_tree(&project), project_before);
+
+    for scope in [None, Some(project.as_path())] {
+        let mut install = vec![
+            "skill",
+            "install",
+            source.to_str().unwrap(),
+            "--target",
+            "copilot",
+            "--yes",
+        ];
+        if let Some(project) = scope {
+            install.extend(["--project", project.to_str().unwrap()]);
+        }
+        install.push("--json");
+        let output = run(&machine, &install);
+        assert_code(&output, 0);
+        let value = json(&output);
+        assert_eq!(value["result"], "completed");
+        assert_eq!(value["summary"]["changed"], true);
+        assert!(
+            value["warnings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|warning| warning["code"] == "skill_effective_unverified")
+        );
+    }
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/copilot-standalone/SKILL.md")
+            .is_file()
+    );
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/copilot-standalone/references/example.md")
+            .is_file()
+    );
+    assert!(
+        project
+            .join(".agents/skills/copilot-standalone/SKILL.md")
+            .is_file()
+    );
+    assert!(!project.join(".github/skills/copilot-standalone").exists());
+
+    for scope in [None, Some(project.as_path())] {
+        let mut repeat = vec![
+            "skill",
+            "install",
+            source.to_str().unwrap(),
+            "--target",
+            "copilot",
+            "--yes",
+        ];
+        if let Some(project) = scope {
+            repeat.extend(["--project", project.to_str().unwrap()]);
+        }
+        repeat.push("--json");
+        let output = run(&machine, &repeat);
+        assert_code(&output, 0);
+        assert_eq!(json(&output)["summary"]["changed"], false);
+    }
+    for scope in [None, Some(project.as_path())] {
+        let mut remove = vec![
+            "skill",
+            "remove",
+            "copilot-standalone",
+            "--target",
+            "copilot",
+        ];
+        if let Some(project) = scope {
+            remove.extend(["--project", project.to_str().unwrap()]);
+        }
+        remove.push("--json");
+        let output = run(&machine, &remove);
+        assert_code(&output, 0);
+    }
+    assert!(machine.home().join(".agents/skills/sibling").is_dir());
+    assert!(project.join(".agents/skills/sibling").is_dir());
+    assert!(
+        copilot
+            ._fixture
+            .captured_invocations()
+            .unwrap()
+            .iter()
+            .all(|invocation| invocation.arguments() == [b"--version".as_slice()])
+    );
+
+    let unknown_machine = IsolatedMachine::new("skilltap-compiled-cli-unknown-copilot").unwrap();
+    let unknown = fake_harness(
+        &unknown_machine,
+        &FakeHarnessProfile::copilot_with_version(
+            "GitHub Copilot CLI 1.0.71.\nRun 'copilot update' to check for updates.",
+        ),
+    );
+    write_owned(
+        &unknown_machine,
+        "config.toml",
+        &native_config_with_copilot(unknown.executable()),
+    );
+    let unknown_before = snapshot_native_tree(unknown_machine.home());
+    let output = run(
+        &unknown_machine,
+        &[
+            "skill",
+            "install",
+            source.to_str().unwrap(),
+            "--target",
+            "copilot",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&output, 2);
+    assert_eq!(json(&output)["summary"]["changed"], false);
+    assert_eq!(snapshot_native_tree(unknown_machine.home()), unknown_before);
+    assert!(
+        unknown
+            ._fixture
+            .captured_invocations()
+            .unwrap()
+            .iter()
+            .all(|invocation| invocation.arguments() == [b"--version".as_slice()])
+    );
 }
 
 #[test]

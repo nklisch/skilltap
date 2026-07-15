@@ -1104,7 +1104,43 @@ pub(super) fn execute_project_skill_install(
             },
         ) {
             Ok(Some(profile)) if profile.capability == CapabilitySupport::Supported => {
-                profile_target_ids.push(target.clone());
+                let skill_capability = CapabilityId::new("component.skill")
+                    .expect("static component skill capability is valid");
+                match profile.profile.mutation_support(
+                    &Scope::Project(project.clone()),
+                    &skill_capability,
+                ) {
+                    Some(CapabilitySupport::Supported) => profile_target_ids.push(target.clone()),
+                    Some(CapabilitySupport::Unverified)
+                        if profile
+                            .declaration_contract
+                            .as_ref()
+                            .is_some_and(|contract| {
+                                contract.covers(&BTreeSet::from([
+                                    skilltap_core::mutation_authority::ManagedSurfaceKind::CompleteSkillTree,
+                                ]))
+                            }) && acknowledged =>
+                    {
+                        profile_target_ids.push(target.clone());
+                        outcome = outcome
+                            .with_warning(
+                                Warning::new(
+                                    "skill_effective_unverified",
+                                    "The complete skill tree will be written, but Copilot skill loading remains unverified.",
+                                )
+                                .with_context("target", target.as_str()),
+                            );
+                    }
+                    _ => {
+                        outcome = outcome.with_warning(
+                            Warning::new(
+                                "skill_mutation_unavailable",
+                                "The selected harness profile does not authorize project skill mutation without an explicit declaration acknowledgment; no files were written for it.",
+                            )
+                            .with_context("target", target.as_str()),
+                        );
+                    }
+                }
             }
             Ok(Some(_)) | Ok(None) | Err(_) => {
                 outcome = outcome.with_warning(
