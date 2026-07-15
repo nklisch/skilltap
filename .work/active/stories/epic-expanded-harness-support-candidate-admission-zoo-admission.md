@@ -13,7 +13,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Resolve Zoo Code Admission
@@ -41,47 +41,46 @@ writes editor extension storage or caches.
 
 ## Acceptance evidence
 
-- [x] Production shape exactly matches the boundary disposition: `blocked`.
-- [x] No admitted profile or shared acceptance matrix was added because the
-      boundary did not establish an admissible or observe-only runtime.
-- [x] No observe-only profile or mutating port was added.
-- [x] No version probe was added; the boundary found no compatible host or
-      installed extension from which to derive one.
-- [x] Blocked disposition leaves `zoo` absent from adapters, profiles, ports,
-      path constants, canonical registry/help, and fixtures.
+- [x] Original mutation shape remains blocked: no exact profile, writer,
+      projection, effective probe, or native lifecycle exists.
+- [x] Relaxed registry shape is observe-only through the typed file-only
+      contract; no guessed host argv or global-storage path exists.
+- [x] Status reports unavailable host identity, global storage, and effective
+      reload boundaries.
 
 ## Disposition rationale
 
-**Blocked**, exactly as recorded by the Zoo boundary checkpoint at commit
-`8b393752` under the candidate-admission gate established at commit `8137cbd2`.
-The boundary's exact rationale is that Zoo is an editor extension, no compatible
-host or Zoo executable was available, no installed extension identity/version or
-safe deterministic read-only effective-state observation could be obtained, and
-all native skill/MCP discovery, precedence, reload, preservation, ownership,
-removal, repeat, and full isolation checks therefore remained unavailable under
-the mandated non-UI isolation. Source and distribution artifacts were not
-promoted to runtime evidence. Consequently this story intentionally adds no
-adapter, profile, port, path constant, fixture, or registry/help entry.
+**Original mutation disposition: Blocked.** This remains exactly as recorded by
+the Zoo boundary checkpoint at commit `8b393752` under the original gate
+`8137cbd2`: no compatible host, installed version, safe global storage path,
+effective observation, preservation, ownership, removal, repeat, or full
+isolation evidence was available. Source and distribution artifacts are not
+mutation evidence.
+
+**Relaxed registry disposition: ObserveOnly.** The new gate admits the
+source-attested extension identity and safe documented `.roo`/`.agents` skill
+roots plus project `.roo/mcp.json` as a narrow read-only target. The production
+adapter has no binary, native lifecycle, skill projection, managed projection,
+or effective probe. Global editor storage and effective reload remain explicit
+unsupported surfaces.
 
 ## Implementation notes
 
-- Files changed: this story only.
-- No Zoo adapter/profile/port/registry entry was added.
-- No production or test-support source was changed.
-- No candidate integration test was added because the boundary explicitly
-  forbids one until native roots and processes can be safely isolated.
+- Added `crates/harnesses/src/adapters/zoo.rs` and one registry entry for
+  observe-only documented declaration observation.
+- Added no command argv, native lifecycle, skill/managed projection, editor
+  storage writer, cache access, authentication, or effective probe.
+- The adapter reads only the documented safe subset and reports unavailable
+  host/global-storage/effective boundaries.
 
 ## Verification
 
-- Confirmed the boundary story at `8b393752` records `**blocked**` and names
-  every missing admission check.
-- Confirmed the shared gate at `8137cbd2` provides the disposition contract and
-  treats incomplete observation as `Blocked`.
-- Confirmed the production tree contains no Zoo adapter, profile, port, path
-  constant, or registry entry; the only `zoo` source hit is the gate's
-  test-support matrix fixture.
-- Confirmed no Zoo-named adapter/profile/port file or candidate integration test
-  exists.
+- Preserved the boundary story's original blocked mutation evidence.
+- Confirmed the relaxed gate requires only reliable identity plus safe documented
+  read surfaces for registry admission and keeps exact compiled authority
+  mandatory for mutation.
+- Confirmed registry, help, status, `--target all`, bootstrap exclusion, and
+  zero-native-write tests cover Zoo; all mutation ports remain absent.
 
 ## Ordering
 

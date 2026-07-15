@@ -13,7 +13,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Validate ZCode Boundaries
@@ -36,20 +36,27 @@ redirectable host/CLI boundary exists. Record exact sources, commands, bytes,
 paths, and results in this story body and conclude `admitted`, `observe_only`,
 or `blocked`.
 
-## Disposition
+## Original mutation disposition
 
 **`blocked`** for the current official ZCode 3.3.5 boundary.
 
-The current public docs establish the global skill root and, in the Chinese MCP
-page, exact native user/workspace MCP files with direct-edit and precedence
-semantics. They do not establish an exact project skill root, deterministic
-non-UI installation/version observation, a redirectable isolated profile, or a
-headless effective-state/reload surface. Without exact installation identity or
-safe effective observation, the shared gate cannot return `observe_only`; the
-remaining mutation checks also prevent `admitted`.
+The current public docs establish the global skill root and exact native
+user/workspace MCP files, but do not establish an exact project skill root,
+deterministic non-UI installation/version observation, a redirectable isolated
+profile, or a headless effective-state/reload surface. These gaps remain
+mutation blockers and no file writer is authorized.
 
-No production adapter, registry entry, candidate test, fixture, or profile was
-created.
+## Relaxed registry disposition — 2026-07-15
+
+The relaxed gate admits reliable product identity plus safe documented reads.
+ZCode therefore registers a typed file-only observe-only adapter for the exact
+global `~/.zcode/skills`, global `~/.zcode/cli/config.json`, and project
+`.zcode/config.json` MCP declarations. Project skill observation remains
+unsupported rather than inferred. Installed identity, effective reload, and
+cache-independent proof remain explicit unresolved boundaries.
+
+The registry disposition is **`observe_only`**; the original blocked mutation
+evidence above is retained.
 
 ## Source-direct evidence
 

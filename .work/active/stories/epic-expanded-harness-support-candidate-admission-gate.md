@@ -11,16 +11,17 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Define Candidate Admission Authority and Gate
 
 ## Checkpoint
 
-Represent a known, version-pinned but deliberately read-only harness profile
-without granting mutation authority, and define one dependency-neutral candidate
-matrix used by Cursor, Zoo Code, and ZCode.
+Represent deliberately read-only candidate profiles without granting mutation
+authority, and define one dependency-neutral candidate matrix used by Cursor,
+Zoo Code, and ZCode. The 2026-07-15 relaxed amendment separates registry
+observation from mutation admission.
 
 Add `CapabilityProfileSelection::VerifiedObserveOnly { id, capabilities }` in
 `crates/core/src/domain/installation.rs`. It reports
@@ -38,9 +39,12 @@ assertions before returning a check; evidence labels alone do not pass the gate.
 Disposition rules:
 
 - `Admitted` requires every check.
-- `ObserveOnly` requires exact deterministic installation identity and safe,
-  documented read-only observation but is missing at least one mutation check.
-- `Blocked` covers missing deterministic identity or safe observation.
+- `ObserveOnly` requires reliable target identity plus at least one safe,
+  source-documented read surface, and is missing exact mutation/effective checks.
+  It may register a read-only adapter or typed file-only contract.
+- `Blocked` covers missing reliable identity or safe documented observation.
+- Exact compiled profile identity remains mandatory for every mutation channel;
+  `--yes` and `VerifiedObserveOnly` never change that ceiling.
 
 The matrix is test support only. Production authority remains the ordinary
 profile and optional adapter ports; no candidate executor or runtime disposition
@@ -64,14 +68,15 @@ switch is introduced.
   contract. It retains exact profile identity and scoped observation evidence,
   maps to `ProfileAuthority::ObserveOnly`, exposes no mutation capability set,
   and preserves its authority and identity through narrowing.
-- Added the dependency-neutral test-support candidate matrix with all fourteen
-  checks. Exact identity plus the complete documented/cache-independent
-  observation surface is required for `ObserveOnly`; any missing observation
-  prerequisite is `Blocked`, while complete evidence is `Admitted`.
-- Updated only the test-support module export and core profile contract. No
-  candidate adapter, path, executor, registry entry, or production disposition
-  import was added. Existing CLI renderers already render the shared
-  `ProfileAuthority::ObserveOnly` value correctly for both observe-only forms.
+- Added the dependency-neutral test-support candidate matrix with sixteen
+  checks, including `ReliableTargetIdentity` and
+  `SafeDocumentedReadSurface`. The relaxed read-only set is intentionally only
+  those two checks; exact installation identity, precedence/reload,
+  preservation, ownership, and repeat checks remain mutation evidence.
+- The gate remains test-support-only. Candidate adapters now consume a typed
+  `ReadOnlyTargetPort` only for file-only/editor identity boundaries; no gate
+  disposition is consulted by the executor. Existing renderers still render
+  `ProfileAuthority::ObserveOnly` accurately.
 
 ## Verification
 
@@ -80,11 +85,11 @@ switch is introduced.
   `cargo test -p skilltap entrypoint::tests`,
   `cargo test -p skilltap output::tests`, and
   `cargo test -p skilltap application::tests`.
-- Workspace verification passed: `cargo check --workspace --all-features`,
-  `cargo test --workspace --all-features`, and
-  `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
-- `cargo fmt --all -- --check` and `git diff --check` passed. A production-tree
-  search found no import or use of the test-only candidate disposition matrix.
+- The original gate verification passed before the amendment. The relaxed
+  implementation re-runs the workspace ladder after candidate registration;
+  the final counts and commands are recorded in the parent feature and
+  acceptance story. `git diff --check` and strict Clippy remain required before
+  parent review.
 
 ## Ordering
 

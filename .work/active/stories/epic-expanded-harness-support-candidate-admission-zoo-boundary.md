@@ -13,7 +13,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Validate Zoo Code Boundaries
@@ -189,14 +189,27 @@ cross-family/cross-mode skill priority, and native MCP update/removal helpers
 reconstruct the top-level JSON object. Neither risk can be resolved by treating
 source inspection or the webview as effective-state evidence.
 
-## Disposition
+## Original mutation disposition
 
 **blocked**
 
-The candidate lacks the exact installed identity/read-only observation required
-even for the shared gate's observe-only profile, and every mutation/effective-
-state check listed above remains unavailable under the mandated isolation and
-non-UI constraints.
+The exact installed extension identity, host isolation, global storage path,
+effective observation, preservation, ownership, removal, and repeat checks
+remain unavailable under the mandated isolation and non-UI constraints.
+
+## Relaxed registry disposition — 2026-07-15
+
+The relaxed gate requires reliable target identity plus a safe documented read
+surface, not an exact installed mutation profile. Zoo's source-attested
+extension identity and documented `.roo`/`.agents` skill roots plus project
+`.roo/mcp.json` provide that narrow read boundary. The adapter deliberately
+omits the editor global-storage MCP file because its host-provided storage
+location is unresolved.
+
+The registry disposition is therefore **`observe_only`**. Host redirection,
+installed extension identity, global storage, and effective reload remain
+explicit status boundaries. The original blocked mutation evidence is retained
+above; no Zoo file writer, editor/cache writer, or effective probe is implied.
 
 ## Implementation notes
 

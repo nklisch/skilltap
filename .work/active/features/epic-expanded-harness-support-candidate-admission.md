@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-candidate-admission
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -38,25 +38,66 @@ block rather than a guessed configuration location.
 
 ## Implementation result
 
-All three independent tracks resolved honestly to `blocked`: Cursor lacks an
-installed exact runtime and redirectable editor/CLI profile; Zoo Code lacks a
-standalone process plus documented cross-platform global MCP and non-UI
-effective observation; ZCode lacks deterministic installation identity, its
-exact project skill path, and a non-UI reload observer. The shared
-`VerifiedObserveOnly` authority and candidate admission matrix landed without
-registering any candidate. Aggregate acceptance proves Cursor, Zoo Code, and
-ZCode remain absent from the registry, help, mutation, and `--target all`
-surfaces, while Codex/Claude bootstrap behavior and sibling isolation remain
-unchanged. Workspace verification passed 656 tests with strict Clippy,
-formatting, and diff checks.
+The original boundary work remains the source of truth for mutation: no
+candidate has an exact compiled mutation profile, native lifecycle, skill
+projection, managed projection, effective-state probe, authentication path,
+editor/cache writer, or browser flow. Its prior `blocked` mutation evidence is
+preserved in each boundary and admission story below.
 
-## Review result
+### Relaxed observe-only amendment — 2026-07-15
 
-The required standard independent cross-model pass approved the feature with no
-material blockers. It directly re-ran the 656-test workspace suite, strict
-Clippy, formatting, diff checks, focused gate/registry/compiled CLI tests, and
-production-isolation searches. One cosmetic stale Cursor CLI name was corrected
-to the current documented `agent` command; no second review pass was required.
+The foundation now distinguishes registry observation from mutation admission.
+The candidate gate therefore admits a target to the registry when it has a
+reliable target identity and at least one safe, documented read surface. An
+exact compiled profile remains mandatory for every mutation channel; the
+`VerifiedObserveOnly` profile and the file-only registry contract cannot expose
+mutation capabilities and unknown executable versions remain no-write.
+
+The resulting dispositions are intentionally narrow:
+
+- **Cursor — `observe_only`**. Registered with documented executable `agent`
+  and a bounded one-line `--version` decoder. Observation reads only the
+  source-attested global/project Agent Skills roots and `.cursor/mcp.json`
+  surfaces, with documented project-over-global MCP precedence. It has no
+  skill, managed, native lifecycle, authentication, login, browser, editor, or
+  cache port. Unresolved skill precedence, editor/CLI skill equivalence, and
+  effective reload are emitted as status boundaries; every unknown version is
+  observe-only.
+- **Zoo Code — `observe_only`**. Registered through a typed file-only/editor
+  identity contract using the source-attested extension identity, without a
+  guessed host command. Observation reads only the documented `.roo`/`.agents`
+  skill roots and project `.roo/mcp.json`. Host isolation, installed extension
+  identity, global editor storage, and effective reload remain explicitly
+  unavailable. No file mutation is possible, including for the documented
+  3.68.0 artifact unless a future exact installed identity and preserved path
+  boundary is proven.
+- **ZCode — `observe_only`**. Registered through the same typed file-only
+  contract, with no default executable or command guessing. Observation reads
+  only the documented global `~/.zcode/skills`, global
+  `~/.zcode/cli/config.json`, and project `.zcode/config.json` MCP files.
+  Project skills, installed identity, effective reload, and cache-independent
+  proof remain unsupported and are reported; no mutation port exists.
+
+Aggregate acceptance now proves registry/help/status/`--target all` visibility,
+first-party bootstrap exclusion, unknown-version no-write behavior, absent
+mutation ports, isolated read-only surfaces, and unchanged Codex/Claude
+bootstrap and sibling state. The amendment is implementation-complete and the
+parent feature is at `review`; this worker does not self-review that stage.
+
+## Review posture
+
+This implementation pass did not self-review the parent feature. The parent
+remains at `stage: review` for its independent feature-level review; no review
+approval is claimed here.
+
+## Final verification
+
+- `cargo test --workspace --all-targets` — 747 passed, 370 filtered.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` passed.
+- `cargo fmt --all -- --check` and `git diff --check` passed.
+- The compiled candidate mutation matrix covers status, plan, sync, adopt,
+  marketplace, plugin, skill, bootstrap, and target-all behavior while
+  preserving isolated configuration and native trees byte-for-byte.
 
 ## Epic context
 
@@ -119,9 +160,10 @@ The completed prerequisites provide the reusable implementation seams:
   requests, and isolated fixture roots are established project patterns and are
   mandatory for any admitted candidate.
 
-The current canonical registry contains only Codex and Claude. No candidate id,
-path, binary, or mutable profile is present in production code, so there is no
-legacy candidate behavior to preserve.
+Before the relaxed amendment, the canonical registry contained only the
+previously admitted targets and no candidate mutation surface. The amendment
+adds only the three named observe-only registry identities; no candidate mutator
+or guessed desktop/editor command is preserved or introduced.
 
 This design used direct reading only. The caller explicitly prohibited nested
 agents and peer mechanisms. The child stories are durable validation and
@@ -134,19 +176,19 @@ parallel implementation assignments.
   and ZCode each receive an independent evidence report and disposition. One
   target's paths, version, or acceptance result can never populate another
   target's profile or unblock another target's admission story.
-- **Three valid dispositions:**
+- **Three valid dispositions (relaxed amendment):**
   1. `admitted` — deterministic detection plus every skill, MCP, observation,
      ownership, and acceptance check passes; register the ordinary adapter and
      exact mutable profile.
-  2. `observe_only` — exact version/detection and documented read-only surfaces
-     are safe, but one or more mutation checks remain unresolved; register only
-     a read-only adapter/profile, with no skill projection or managed projection
-     port.
-  3. `blocked` — deterministic installation identity or safe documented read
-     surfaces are not established; do not register the target. Record the exact
-     missing evidence in its boundary and admission story bodies.
-  Both `observe_only` and `blocked` are complete, successful story outcomes;
-  neither is softened into speculative support.
+  2. `observe_only` — reliable target identity plus at least one safe,
+     source-documented read surface is established, while mutation/effective
+     checks remain unresolved; register only a read-only adapter/profile or
+     file-only contract, with no mutation ports.
+  3. `blocked` — neither reliable identity nor a safe documented read surface
+     is established; do not register the target. Preserve the exact missing
+     evidence in its boundary and admission story bodies.
+  All three are complete, successful story outcomes; observe-only registration
+  never softens unresolved mutation evidence into support.
 - **Represent a known observe-only profile accurately.** Extend
   `CapabilityProfileSelection` with `VerifiedObserveOnly { id, capabilities }`.
   It has `ProfileAuthority::ObserveOnly`, exposes observation capabilities and a
@@ -154,11 +196,11 @@ parallel implementation assignments.
   runtime narrowing. This avoids falsely labeling an exact validated candidate
   version as an unknown version and avoids misusing `VerifiedCompiled` merely
   because its mutation capability set is empty.
-- **Source-direct documentation and isolated behavior are both required.** The
-  gate accepts an exact path only when a current official source identifies it
-  as supported and an isolated native instance proves write, reload,
-  precedence, update, and removal behavior. Source-only claims lack effective
-  evidence; empirical-only paths may be internal caches.
+- **Source-direct documentation and isolated behavior are channel-specific.**
+  Observe-only admission requires reliable identity and safe source-documented
+  reads. Mutation admission still requires isolated effective behavior,
+  preservation, ownership, rollback, and immediate-repeat evidence; source-only
+  claims never authorize a write.
 - **Validation never mutates operator state.** Candidate probes use isolated
   HOME/XDG/project/editor-profile roots and explicitly supplied binaries or
   extension hosts. A probe that cannot redirect every affected root is blocked;
@@ -191,10 +233,10 @@ parallel implementation assignments.
   emits no link. Otherwise it derives one per-skill relative link. A candidate
   cannot be admitted if a complete directory reached through that representation
   loses siblings, executable intent, or target precedence.
-- **No partial scope admission.** A candidate with a validated project surface
-  but unresolved global surface, or vice versa, remains observe-only/blocked.
-  The product contract requires both scopes; a global-only mutable profile is
-  not shipped as an intermediate result.
+- **No partial mutation admission.** Observe-only registration may expose only
+  the exact documented subset that can be read safely. Unavailable global
+  storage, unsupported project skills, unresolved precedence, or missing
+  effective reload remain status boundaries and never grant a mutator.
 - **No native lifecycle claims.** Current evidence establishes component load
   surfaces, not complete marketplace/plugin lifecycle. Candidate adapters use
   source-only marketplace registration plus managed projection and return no
@@ -204,10 +246,10 @@ parallel implementation assignments.
   credentials, user trust decisions, editor databases, and caches are neither
   copied nor treated as desired state. MCP codecs preserve references and reject
   literal secret acquisition under the existing compatibility rules.
-- **Feature closure does not require three admissions.** The feature is complete
-  when every target has a grounded disposition and the aggregate tests prove
-  admitted/observe-only/blocked isolation. A blocked candidate is an honest
-  product result, not a reason to guess or keep the feature indefinitely open.
+- **Feature closure requires three grounded registry dispositions.** The
+  amendment closes Cursor, Zoo, and ZCode as observe-only while retaining their
+  original blocked mutation evidence. A future exact profile may promote one
+  target independently and cannot borrow authority from a sibling.
 - **No skilltap UI surface.** This is a non-interactive CLI/adapter boundary.
   External editor UI may be part of disconfirming validation, but skilltap gains
   no screen or flow, so mockup fallback is skipped.

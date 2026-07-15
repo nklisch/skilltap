@@ -13,7 +13,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Resolve ZCode Admission
@@ -43,44 +43,40 @@ production adapter, constants, fixture, or registry entry.
 - [ ] Admitted lifecycle passes complete-skill, effective reload, ownership,
       update/removal, recovery, target-state, and repeat acceptance in both
       scopes.
-- [ ] Observe-only/blocked outcomes cannot reach managed or native execution.
+- [x] Observe-only/blocked outcomes cannot reach managed or native execution.
 - [ ] Import databases, editor caches, and credentials remain untouched.
 
 ## Disposition rationale
 
-**Blocked**, exactly as recorded by the ZCode boundary at commit `0b56a448`
-under the candidate-admission gate at commit `8137cbd2`. The corrected boundary
-evidence reference is
-`.work/active/stories/epic-expanded-harness-support-candidate-admission-zcode-boundary.md`.
+**Original mutation disposition: Blocked**, exactly as recorded by the boundary
+at commit `0b56a448` under the original gate `8137cbd2`. The exact project skill
+root, deterministic installed identity, redirectable profile, effective reload,
+preservation, ownership, and repeat evidence remain absent, so no mutation
+profile or writer is authorized.
 
-The boundary establishes the documented global `~/.zcode/skills` root and exact
-native user/workspace MCP files, but does not establish an exact project skill
-root, deterministic non-UI installation/version observation, a redirectable
-isolated profile, or a headless effective-state/reload surface. Without exact
-installation identity or safe effective observation, the shared gate cannot
-return `observe_only`; the remaining mutation checks also prevent `admitted`.
-Therefore this story adds no production adapter, profile, port, path constant,
-fixture, candidate test, or registry entry.
+**Relaxed registry disposition: ObserveOnly.** The typed file-only adapter reads
+only the exact documented global skill and user/workspace MCP declaration files.
+It has no executable, default command, native lifecycle, skill projection,
+managed projection, or effective probe. Project skill observation remains
+unsupported and all unresolved boundaries are reported.
 
 ## Implementation notes
 
-- Files changed: this story only.
-- No ZCode adapter, profile, port, or registry entry was added.
-- No production or test-support source was changed.
-- No browser, authentication, login, native state, or nested agent was used.
+- Added `crates/harnesses/src/adapters/zcode.rs` and one registry entry through
+  the typed file-only read-only contract.
+- Added no executable argv, default command, mutation port, import UI path,
+  cache/database access, browser, authentication, login, or native writer.
+- Project skill remains unsupported exactly as the boundary evidence requires.
 
 ## Verification
 
-- Confirmed the boundary evidence at `0b56a448` records the exact `blocked`
-  disposition and the missing installation, project-skill, isolation, and
-  effective-observation contracts.
-- Confirmed the candidate-admission gate at `8137cbd2` prevents incomplete
-  deterministic observation from reaching `observe_only` or `admitted`.
-- Searched `crates/harnesses/src/adapters`, `crates/harnesses/src`,
-  `crates/test-support/src`, and `crates/harnesses/tests`; no ZCode adapter,
-  profile, port, or registry entry exists. The only source `zcode` match is the
-  generic candidate-admission test fixture.
-- Confirmed the corrected boundary-story path above is the evidence reference.
+- Preserved and re-read the original boundary's blocked mutation evidence.
+- Confirmed the relaxed gate uses reliable identity plus safe documented reads
+  for registry admission while exact compiled authority remains mandatory for
+  writes.
+- Confirmed registry, help, status, `--target all`, bootstrap exclusion, and
+  zero-native-write tests cover ZCode; no mutation port or project skill root
+  exists.
 
 ## Ordering
 
@@ -89,4 +85,4 @@ independent of Zoo and Cursor admission.
 
 ## Disposition
 
-blocked
+observe_only (registry admission); mutation remains blocked

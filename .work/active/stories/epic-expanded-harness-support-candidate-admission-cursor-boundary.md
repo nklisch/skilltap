@@ -13,7 +13,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Validate Cursor Boundaries
@@ -181,6 +181,24 @@ operator configuration, or native state changed.
 `OwnershipSafeUpdateAndRemoval`, `CacheIndependentBoundary`,
 `SharedAdapterAcceptance`, and `ImmediateRepeatNoChange`.
 
-## Disposition
+## Original mutation disposition
 
 blocked
+
+## Relaxed registry disposition — 2026-07-15
+
+The original `blocked` result remains binding for mutation and effective-state
+claims: no exact installed profile, skill precedence/equivalence, reload,
+ownership, removal, or cache-independent mutation boundary was established.
+The relaxed gate asks only for reliable target identity plus safe documented
+reads for registry admission. Cursor satisfies that narrower threshold through
+the current official executable name `agent`, its bounded one-line `--version`
+observation contract, the documented global/project Agent Skills roots, and the
+attested global/project `.cursor/mcp.json` files with project-over-global MCP
+precedence.
+
+The registry disposition is therefore **`observe_only`**, with unresolved
+`skill_precedence`, `editor_cli_skill_equivalence`, and `effective_reload`
+reported explicitly. No auth/login/browser/editor/cache boundary was used or
+promoted, and the prior missing mutation checks above are intentionally
+preserved.

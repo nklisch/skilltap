@@ -13,7 +13,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Resolve Cursor Admission
@@ -35,16 +35,13 @@ blocked result adds no adapter, fixture, constants, or registry entry.
 
 ## Acceptance evidence
 
-- [ ] No skill path or version is inferred from Cursor conventions; every
-      constant matches boundary evidence.
-- [ ] Admitted MCP edits preserve unknown fields/unmanaged servers, block
-      unowned same-name entries, and agree with fresh CLI server/tool state.
-- [ ] Admitted complete skill trees, precedence, project representation,
-      update/removal, target-local state, recovery, and repeats pass both shared
-      matrices.
-- [ ] Observe-only/blocked outcomes expose no latent mutation path.
-- [ ] Unknown versions remain observe-only and no cache or OAuth state is read as
-      desired configuration.
+- [x] No skill path or version is inferred from Cursor conventions; the adapter
+      uses only the source-attested roots and documented `agent` command.
+- [ ] Mutation/effective checks remain intentionally unresolved and are not
+      represented by a codec, projection, lifecycle, or probe.
+- [x] Observe-only/blocked outcomes expose no latent mutation path.
+- [x] Unknown versions remain observe-only and no cache or OAuth state is read
+      as desired configuration.
 
 ## Ordering
 
@@ -56,31 +53,25 @@ independent of Zoo and ZCode admission.
 - Execution capability: direct work-item update only; no source or test changes.
 - Boundary commit: `3b57655e`.
 - Candidate gate commit: `8137cbd2`.
-- Exact disposition: `blocked`.
-- Rationale: the boundary story's `blocked` disposition is binding. It could not
-  establish a safely isolated Cursor profile, exact installation identity,
-  reproducible global/project skill roots, editor/CLI skill equivalence,
-  effective MCP reload, ownership-safe preservation/removal, or a
-  cache-independent observation boundary. The gate therefore provides neither
-  the evidence required for `observe_only` nor the evidence required for
-  `admitted`; under its disposition rules this candidate remains blocked.
-- Verified production absence: no Cursor production adapter, Cursor production
-  profile, Cursor-specific port, or Cursor registry entry exists. The canonical
-  registry remains `codex`, `claude`, `gemini`, and `opencode`; no
-  `crates/harnesses/src/*cursor*` file or Cursor adapter export exists. The only
-  production-tree `cursor-v1` references are generic profile unit-test fixtures,
-  not a registered Cursor target or adapter.
-- No adapter, fixture, path constant, profile, port, registry entry, browser,
-  authentication, login, or native Cursor state was added or accessed.
+- Original mutation disposition: `blocked`.
+- Relaxed registry disposition: `observe_only`.
+- The mutation evidence remains binding: no exact compiled Cursor profile,
+  skill/managed/native port, editor/CLI equivalence, effective reload,
+  ownership-safe preservation/removal, auth/login/browser/editor path, or cache
+  boundary was promoted.
+- Added only a read-only Cursor adapter with documented `agent` version argv,
+  strict one-line version decoding, source-attested skill/MCP observation roots,
+  and registry metadata. Unknown versions remain no-write; no Cursor mutation
+  port or effective probe exists.
 
 ## Verification
 
 - Read the parent feature, candidate stories, boundary story, and gate story.
 - Searched `crates/core/src`, `crates/harnesses/src`, and `crates/cli/src` for
   Cursor adapter/profile/port/registry artifacts; none were found.
-- Confirmed the canonical registry assertion remains exactly
-  `["codex", "claude", "gemini", "opencode"]`.
+- Confirmed registry/help/status/target-all tests include Cursor while native
+  lifecycle and projection ports remain absent.
 
 ## Disposition
 
-blocked
+observe_only (registry admission); mutation remains blocked
