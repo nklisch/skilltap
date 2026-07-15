@@ -7,6 +7,7 @@ struct NativeLifecyclePlanBuilder {
     managed_entries: BTreeMap<OperationId, ManagedLifecycleEntry>,
     seeds: BTreeMap<ResourceKey, ResourceState>,
     foreign_operations: BTreeSet<OperationId>,
+    pending_updates: Vec<skilltap_core::daemon::DaemonPendingUpdate>,
 }
 
 struct DaemonNativeExecution {
@@ -69,6 +70,33 @@ fn daemon_blocked_operation_id(resource: &ResourceKey, target: &HarnessId) -> Op
     let hash = stable_hash(&label);
     OperationId::new(format!("daemon-blocked:{}:{hash:016x}", target.as_str()))
         .expect("daemon blocked operation id is valid")
+}
+
+fn mark_daemon_declaration_pending(
+    builder: &mut NativeLifecyclePlanBuilder,
+    resource: &DesiredResource,
+    target: &HarnessId,
+    outcome: &mut Outcome,
+) {
+    builder
+        .pending_updates
+        .push(skilltap_core::daemon::DaemonPendingUpdate::new(
+            resource.key().clone(),
+            target.clone(),
+            skilltap_core::daemon::DaemonPendingReason::DeclarationManaged,
+        ));
+    *outcome = outcome
+        .clone()
+        .with_warning(
+            Warning::new(
+                "daemon.declaration_managed_pending",
+                "A declaration-managed update remains pending for foreground acknowledgment; the daemon did not construct or execute it.",
+            )
+            .with_context("target", target.as_str())
+            .with_context("scope", scope_label(resource.scope()))
+            .with_context("resource", resource.key().to_string()),
+        );
+    outcome.result = ResultClass::AttentionRequired;
 }
 
 fn native_state_seed(
@@ -315,10 +343,12 @@ impl StatusApplication<'_> {
         };
         let mut builder = NativeLifecyclePlanBuilder::default();
         let mut refresh_ids = BTreeMap::new();
+        let mut pending_refreshes = BTreeSet::new();
         for refresh in plan.refreshes() {
             let Some(resource) = inventory.resources().get(refresh.key().resource()) else {
                 continue;
             };
+            let pending_before = builder.pending_updates.len();
             let operation = self.plan_daemon_lifecycle_target(
                 &mut builder,
                 documents,
@@ -336,12 +366,23 @@ impl StatusApplication<'_> {
             );
             if let Some(operation) = operation {
                 refresh_ids.insert(refresh.key().clone(), operation);
+            } else if builder.pending_updates.len() > pending_before {
+                pending_refreshes.insert(refresh.key().clone());
             }
         }
         for plugin in plan.plugins() {
             let Some(resource) = inventory.resources().get(plugin.resource()) else {
                 continue;
             };
+            if pending_refreshes.contains(plugin.refresh()) {
+                mark_daemon_declaration_pending(
+                    &mut builder,
+                    resource,
+                    plugin.target(),
+                    &mut outcome,
+                );
+                continue;
+            }
             let dependencies = refresh_ids
                 .get(plugin.refresh())
                 .cloned()
@@ -394,7 +435,7 @@ impl StatusApplication<'_> {
                 outcome,
                 changed: false,
                 safe_operations: 0,
-                pending_operations: 0,
+                pending_operations: builder.pending_updates.len() as u64,
                 operations: Vec::new(),
             };
         }
@@ -477,7 +518,7 @@ impl StatusApplication<'_> {
             };
         let mut changed = false;
         let mut safe_operations = 0_u64;
-        let mut pending_operations = 0_u64;
+        let mut pending_operations = builder.pending_updates.len() as u64;
         let mut operations = Vec::new();
         for result in report.result.operations().values() {
             let Some(operation) = report.result.plan().get(result.operation_id()) else {
@@ -627,6 +668,34 @@ impl StatusApplication<'_> {
                 );
             }
         };
+        // Resolve the managed projection profile before route selection. An
+        // exact Unverified profile is a foreground-only declaration path; do
+        // not resolve a checkout, build a managed entry/seed, or probe an
+        // effective state merely to discover that the daemon cannot apply it.
+        if self
+            .registry
+            .adapter(target)
+            .is_some_and(|adapter| adapter.managed_projection().is_some())
+            && configured_adapter_profile(
+                self.registry,
+                &documents.config,
+                target,
+                NativeProfileRequest {
+                    scope: resource.scope(),
+                    environment: native_environment,
+                    process_limits,
+                    json_limits,
+                    search_path: std::env::var_os("PATH"),
+                    capability_name: "managed.projection",
+                },
+            )
+            .ok()
+            .flatten()
+            .is_some_and(|profile| profile.capability == CapabilitySupport::Unverified)
+        {
+            mark_daemon_declaration_pending(builder, resource, target, outcome);
+            return None;
+        }
         let route = match select_lifecycle_route(LifecycleRouteContext {
             registry: self.registry,
             documents,
@@ -732,6 +801,10 @@ impl StatusApplication<'_> {
                     }
                 }
             };
+            if planned.operation.class() == skilltap_core::domain::OperationClass::Partial {
+                mark_daemon_declaration_pending(builder, resource, target, outcome);
+                return None;
+            }
             let operation = match planned.operation.with_added_dependencies(dependencies) {
                 Ok(operation) => operation,
                 Err(_) => {

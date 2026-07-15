@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-declaration-managed-daemon-safety
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-declaration-managed
 depends_on: [epic-expanded-harness-support-declaration-managed-planner-acknowledgment, epic-expanded-harness-support-declaration-managed-execution-status]
@@ -54,3 +54,20 @@ Supported independent work remains eligible.
 
 Depends on the executor/status contract so daemon classification and output use
 the same authority and declared/effective semantics.
+
+## Implementation notes
+
+- Added typed `DaemonPendingReason` and `DaemonPendingUpdate` evidence in core.
+- Daemon planning checks exact managed projection authority before lifecycle
+  route selection. Declaration-managed work is recorded as pending and does
+  not resolve a checkout, create an entry/seed, invoke an effective probe, or
+  enqueue an executor request.
+- Pending marketplace prerequisites propagate to their dependent plugin work;
+  unrelated supported updates continue through the existing empty-acknowledgment
+  executor path.
+- Verification: `cargo fmt --all && cargo test --workspace --all-targets`
+  (703 passed).
+
+## Completion
+
+Implemented and verified. Migration and integrated acceptance remain.

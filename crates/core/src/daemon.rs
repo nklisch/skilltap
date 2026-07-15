@@ -91,6 +91,45 @@ impl DaemonCyclePlan {
     }
 }
 
+/// Why one otherwise actionable update must remain foreground-only.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum DaemonPendingReason {
+    AcknowledgmentRequired,
+    DeclarationManaged,
+    Drifted,
+    Conflict,
+}
+
+/// Stable, redacted daemon evidence for work intentionally left pending.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct DaemonPendingUpdate {
+    resource: ResourceKey,
+    target: HarnessId,
+    reason: DaemonPendingReason,
+}
+
+impl DaemonPendingUpdate {
+    pub fn new(resource: ResourceKey, target: HarnessId, reason: DaemonPendingReason) -> Self {
+        Self {
+            resource,
+            target,
+            reason,
+        }
+    }
+
+    pub const fn resource(&self) -> &ResourceKey {
+        &self.resource
+    }
+
+    pub const fn target(&self) -> &HarnessId {
+        &self.target
+    }
+
+    pub const fn reason(&self) -> DaemonPendingReason {
+        self.reason
+    }
+}
+
 /// Reduce a foreground update plan to the only work a daemon may apply. The
 /// daemon has no acknowledgment set, so every non-safe decision remains
 /// pending and visible to status.
