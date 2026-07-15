@@ -462,9 +462,7 @@ fn factory_surface_labels(base: &AbsolutePath) -> Vec<&'static str> {
     ]
     .into_iter()
     .filter_map(|(label, path)| {
-        std::fs::symlink_metadata(format!("{}/{}", base.as_str(), path))
-            .is_ok()
-            .then_some(label)
+        crate::adapter_helpers::child_path_exists(base, path).then_some(label)
     })
     .collect()
 }

@@ -129,12 +129,12 @@ impl HarnessAdapter for CursorAdapter {
         let mut surface_labels = Vec::new();
         match scope {
             Scope::Global => {
-                if path_exists(paths.home(), ".cursor/mcp.json") {
+                if adapter_helpers::child_path_exists(paths.home(), ".cursor/mcp.json") {
                     surface_labels.push("cursor.global.mcp");
                 }
             }
             Scope::Project(project) => {
-                if path_exists(project, ".cursor/mcp.json") {
+                if adapter_helpers::child_path_exists(project, ".cursor/mcp.json") {
                     surface_labels.push("project.cursor.mcp");
                 }
             }
@@ -157,10 +157,6 @@ impl HarnessAdapter for CursorAdapter {
     fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {
         adapter_helpers::absolute_child(paths.home(), ".cursor")
     }
-}
-
-fn path_exists(root: &AbsolutePath, child: &str) -> bool {
-    std::fs::symlink_metadata(std::path::Path::new(root.as_str()).join(child)).is_ok()
 }
 
 #[cfg(test)]

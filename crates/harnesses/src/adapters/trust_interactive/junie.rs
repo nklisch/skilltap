@@ -154,7 +154,7 @@ impl HarnessAdapter for JunieAdapter {
             Err(ObservationRuntimeError::TreeRootUnavailable) => {}
             Err(error) => return Err(ObservationPathError::Runtime(error)),
         }
-        let surface_labels = if path_exists(&mcp_document) {
+        let surface_labels = if adapter_helpers::path_exists(&mcp_document) {
             vec![mcp_label]
         } else {
             Vec::new()
@@ -198,10 +198,6 @@ impl SkillProjectionPort for JunieSkillProjection {
 pub(super) fn junie_home(paths: &PlatformPaths) -> AbsolutePath {
     adapter_helpers::absolute_child(paths.home(), ".junie")
         .expect("Junie home path is derived from the validated home")
-}
-
-fn path_exists(path: &AbsolutePath) -> bool {
-    std::fs::symlink_metadata(path.as_str()).is_ok()
 }
 
 fn invalid_path_error() -> skilltap_core::domain::ValidationError {

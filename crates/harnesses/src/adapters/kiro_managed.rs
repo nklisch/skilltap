@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    io,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use skilltap_core::{
     domain::{
@@ -9,15 +6,10 @@ use skilltap_core::{
         RelativeArtifactPath, ResourceKind,
     },
     instructions::fingerprint_contents,
-    managed_projection::{
-        ManagedFileWrite, ManagedPluginWrite, ManagedProjectionError, ManagedProjectionPlan,
-    },
+    managed_projection::{ManagedFileWrite, ManagedProjectionError, ManagedProjectionPlan},
     plugin_graph::ComponentDeclaration,
-    runtime::{
-        ConfinedFileSystem, ExternalTreeLimits, JsonLimits, RuntimeError, StrictJson,
-        StrictJsonDecoder,
-    },
-    storage::{ArtifactTree, ManagedProjection},
+    runtime::{ConfinedFileSystem, JsonLimits, StrictJson, StrictJsonDecoder},
+    storage::ManagedProjection,
 };
 
 use crate::{
@@ -25,7 +17,13 @@ use crate::{
     managed_projection::{ManagedProjectionContext, ManagedProjectionInput, ManagedProjectionPort},
 };
 
-use super::file_managed::read_complete_source_plugin;
+use super::{
+    configuration_constrained::common::{
+        SkillProjectionDestinationError, SkillProjectionDiagnostics, SkillProjectionPolicy,
+        evidence, plan_skills_with_policy,
+    },
+    file_managed::{CompleteSourcePlugin, read_complete_source_plugin},
+};
 
 const MARKETPLACE_DOCUMENTS: &[&str] = &[
     ".agents/plugins/marketplace.json",
@@ -40,6 +38,22 @@ const MCP_SOURCE_DOCUMENTS: &[&str] = &[
 const MCP_CONTAINER: &str = "mcpServers";
 const POWER_REQUIRED_CODE: &str = "kiro_power_required";
 const STEERING_ID: &str = "kiro:steering";
+const SKILL_POLICY: SkillProjectionPolicy =
+    SkillProjectionPolicy::complete_tree(SkillProjectionDiagnostics {
+        missing_declared_name: "A Kiro plugin skill has no declared name.",
+        required_missing_tree: "A required Kiro plugin skill is missing its complete directory.",
+        unsafe_destination: SkillProjectionDestinationError::Other {
+            code: "managed_destination_invalid",
+            summary: "The Kiro managed destination is invalid.",
+        },
+        incomplete_tree: "A Kiro plugin skill is not a complete artifact tree.",
+        missing_top_level_skill: "A Kiro plugin skill is missing top-level SKILL.md.",
+        invalid_agent_skill_name: None,
+        invalid_contract: None,
+        observed_tree_invalid: "The Kiro managed skill tree is invalid.",
+        observe_safely_failed: "The Kiro managed skill tree could not be observed safely.",
+        drifted: "An owned Kiro skill projection is missing or was replaced.",
+    });
 
 static PROJECTION: KiroManagedProjection = KiroManagedProjection;
 
@@ -78,8 +92,10 @@ fn plan_plugin(
         ManagedProjectionInput::Remove => None,
     };
     let (skill_root, config_root, config_destination) = destination_paths(context)?;
+    let mut kiro_manifest = kiro_projection_manifest(plugin.as_ref())?;
     let (trees, mut current_parts, mut desired_parts, mut manifest) =
-        plan_skills(&skill_root, context, plugin.as_ref())?;
+        plan_skills_with_policy(&skill_root, context, plugin.as_ref(), SKILL_POLICY)?;
+    manifest.append(&mut kiro_manifest);
     let (mcp_write, mcp_manifest) = plan_mcp(
         &config_root,
         &config_destination,
@@ -113,7 +129,7 @@ fn plan_plugin(
 fn read_selected_plugin(
     context: &ManagedProjectionContext<'_>,
     checkout: &skilltap_core::managed_projection::ResolvedSourceCheckout,
-) -> Result<super::file_managed::CompleteSourcePlugin, ManagedProjectionError> {
+) -> Result<CompleteSourcePlugin, ManagedProjectionError> {
     let selector = skilltap_core::marketplace::PluginSelector::parse(context.request.name.as_str())
         .map_err(|_| ManagedProjectionError::PluginSourceInvalid {
             detail: "The selected Kiro plugin selector is invalid.",
@@ -173,25 +189,17 @@ fn destination_paths(
     Ok((skill_root, config_root, config_destination))
 }
 
-type SkillPlan = (
-    Vec<ManagedPluginWrite>,
-    Vec<u8>,
-    Vec<u8>,
-    Vec<ManagedProjection>,
-);
-
-fn plan_skills(
-    skill_root: &AbsolutePath,
-    context: &ManagedProjectionContext<'_>,
-    plugin: Option<&super::file_managed::CompleteSourcePlugin>,
-) -> Result<SkillPlan, ManagedProjectionError> {
-    let removal = matches!(context.input, ManagedProjectionInput::Remove);
-    if let Some(plugin) = plugin
-        && plugin
-            .tree
-            .files()
-            .keys()
-            .any(|path| path.as_str() == "POWER.md" || path.as_str().ends_with("/POWER.md"))
+fn kiro_projection_manifest(
+    plugin: Option<&CompleteSourcePlugin>,
+) -> Result<Vec<ManagedProjection>, ManagedProjectionError> {
+    let Some(plugin) = plugin else {
+        return Ok(Vec::new());
+    };
+    if plugin
+        .tree
+        .files()
+        .keys()
+        .any(|path| path.as_str() == "POWER.md" || path.as_str().ends_with("/POWER.md"))
     {
         return Err(ManagedProjectionError::Other {
             code: POWER_REQUIRED_CODE,
@@ -199,174 +207,19 @@ fn plan_skills(
         });
     }
 
-    let declarations = plugin.map_or(&[][..], |plugin| plugin.declarations.as_slice());
-    let mut skill_names = BTreeSet::new();
     let mut manifest = Vec::new();
-    let mut omitted = Vec::new();
-    for declaration in declarations {
-        match declaration.kind {
-            ComponentKind::Skill => {
-                let name = declaration.declared_name.as_deref().ok_or(
-                    ManagedProjectionError::PluginMissing {
-                        detail: "A Kiro plugin skill has no declared name.",
-                    },
-                )?;
-                skill_names.insert(name.to_owned());
-            }
-            ComponentKind::McpServer => {}
-            _ if declaration.requiredness == ComponentRequiredness::Required => {
-                return Err(ManagedProjectionError::RequiredUnsupported);
-            }
-            _ => omitted.push(ManagedProjection::Omitted {
-                id: declaration.id.clone(),
-                consequence: evidence("unsupported_optional_component_omitted"),
-            }),
-        }
-    }
-
-    if plugin.is_some_and(|plugin| {
-        plugin
-            .tree
-            .files()
-            .keys()
-            .any(|path| path.as_str().starts_with("steering/"))
-    }) {
-        omitted.push(ManagedProjection::Omitted {
+    if plugin
+        .tree
+        .files()
+        .keys()
+        .any(|path| path.as_str().starts_with("steering/"))
+    {
+        manifest.push(ManagedProjection::Omitted {
             id: ComponentId::new(STEERING_ID).expect("static Kiro steering id is valid"),
             consequence: evidence("unsupported_optional_component_omitted"),
         });
     }
-    manifest.extend(omitted);
-
-    for projection in context.prior {
-        if let ManagedProjection::Skill { id, .. } = projection {
-            skill_names.insert(id.as_str().to_owned());
-        }
-    }
-
-    let mut trees = Vec::new();
-    let mut current_parts = Vec::new();
-    let mut desired_parts = Vec::new();
-    for name in skill_names {
-        let desired_tree = match plugin {
-            Some(plugin) => skill_tree(&plugin.tree, &name)?,
-            None => None,
-        };
-        if !removal
-            && desired_tree.is_none()
-            && declarations.iter().any(|declaration| {
-                declaration.kind == ComponentKind::Skill
-                    && declaration.declared_name.as_deref() == Some(name.as_str())
-                    && declaration.requiredness == ComponentRequiredness::Required
-            })
-        {
-            return Err(ManagedProjectionError::PluginMissing {
-                detail: "A required Kiro plugin skill is missing its complete directory.",
-            });
-        }
-        let destination = relative(&name)?;
-        let current = observe_tree(context.filesystem, skill_root, &destination)?;
-        verify_prior_skill(context.prior, &destination, current.as_ref())?;
-        if let Some((_, tree)) = &current {
-            append_tree_fingerprint(&mut current_parts, &destination, tree);
-        }
-        if !removal && let Some(tree) = &desired_tree {
-            append_tree_fingerprint(&mut desired_parts, &destination, tree);
-            manifest.push(ManagedProjection::Skill {
-                id: destination.clone(),
-                fingerprint: fingerprint_tree(&destination, tree),
-            });
-        }
-        trees.push(ManagedPluginWrite {
-            root: skill_root.clone(),
-            destination,
-            desired_tree: (!removal).then_some(desired_tree).flatten(),
-            expected_tree: current.as_ref().map(|(_, tree)| tree.clone()),
-            expected_identity: current.map(|(identity, _)| identity),
-        });
-    }
-    Ok((trees, current_parts, desired_parts, manifest))
-}
-
-fn skill_tree(
-    plugin: &ArtifactTree,
-    name: &str,
-) -> Result<Option<ArtifactTree>, ManagedProjectionError> {
-    let prefix = format!("skills/{name}/");
-    let files = plugin
-        .files()
-        .iter()
-        .filter_map(|(path, file)| {
-            path.as_str()
-                .strip_prefix(&prefix)
-                .map(|relative| (relative.to_owned(), file.clone()))
-        })
-        .collect::<Vec<_>>();
-    if files.is_empty() {
-        return Ok(None);
-    }
-    let tree = ArtifactTree::new(files).map_err(|_| ManagedProjectionError::PluginMissing {
-        detail: "A Kiro plugin skill is not a complete artifact tree.",
-    })?;
-    if !tree
-        .files()
-        .contains_key(&RelativeArtifactPath::new("SKILL.md").expect("static path is valid"))
-    {
-        return Err(ManagedProjectionError::PluginMissing {
-            detail: "A Kiro plugin skill is missing top-level SKILL.md.",
-        });
-    }
-    Ok(Some(tree))
-}
-
-type ObservedTree = (skilltap_core::runtime::DirectoryIdentity, ArtifactTree);
-
-fn observe_tree(
-    filesystem: &dyn ConfinedFileSystem,
-    root: &AbsolutePath,
-    destination: &RelativeArtifactPath,
-) -> Result<Option<ObservedTree>, ManagedProjectionError> {
-    match filesystem.load_tree_bounded_no_follow(root, destination, tree_limits()) {
-        Ok((identity, files)) => {
-            let tree = ArtifactTree::new(
-                files
-                    .into_iter()
-                    .map(|(path, file)| (path.as_str().to_owned(), file)),
-            )
-            .map_err(|_| ManagedProjectionError::PluginUnreadable {
-                detail: "The Kiro managed skill tree is invalid.",
-            })?;
-            Ok(Some((identity, tree)))
-        }
-        Err(RuntimeError::FileSystem { source, .. })
-            if source.kind() == io::ErrorKind::NotFound =>
-        {
-            Ok(None)
-        }
-        Err(_) => Err(ManagedProjectionError::PluginUnreadable {
-            detail: "The Kiro managed skill tree could not be observed safely.",
-        }),
-    }
-}
-
-fn verify_prior_skill(
-    prior: &[ManagedProjection],
-    destination: &RelativeArtifactPath,
-    current: Option<&ObservedTree>,
-) -> Result<(), ManagedProjectionError> {
-    let Some(expected) = prior.iter().find_map(|projection| match projection {
-        ManagedProjection::Skill { id, fingerprint } if id == destination => Some(fingerprint),
-        _ => None,
-    }) else {
-        return Ok(());
-    };
-    let observed = current.map(|(_, tree)| fingerprint_tree(destination, tree));
-    if observed.as_ref() != Some(expected) {
-        return Err(ManagedProjectionError::Drifted {
-            detail: "An owned Kiro skill projection is missing or was replaced.",
-        });
-    }
-    Ok(())
+    Ok(manifest)
 }
 
 fn plan_mcp(
@@ -685,43 +538,12 @@ fn relative(path: &str) -> Result<RelativeArtifactPath, ManagedProjectionError> 
     })
 }
 
-fn evidence(code: &'static str) -> skilltap_core::domain::EvidenceCode {
-    skilltap_core::domain::EvidenceCode::new(code).expect("static Kiro evidence code is valid")
-}
-
-fn fingerprint_tree(
-    destination: &RelativeArtifactPath,
-    tree: &ArtifactTree,
-) -> skilltap_core::domain::Fingerprint {
-    let mut bytes = Vec::new();
-    append_tree_fingerprint(&mut bytes, destination, tree);
-    fingerprint_contents(&bytes)
-}
-
-fn append_tree_fingerprint(
-    bytes: &mut Vec<u8>,
-    destination: &RelativeArtifactPath,
-    tree: &ArtifactTree,
-) {
-    bytes.extend_from_slice(destination.as_str().as_bytes());
-    for (path, file) in tree.files() {
-        bytes.extend_from_slice(path.as_str().as_bytes());
-        bytes.push(u8::from(file.is_executable()));
-        bytes.extend_from_slice(file.contents());
-    }
-}
-
 fn json_fingerprint(value: &serde_json::Value) -> skilltap_core::domain::Fingerprint {
     fingerprint_contents(&json_fingerprint_bytes(value))
 }
 
 fn json_fingerprint_bytes(value: &serde_json::Value) -> Vec<u8> {
     serde_json::to_vec(value).unwrap_or_default()
-}
-
-fn tree_limits() -> ExternalTreeLimits {
-    ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
-        .expect("static managed tree limits are valid")
 }
 
 #[cfg(test)]

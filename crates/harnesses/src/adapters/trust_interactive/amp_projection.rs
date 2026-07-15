@@ -20,7 +20,8 @@ use crate::{
 use super::super::{
     configuration_constrained::{
         AuthenticationRequirement, PortableMcpServer, PortableRemoteTransport,
-        SelectedPortablePlugin, common::plan_skills,
+        SelectedPortablePlugin,
+        common::{evidence, plan_skills, read_optional_file, tree_limits},
     },
     file_managed::{CompleteSourcePlugin, read_complete_source_plugin},
 };
@@ -74,7 +75,7 @@ fn plan_plugin(
         reject_skill_precedence_conflicts(context, plugin)?;
     }
     let (trees, mut current_parts, mut desired_parts, mut manifest) =
-        plan_skills(&skill_root, context, plugin.as_ref(), "Amp")?;
+        plan_skills(&skill_root, context, plugin.as_ref())?;
     let (mcp_file, mcp_manifest) = plan_mcp(
         &config_root,
         &config_destination,
@@ -455,24 +456,26 @@ fn plan_mcp(
     plugin: Option<&SelectedPortablePlugin>,
     fingerprints: (&mut Vec<u8>, &mut Vec<u8>),
 ) -> Result<(Option<ManagedFileWrite>, Vec<ManagedProjection>), ManagedProjectionError> {
-    let alternate = context
-        .filesystem
-        .read_regular_bounded_no_follow(
-            config_root,
-            alternate_destination,
-            context.json_limits.bytes(),
-        )
-        .map_err(|_| mcp_invalid("The Amp JSONC settings alternative could not be read safely."))?;
+    let alternate = read_optional_file(
+        context.filesystem,
+        config_root,
+        alternate_destination,
+        context.json_limits.bytes(),
+        "The Amp JSONC settings alternative could not be read safely.",
+    )?;
     if alternate.is_some() {
         return Err(ManagedProjectionError::Other {
             code: "amp_settings_jsonc_conflict",
             summary: "An Amp settings.jsonc alternative exists; skilltap will not choose between JSON and JSONC.",
         });
     }
-    let expected = context
-        .filesystem
-        .read_regular_bounded_no_follow(config_root, destination, context.json_limits.bytes())
-        .map_err(|_| mcp_invalid("The Amp settings document could not be read safely."))?;
+    let expected = read_optional_file(
+        context.filesystem,
+        config_root,
+        destination,
+        context.json_limits.bytes(),
+        "The Amp settings document could not be read safely.",
+    )?;
     let mut document = match expected.as_deref() {
         Some(bytes) => StrictJson
             .decode(bytes, context.json_limits)
@@ -497,16 +500,13 @@ fn plan_mcp(
     if let skilltap_core::domain::Scope::Project(_) = context.scope {
         let global_root = context.paths.config_home().clone();
         let global_destination = relative("amp/settings.json")?;
-        let global = context
-            .filesystem
-            .read_regular_bounded_no_follow(
-                &global_root,
-                &global_destination,
-                context.json_limits.bytes(),
-            )
-            .map_err(|_| {
-                mcp_invalid("The Amp global settings document could not be read safely.")
-            })?;
+        let global = read_optional_file(
+            context.filesystem,
+            &global_root,
+            &global_destination,
+            context.json_limits.bytes(),
+            "The Amp global settings document could not be read safely.",
+        )?;
         if let Some(global) = global {
             let global = StrictJson
                 .decode(&global, context.json_limits)
@@ -705,21 +705,6 @@ fn component_id(id: &NativeId) -> Result<ComponentId, ManagedProjectionError> {
 
 fn relative(path: &str) -> Result<RelativeArtifactPath, ManagedProjectionError> {
     RelativeArtifactPath::new(path).map_err(|_| destination_error())
-}
-
-fn tree_limits() -> skilltap_core::runtime::ExternalTreeLimits {
-    skilltap_core::runtime::ExternalTreeLimits::new(
-        64,
-        100_000,
-        64 * 1024 * 1024,
-        1024 * 1024 * 1024,
-        64 * 1024,
-    )
-    .expect("static Amp tree limits are valid")
-}
-
-fn evidence(code: &'static str) -> skilltap_core::domain::EvidenceCode {
-    skilltap_core::domain::EvidenceCode::new(code).expect("static Amp evidence code is valid")
 }
 
 fn destination_error() -> ManagedProjectionError {

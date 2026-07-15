@@ -143,12 +143,12 @@ impl HarnessAdapter for OpenCodeAdapter {
                 let config =
                     adapter_helpers::absolute_child(paths.config_home(), "opencode/opencode.json");
                 let mut labels = Vec::new();
-                if config.as_ref().is_some_and(path_exists) {
+                if config.as_ref().is_some_and(adapter_helpers::path_exists) {
                     labels.push("opencode.config");
                 }
                 if adapter_helpers::absolute_child(paths.config_home(), "opencode/plugins")
                     .as_ref()
-                    .is_some_and(path_exists)
+                    .is_some_and(adapter_helpers::path_exists)
                 {
                     labels.push("opencode.plugins");
                 }
@@ -157,12 +157,12 @@ impl HarnessAdapter for OpenCodeAdapter {
             Scope::Project(project) => {
                 let config = adapter_helpers::absolute_child(project, "opencode.json");
                 let mut labels = Vec::new();
-                if config.as_ref().is_some_and(path_exists) {
+                if config.as_ref().is_some_and(adapter_helpers::path_exists) {
                     labels.push("project.opencode.config");
                 }
                 if adapter_helpers::absolute_child(project, ".opencode/plugins")
                     .as_ref()
-                    .is_some_and(path_exists)
+                    .is_some_and(adapter_helpers::path_exists)
                 {
                     labels.push("project.opencode.plugins");
                 }
@@ -231,10 +231,6 @@ impl EffectiveStateProbePort for OpenCodeEffectiveStateProbe {
     fn reload_semantics(&self) -> ReloadSemantics {
         ReloadSemantics::StatusRefresh
     }
-}
-
-fn path_exists(path: &AbsolutePath) -> bool {
-    std::fs::symlink_metadata(path.as_str()).is_ok()
 }
 
 /// Decode the exact human-readable `opencode mcp list` grammar attested for

@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-share-projection-helpers
 kind: story
-stage: implementing
+stage: done
 tags: [cleanup]
 parent: null
 depends_on: []
@@ -27,3 +27,12 @@ Amp and Junie projections duplicate `evidence`, `tree_limits`, and `read_optiona
 
 ## Removal
 Reuse the common helpers, adapting the `JsonLimits` parameter without weakening limits or diagnostics, and delete local copies. Preserve projection output and observation behavior.
+
+## Verification
+
+Reused shared evidence, tree-limit, and optional-file helpers for Amp and Junie without changing byte limits or MCP error diagnostics.
+
+- `cargo test -p skilltap-harnesses`: 163 passed.
+- `cargo clippy -p skilltap-harnesses --all-targets -- -D warnings`: clean.
+- Independent standard review: no material findings.
+- `git diff --check`: clean.

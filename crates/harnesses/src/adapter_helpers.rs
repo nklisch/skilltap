@@ -292,7 +292,9 @@ fn claude_surface_labels(
             if let Some(path) = inputs.project_settings.as_ref() {
                 push_if_exists(&mut labels, "project.claude.settings", path);
             }
-            if path_exists(project, "CLAUDE.md") || path_exists(project, ".claude/CLAUDE.md") {
+            if child_path_exists(project, "CLAUDE.md")
+                || child_path_exists(project, ".claude/CLAUDE.md")
+            {
                 labels.push("project.claude.instructions");
             }
         }
@@ -305,7 +307,7 @@ fn push_if_exists(
     label: &'static str,
     path: &skilltap_core::domain::AbsolutePath,
 ) {
-    if std::fs::symlink_metadata(path.as_str()).is_ok() {
+    if path_exists(path) {
         labels.push(label);
     }
 }
@@ -316,12 +318,20 @@ fn push_child_if_exists(
     root: &skilltap_core::domain::AbsolutePath,
     child: &str,
 ) {
-    if path_exists(root, child) {
+    if child_path_exists(root, child) {
         labels.push(label);
     }
 }
 
-fn path_exists(root: &skilltap_core::domain::AbsolutePath, child: &str) -> bool {
+/// Return true when a path exists as a filesystem entry, including a dangling
+/// symlink. Adapter observation labels care about the declared surface being
+/// present, not whether a symlink target currently resolves.
+pub(crate) fn path_exists(path: &skilltap_core::domain::AbsolutePath) -> bool {
+    std::fs::symlink_metadata(path.as_str()).is_ok()
+}
+
+/// Child-path variant of [`path_exists`] for documented adapter surfaces.
+pub(crate) fn child_path_exists(root: &skilltap_core::domain::AbsolutePath, child: &str) -> bool {
     std::fs::symlink_metadata(std::path::Path::new(root.as_str()).join(child)).is_ok()
 }
 

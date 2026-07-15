@@ -153,11 +153,7 @@ impl HarnessAdapter for VibeAdapter {
                 Err(error) => return Err(ObservationPathError::Runtime(error)),
             }
         }
-        let labels = if std::fs::symlink_metadata(
-            std::path::Path::new(config_root.as_str()).join(config_child),
-        )
-        .is_ok()
-        {
+        let labels = if adapter_helpers::child_path_exists(&config_root, config_child) {
             vec![config_label]
         } else {
             Vec::new()
@@ -232,7 +228,7 @@ fn plan_plugin(
     })
     .map_err(|_| destination_error())?;
     let (trees, mut current_parts, mut desired_parts, mut manifest) =
-        plan_skills(&skill_root, context, plugin.as_ref(), "Vibe")?;
+        plan_skills(&skill_root, context, plugin.as_ref())?;
     let (file, mcp_manifest) = plan_mcp(
         context,
         plugin.as_ref(),

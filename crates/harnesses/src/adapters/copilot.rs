@@ -432,10 +432,6 @@ fn child(root: &AbsolutePath, relative: &str) -> Option<AbsolutePath> {
     AbsolutePath::new(format!("{}/{}", root.as_str(), relative)).ok()
 }
 
-fn existing(root: &AbsolutePath, relative: &str) -> bool {
-    std::fs::symlink_metadata(format!("{}/{}", root.as_str(), relative)).is_ok()
-}
-
 fn copilot_global_surfaces(home: &AbsolutePath) -> Vec<&'static str> {
     [
         ("copilot.mcp", ".copilot/mcp-config.json"),
@@ -444,7 +440,9 @@ fn copilot_global_surfaces(home: &AbsolutePath) -> Vec<&'static str> {
         ("copilot.skills", ".copilot/skills"),
     ]
     .into_iter()
-    .filter_map(|(label, relative)| existing(home, relative).then_some(label))
+    .filter_map(|(label, relative)| {
+        crate::adapter_helpers::child_path_exists(home, relative).then_some(label)
+    })
     .collect()
 }
 
@@ -457,7 +455,9 @@ fn copilot_project_surfaces(project: &AbsolutePath) -> Vec<&'static str> {
         ("project.copilot.claude.skills", ".claude/skills"),
     ]
     .into_iter()
-    .filter_map(|(label, relative)| existing(project, relative).then_some(label))
+    .filter_map(|(label, relative)| {
+        crate::adapter_helpers::child_path_exists(project, relative).then_some(label)
+    })
     .collect()
 }
 

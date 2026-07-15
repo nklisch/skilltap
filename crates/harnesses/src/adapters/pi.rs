@@ -178,13 +178,9 @@ fn push_if_exists(
     label: &'static str,
     path: Option<&AbsolutePath>,
 ) {
-    if path.is_some_and(path_exists) {
+    if path.is_some_and(adapter_helpers::path_exists) {
         labels.push(label);
     }
-}
-
-fn path_exists(path: &AbsolutePath) -> bool {
-    std::fs::symlink_metadata(path.as_str()).is_ok()
 }
 
 #[cfg(test)]

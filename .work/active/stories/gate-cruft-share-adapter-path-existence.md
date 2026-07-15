@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-share-adapter-path-existence
 kind: story
-stage: implementing
+stage: done
 tags: [cleanup]
 parent: null
 depends_on: []
@@ -27,3 +27,12 @@ Eleven private adapter helpers repeat one of two identical `symlink_metadata(...
 
 ## Removal
 Expose cohesive path-existence helpers from `adapter_helpers`, migrate adapter callers, and delete private copies. Preserve the current behavior that a dangling symlink counts as present.
+
+## Verification
+
+Centralized direct and child path observation through dangling-symlink-aware adapter helpers and removed private copies.
+
+- `cargo test -p skilltap-harnesses`: 163 passed.
+- `cargo clippy -p skilltap-harnesses --all-targets -- -D warnings`: clean.
+- Independent standard review: no material findings.
+- `git diff --check`: clean.

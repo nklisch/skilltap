@@ -136,10 +136,13 @@ impl HarnessAdapter for GeminiAdapter {
                     adapter_helpers::absolute_child(paths.home(), ".gemini/settings.json");
                 let native_skills = adapter_helpers::absolute_child(paths.home(), ".gemini/skills");
                 let mut labels = Vec::new();
-                if settings.as_ref().is_some_and(path_exists) {
+                if settings.as_ref().is_some_and(adapter_helpers::path_exists) {
                     labels.push("gemini.settings");
                 }
-                if native_skills.as_ref().is_some_and(path_exists) {
+                if native_skills
+                    .as_ref()
+                    .is_some_and(adapter_helpers::path_exists)
+                {
                     labels.push("gemini.native.skills");
                 }
                 labels
@@ -148,10 +151,13 @@ impl HarnessAdapter for GeminiAdapter {
                 let settings = adapter_helpers::absolute_child(project, ".gemini/settings.json");
                 let native_skills = adapter_helpers::absolute_child(project, ".gemini/skills");
                 let mut labels = Vec::new();
-                if settings.as_ref().is_some_and(path_exists) {
+                if settings.as_ref().is_some_and(adapter_helpers::path_exists) {
                     labels.push("project.gemini.settings");
                 }
-                if native_skills.as_ref().is_some_and(path_exists) {
+                if native_skills
+                    .as_ref()
+                    .is_some_and(adapter_helpers::path_exists)
+                {
                     labels.push("project.gemini.skills");
                 }
                 labels
@@ -221,10 +227,6 @@ impl EffectiveStateProbePort for GeminiEffectiveStateProbe {
             next_action: "Run `/mcp reload` in Gemini CLI, then re-run status.",
         }
     }
-}
-
-fn path_exists(path: &AbsolutePath) -> bool {
-    std::fs::symlink_metadata(path.as_str()).is_ok()
 }
 
 /// Decode the exact human-readable status emitted by Gemini CLI 0.50.0.

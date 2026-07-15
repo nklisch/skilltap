@@ -4,7 +4,7 @@ use skilltap_core::{
     domain::{AbsolutePath, NativeId, RelativeArtifactPath, ResourceKind},
     instructions::fingerprint_contents,
     managed_projection::{ManagedFileWrite, ManagedProjectionError, ManagedProjectionPlan},
-    runtime::{ConfinedFileSystem, JsonLimits, StrictJson, StrictJsonDecoder},
+    runtime::{StrictJson, StrictJsonDecoder},
     storage::ManagedProjection,
 };
 
@@ -14,7 +14,8 @@ use crate::managed_projection::{
 
 use super::super::configuration_constrained::{
     AuthenticationRequirement, PortableMcpServer, PortableRemoteTransport, SelectedPortablePlugin,
-    common::plan_skills, load_selected_plugin,
+    common::{evidence, plan_skills, read_optional_file},
+    load_selected_plugin,
 };
 use super::junie::junie_home;
 
@@ -67,7 +68,7 @@ fn plan_plugin(
     }
     .map_err(|_| destination_error())?;
     let (trees, mut current_parts, mut desired_parts, mut manifest) =
-        plan_skills(&skill_root, context, plugin.as_ref(), "Junie")?;
+        plan_skills(&skill_root, context, plugin.as_ref())?;
     let (mcp_write, mcp_manifest) = plan_mcp(
         context,
         plugin.as_ref(),
@@ -114,7 +115,7 @@ fn plan_mcp(
         context.filesystem,
         &root,
         &destination,
-        context.json_limits,
+        context.json_limits.bytes(),
         "The Junie MCP document could not be read safely.",
     )?;
     let mut document = match expected.as_deref() {
@@ -139,7 +140,7 @@ fn plan_mcp(
             context.filesystem,
             &user_root,
             &user_destination,
-            context.json_limits,
+            context.json_limits.bytes(),
             "The Junie user MCP document could not be read safely.",
         )?;
         if let Some(user_bytes) = user_bytes {
@@ -344,24 +345,6 @@ fn merge_object(
     serde_json::Value::Object(mapped_object)
 }
 
-fn read_optional_file(
-    filesystem: &dyn ConfinedFileSystem,
-    root: &AbsolutePath,
-    destination: &RelativeArtifactPath,
-    limits: JsonLimits,
-    detail: &'static str,
-) -> Result<Option<Vec<u8>>, ManagedProjectionError> {
-    match filesystem.read_regular_bounded_no_follow(root, destination, limits.bytes()) {
-        Ok(bytes) => Ok(bytes),
-        Err(skilltap_core::runtime::RuntimeError::FileSystem { source, .. })
-            if source.kind() == std::io::ErrorKind::NotFound =>
-        {
-            Ok(None)
-        }
-        Err(_) => Err(mcp_invalid(detail)),
-    }
-}
-
 fn relative(path: &str) -> Result<RelativeArtifactPath, ManagedProjectionError> {
     RelativeArtifactPath::new(path).map_err(|_| destination_error())
 }
@@ -382,10 +365,6 @@ fn is_required_mcp(
             && declaration.declared_name.as_deref() == Some(name)
             && declaration.requiredness == skilltap_core::domain::ComponentRequiredness::Required
     })
-}
-
-fn evidence(code: &'static str) -> skilltap_core::domain::EvidenceCode {
-    skilltap_core::domain::EvidenceCode::new(code).expect("static Junie evidence code is valid")
 }
 
 fn destination_error() -> ManagedProjectionError {

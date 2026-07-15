@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-remove-common-target-name-plumbing
 kind: story
-stage: implementing
+stage: done
 tags: [cleanup]
 parent: null
 depends_on: []
@@ -27,3 +27,12 @@ dead parameter
 
 ## Removal
 Remove the unused parameter from `plan_skills`, `skill_tree`, `observe_tree`, and `verify_prior_skill`, then update Kimi, Vibe, Kilo, Amp, and Junie callers. Preserve all validation and error semantics.
+
+## Verification
+
+Removed unused target-name arguments from shared projection planning and all constrained/trust-interactive callers.
+
+- `cargo test -p skilltap-harnesses`: 163 passed.
+- `cargo clippy -p skilltap-harnesses --all-targets -- -D warnings`: clean.
+- Independent standard review: no material findings.
+- `git diff --check`: clean.

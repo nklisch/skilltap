@@ -159,7 +159,9 @@ impl HarnessAdapter for KimiAdapter {
             }
         }
         let mut labels = Vec::new();
-        if matches!(scope, Scope::Global) && path_exists(paths.kimi_share_dir(), "mcp.json") {
+        if matches!(scope, Scope::Global)
+            && adapter_helpers::child_path_exists(paths.kimi_share_dir(), "mcp.json")
+        {
             labels.push(mcp_label);
         }
         Ok(AdapterObservationPaths {
@@ -233,7 +235,7 @@ fn plan_plugin(
     })
     .map_err(|_| destination_error())?;
     let (trees, mut current_parts, mut desired_parts, mut manifest) =
-        plan_skills(&skill_root, context, plugin.as_ref(), "Kimi")?;
+        plan_skills(&skill_root, context, plugin.as_ref())?;
     let (mcp_write, mcp_manifest) = plan_mcp(
         context,
         plugin.as_ref(),
@@ -586,9 +588,6 @@ fn json_fingerprint(value: &serde_json::Value) -> skilltap_core::domain::Fingerp
 }
 fn json_fingerprint_bytes(value: &serde_json::Value) -> Vec<u8> {
     serde_json::to_vec(value).unwrap_or_default()
-}
-fn path_exists(root: &AbsolutePath, child: &str) -> bool {
-    std::fs::symlink_metadata(std::path::Path::new(root.as_str()).join(child)).is_ok()
 }
 
 #[cfg(test)]

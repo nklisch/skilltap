@@ -103,14 +103,14 @@ impl HarnessAdapter for ZCodeAdapter {
                         Err(error) => return Err(ObservationPathError::Runtime(error)),
                     }
                 }
-                if path_exists(paths.home(), ".zcode/cli/config.json") {
+                if adapter_helpers::child_path_exists(paths.home(), ".zcode/cli/config.json") {
                     surface_labels.push("zcode.global.mcp");
                 }
             }
             Scope::Project(project) => {
                 // The public contract names the workspace MCP declaration but
                 // does not name a project skill root; do not infer one.
-                if path_exists(project, ".zcode/config.json") {
+                if adapter_helpers::child_path_exists(project, ".zcode/config.json") {
                     surface_labels.push("project.zcode.mcp");
                 }
             }
@@ -160,8 +160,4 @@ impl ReadOnlyTargetPort for ZCodeReadOnlyTarget {
             "cache_independence",
         ]
     }
-}
-
-fn path_exists(root: &AbsolutePath, child: &str) -> bool {
-    std::fs::symlink_metadata(std::path::Path::new(root.as_str()).join(child)).is_ok()
 }

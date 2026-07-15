@@ -155,10 +155,7 @@ impl HarnessAdapter for KiloAdapter {
                 .ok()
                 .flatten()
                 .is_some_and(|(root, path)| {
-                    std::fs::symlink_metadata(
-                        std::path::Path::new(root.as_str()).join(path.as_str()),
-                    )
-                    .is_ok()
+                    adapter_helpers::child_path_exists(&root, path.as_str())
                 })
         };
         Ok(AdapterObservationPaths {
@@ -231,7 +228,7 @@ fn plan_plugin(
     })
     .map_err(|_| destination_error())?;
     let (trees, mut current_parts, mut desired_parts, mut manifest) =
-        plan_skills(&skill_root, context, plugin.as_ref(), "Kilo")?;
+        plan_skills(&skill_root, context, plugin.as_ref())?;
     let (file, mcp_manifest) = plan_mcp(
         context,
         plugin.as_ref(),

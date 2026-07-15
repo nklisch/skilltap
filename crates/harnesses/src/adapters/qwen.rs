@@ -132,7 +132,7 @@ impl HarnessAdapter for QwenAdapter {
             ("qwen.extensions", ".qwen/extensions"),
             ("qwen.extension_store", ".qwen/extension-store/state.json"),
         ] {
-            if std::fs::symlink_metadata(format!("{}/{}", base.as_str(), path)).is_ok() {
+            if crate::adapter_helpers::child_path_exists(base, path) {
                 surface_labels.push(match scope {
                     Scope::Global => label,
                     Scope::Project(_) => match label {

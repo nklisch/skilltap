@@ -1,17 +1,22 @@
 use std::{collections::BTreeSet, io};
 
 use skilltap_core::{
-    domain::{ComponentKind, ComponentRequiredness, RelativeArtifactPath},
+    domain::{
+        AbsolutePath, ComponentKind, ComponentRequiredness, EvidenceCode, Fingerprint,
+        RelativeArtifactPath,
+    },
     instructions::fingerprint_contents,
     managed_projection::{ManagedPluginWrite, ManagedProjectionError},
+    plugin_graph::ComponentDeclaration,
     runtime::{ConfinedFileSystem, DirectoryIdentity, ExternalTreeLimits, RuntimeError},
     skill::ValidatedSkillTree,
     skill_compatibility::{AgentSkillName, validate_agent_skill},
     storage::{ArtifactTree, ManagedProjection},
 };
 
+use super::super::file_managed::CompleteSourcePlugin;
 use super::source::SelectedPortablePlugin;
-use crate::managed_projection::ManagedProjectionContext;
+use crate::managed_projection::{ManagedProjectionContext, ManagedProjectionInput};
 
 pub(crate) type SkillProjectionPlan = (
     Vec<ManagedPluginWrite>,
@@ -21,17 +26,138 @@ pub(crate) type SkillProjectionPlan = (
 );
 pub(crate) type ObservedTree = (DirectoryIdentity, ArtifactTree);
 
-pub(crate) fn plan_skills(
-    skill_root: &skilltap_core::domain::AbsolutePath,
+/// The skill planner only needs the complete source tree and the component
+/// declarations. Keeping that as a named view lets file-managed and
+/// configuration-constrained adapters share drift/fingerprint planning without
+/// forcing their MCP codecs or source loading into the same abstraction.
+pub(crate) trait SkillProjectionSource {
+    fn tree(&self) -> &ArtifactTree;
+    fn declarations(&self) -> &[ComponentDeclaration];
+}
+
+impl SkillProjectionSource for SelectedPortablePlugin {
+    fn tree(&self) -> &ArtifactTree {
+        &self.tree
+    }
+
+    fn declarations(&self) -> &[ComponentDeclaration] {
+        &self.declarations
+    }
+}
+
+impl SkillProjectionSource for CompleteSourcePlugin {
+    fn tree(&self) -> &ArtifactTree {
+        &self.tree
+    }
+
+    fn declarations(&self) -> &[ComponentDeclaration] {
+        &self.declarations
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct SkillProjectionPolicy {
+    diagnostics: SkillProjectionDiagnostics,
+    validation: SkillTreeValidation,
+}
+
+impl SkillProjectionPolicy {
+    pub(crate) const fn agent_skill_contract() -> Self {
+        Self {
+            diagnostics: SkillProjectionDiagnostics {
+                missing_declared_name: "A plugin skill has no declared name.",
+                required_missing_tree: "A required plugin skill is missing its complete directory.",
+                unsafe_destination: SkillProjectionDestinationError::PluginMissing {
+                    detail: "A plugin skill name is not a safe destination.",
+                },
+                incomplete_tree: "A plugin skill is not a complete artifact tree.",
+                missing_top_level_skill: "A plugin skill is missing top-level SKILL.md.",
+                invalid_agent_skill_name: Some(
+                    "A plugin skill name is not a valid Agent Skill name.",
+                ),
+                invalid_contract: Some(
+                    "A plugin skill does not meet the exact Agent Skills contract.",
+                ),
+                observed_tree_invalid: "The managed skill tree is invalid.",
+                observe_safely_failed: "The managed skill tree could not be observed safely.",
+                drifted: "An owned managed skill projection is missing or was replaced.",
+            },
+            validation: SkillTreeValidation::AgentSkillsContract,
+        }
+    }
+
+    pub(crate) const fn complete_tree(diagnostics: SkillProjectionDiagnostics) -> Self {
+        Self {
+            diagnostics,
+            validation: SkillTreeValidation::TopLevelSkillMdOnly,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct SkillProjectionDiagnostics {
+    pub(crate) missing_declared_name: &'static str,
+    pub(crate) required_missing_tree: &'static str,
+    pub(crate) unsafe_destination: SkillProjectionDestinationError,
+    pub(crate) incomplete_tree: &'static str,
+    pub(crate) missing_top_level_skill: &'static str,
+    pub(crate) invalid_agent_skill_name: Option<&'static str>,
+    pub(crate) invalid_contract: Option<&'static str>,
+    pub(crate) observed_tree_invalid: &'static str,
+    pub(crate) observe_safely_failed: &'static str,
+    pub(crate) drifted: &'static str,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum SkillProjectionDestinationError {
+    PluginMissing {
+        detail: &'static str,
+    },
+    Other {
+        code: &'static str,
+        summary: &'static str,
+    },
+}
+
+impl SkillProjectionDestinationError {
+    fn into_error(self) -> ManagedProjectionError {
+        match self {
+            Self::PluginMissing { detail } => ManagedProjectionError::PluginMissing { detail },
+            Self::Other { code, summary } => ManagedProjectionError::Other { code, summary },
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SkillTreeValidation {
+    /// Exact Agent Skills validation used by configuration-constrained targets.
+    AgentSkillsContract,
+    /// Legacy file-managed plugin semantics: a complete skill directory is
+    /// required, but frontmatter conformance remains the source reader's job.
+    TopLevelSkillMdOnly,
+}
+
+pub(crate) fn plan_skills<P: SkillProjectionSource + ?Sized>(
+    skill_root: &AbsolutePath,
     context: &ManagedProjectionContext<'_>,
-    plugin: Option<&SelectedPortablePlugin>,
-    target_name: &'static str,
+    plugin: Option<&P>,
 ) -> Result<SkillProjectionPlan, ManagedProjectionError> {
-    let removal = matches!(
-        context.input,
-        crate::managed_projection::ManagedProjectionInput::Remove
-    );
-    let declarations = plugin.map_or(&[][..], |plugin| plugin.declarations.as_slice());
+    plan_skills_with_policy(
+        skill_root,
+        context,
+        plugin,
+        SkillProjectionPolicy::agent_skill_contract(),
+    )
+}
+
+pub(crate) fn plan_skills_with_policy<P: SkillProjectionSource + ?Sized>(
+    skill_root: &AbsolutePath,
+    context: &ManagedProjectionContext<'_>,
+    plugin: Option<&P>,
+    policy: SkillProjectionPolicy,
+) -> Result<SkillProjectionPlan, ManagedProjectionError> {
+    let removal = matches!(context.input, ManagedProjectionInput::Remove);
+    let declarations = plugin.map_or(&[][..], SkillProjectionSource::declarations);
     let mut names = BTreeSet::new();
     let mut manifest = Vec::new();
     for declaration in declarations {
@@ -39,7 +165,7 @@ pub(crate) fn plan_skills(
             ComponentKind::Skill => {
                 names.insert(declaration.declared_name.clone().ok_or(
                     ManagedProjectionError::PluginMissing {
-                        detail: "A plugin skill has no declared name.",
+                        detail: policy.diagnostics.missing_declared_name,
                     },
                 )?);
             }
@@ -64,7 +190,7 @@ pub(crate) fn plan_skills(
     let mut desired_parts = Vec::new();
     for name in names {
         let desired_tree = plugin
-            .map(|plugin| skill_tree(&plugin.tree, &name, target_name))
+            .map(|plugin| skill_tree(plugin.tree(), &name, policy))
             .transpose()?
             .flatten();
         if !removal
@@ -76,16 +202,13 @@ pub(crate) fn plan_skills(
             })
         {
             return Err(ManagedProjectionError::PluginMissing {
-                detail: "A required plugin skill is missing its complete directory.",
+                detail: policy.diagnostics.required_missing_tree,
             });
         }
-        let destination = RelativeArtifactPath::new(&name).map_err(|_| {
-            ManagedProjectionError::PluginMissing {
-                detail: "A plugin skill name is not a safe destination.",
-            }
-        })?;
-        let current = observe_tree(context.filesystem, skill_root, &destination, target_name)?;
-        verify_prior_skill(context.prior, &destination, current.as_ref(), target_name)?;
+        let destination = RelativeArtifactPath::new(&name)
+            .map_err(|_| policy.diagnostics.unsafe_destination.into_error())?;
+        let current = observe_tree(context.filesystem, skill_root, &destination, policy)?;
+        verify_prior_skill(context.prior, &destination, current.as_ref(), policy)?;
         if let Some((_, tree)) = &current {
             append_tree_fingerprint(&mut current_parts, &destination, tree);
         }
@@ -110,7 +233,7 @@ pub(crate) fn plan_skills(
 fn skill_tree(
     plugin: &ArtifactTree,
     name: &str,
-    target_name: &str,
+    policy: SkillProjectionPolicy,
 ) -> Result<Option<ArtifactTree>, ManagedProjectionError> {
     let prefix = format!("skills/{name}/");
     let files = plugin
@@ -126,33 +249,66 @@ fn skill_tree(
         return Ok(None);
     }
     let tree = ArtifactTree::new(files).map_err(|_| ManagedProjectionError::PluginMissing {
-        detail: "A plugin skill is not a complete artifact tree.",
+        detail: policy.diagnostics.incomplete_tree,
     })?;
-    let validated = ValidatedSkillTree::from_artifact_tree(tree.clone()).map_err(|_| {
-        ManagedProjectionError::PluginMissing {
-            detail: "A plugin skill is missing top-level SKILL.md.",
-        }
-    })?;
-    let name = AgentSkillName::new(name.to_owned()).map_err(|_| {
-        ManagedProjectionError::PluginMissing {
-            detail: "A plugin skill name is not a valid Agent Skill name.",
-        }
-    })?;
-    let validation = validate_agent_skill(&validated, &name);
-    if !validation.loadable_shape() || !validation.is_conforming() {
-        let _ = target_name;
-        return Err(ManagedProjectionError::PluginMissing {
-            detail: "A plugin skill does not meet the exact Agent Skills contract.",
-        });
+    match policy.validation {
+        SkillTreeValidation::AgentSkillsContract => validate_agent_skill_tree(&tree, name, policy)?,
+        SkillTreeValidation::TopLevelSkillMdOnly => ensure_top_level_skill_md(&tree, policy)?,
     }
     Ok(Some(tree))
 }
 
+fn validate_agent_skill_tree(
+    tree: &ArtifactTree,
+    name: &str,
+    policy: SkillProjectionPolicy,
+) -> Result<(), ManagedProjectionError> {
+    let validated = ValidatedSkillTree::from_artifact_tree(tree.clone()).map_err(|_| {
+        ManagedProjectionError::PluginMissing {
+            detail: policy.diagnostics.missing_top_level_skill,
+        }
+    })?;
+    let name = AgentSkillName::new(name.to_owned()).map_err(|_| {
+        ManagedProjectionError::PluginMissing {
+            detail: policy
+                .diagnostics
+                .invalid_agent_skill_name
+                .expect("Agent Skills validation supplies an invalid-name diagnostic"),
+        }
+    })?;
+    let validation = validate_agent_skill(&validated, &name);
+    if !validation.loadable_shape() || !validation.is_conforming() {
+        return Err(ManagedProjectionError::PluginMissing {
+            detail: policy
+                .diagnostics
+                .invalid_contract
+                .expect("Agent Skills validation supplies a contract diagnostic"),
+        });
+    }
+    Ok(())
+}
+
+fn ensure_top_level_skill_md(
+    tree: &ArtifactTree,
+    policy: SkillProjectionPolicy,
+) -> Result<(), ManagedProjectionError> {
+    if tree
+        .files()
+        .contains_key(&RelativeArtifactPath::new("SKILL.md").expect("static path is valid"))
+    {
+        Ok(())
+    } else {
+        Err(ManagedProjectionError::PluginMissing {
+            detail: policy.diagnostics.missing_top_level_skill,
+        })
+    }
+}
+
 fn observe_tree(
     filesystem: &dyn ConfinedFileSystem,
-    root: &skilltap_core::domain::AbsolutePath,
+    root: &AbsolutePath,
     destination: &RelativeArtifactPath,
-    target_name: &str,
+    policy: SkillProjectionPolicy,
 ) -> Result<Option<ObservedTree>, ManagedProjectionError> {
     match filesystem.load_tree_bounded_no_follow(root, destination, tree_limits()) {
         Ok((identity, files)) => Ok(Some((
@@ -163,7 +319,7 @@ fn observe_tree(
                     .map(|(path, file)| (path.as_str().to_owned(), file)),
             )
             .map_err(|_| ManagedProjectionError::PluginUnreadable {
-                detail: "The managed skill tree is invalid.",
+                detail: policy.diagnostics.observed_tree_invalid,
             })?,
         ))),
         Err(RuntimeError::FileSystem { source, .. })
@@ -171,12 +327,9 @@ fn observe_tree(
         {
             Ok(None)
         }
-        Err(_) => {
-            let _ = target_name;
-            Err(ManagedProjectionError::PluginUnreadable {
-                detail: "The managed skill tree could not be observed safely.",
-            })
-        }
+        Err(_) => Err(ManagedProjectionError::PluginUnreadable {
+            detail: policy.diagnostics.observe_safely_failed,
+        }),
     }
 }
 
@@ -184,7 +337,7 @@ fn verify_prior_skill(
     prior: &[ManagedProjection],
     destination: &RelativeArtifactPath,
     current: Option<&ObservedTree>,
-    target_name: &str,
+    policy: SkillProjectionPolicy,
 ) -> Result<(), ManagedProjectionError> {
     let Some(expected) = prior.iter().find_map(|projection| match projection {
         ManagedProjection::Skill { id, fingerprint } if id == destination => Some(fingerprint),
@@ -197,9 +350,8 @@ fn verify_prior_skill(
         .as_ref()
         != Some(expected)
     {
-        let _ = target_name;
         return Err(ManagedProjectionError::Drifted {
-            detail: "An owned managed skill projection is missing or was replaced.",
+            detail: policy.diagnostics.drifted,
         });
     }
     Ok(())
@@ -208,7 +360,7 @@ fn verify_prior_skill(
 pub(crate) fn fingerprint_tree(
     destination: &RelativeArtifactPath,
     tree: &ArtifactTree,
-) -> skilltap_core::domain::Fingerprint {
+) -> Fingerprint {
     let mut bytes = Vec::new();
     append_tree_fingerprint(&mut bytes, destination, tree);
     fingerprint_contents(&bytes)
@@ -227,9 +379,8 @@ pub(crate) fn append_tree_fingerprint(
     }
 }
 
-pub(crate) fn evidence(code: &'static str) -> skilltap_core::domain::EvidenceCode {
-    skilltap_core::domain::EvidenceCode::new(code)
-        .expect("static constrained evidence code is valid")
+pub(crate) fn evidence(code: &'static str) -> EvidenceCode {
+    EvidenceCode::new(code).expect("static constrained evidence code is valid")
 }
 
 pub(crate) fn tree_limits() -> ExternalTreeLimits {
@@ -239,7 +390,7 @@ pub(crate) fn tree_limits() -> ExternalTreeLimits {
 
 pub(crate) fn read_optional_file(
     filesystem: &dyn ConfinedFileSystem,
-    root: &skilltap_core::domain::AbsolutePath,
+    root: &AbsolutePath,
     destination: &RelativeArtifactPath,
     maximum_bytes: u64,
     detail: &'static str,

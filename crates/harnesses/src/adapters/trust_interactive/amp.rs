@@ -165,7 +165,7 @@ impl HarnessAdapter for AmpAdapter {
         }
         let mut surface_labels = Vec::new();
         for (label, path) in settings_surfaces(paths, scope) {
-            if path_exists(&path) {
+            if adapter_helpers::path_exists(&path) {
                 surface_labels.push(label);
             }
         }
@@ -309,10 +309,6 @@ fn settings_surfaces(paths: &PlatformPaths, scope: &Scope) -> Vec<(&'static str,
 
 fn child(root: &AbsolutePath, relative: &str) -> Option<AbsolutePath> {
     adapter_helpers::absolute_child(root, relative)
-}
-
-fn path_exists(path: &AbsolutePath) -> bool {
-    std::fs::symlink_metadata(path.as_str()).is_ok()
 }
 
 fn is_version_token(value: &str) -> bool {

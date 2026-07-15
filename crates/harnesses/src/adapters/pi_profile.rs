@@ -11,7 +11,10 @@ use skilltap_core::{
     runtime::{ConfinedFileSystem, JsonLimits, StrictJson, StrictJsonDecoder},
 };
 
-use crate::conditional_profile::{ConditionalProfileContext, ConditionalProfilePort};
+use crate::{
+    adapter_helpers,
+    conditional_profile::{ConditionalProfileContext, ConditionalProfilePort},
+};
 
 use super::pi_settings::{
     HookDeclaration, PackageDeclaration, PiSettings, SettingsReadState, package_manifest_path,
@@ -501,7 +504,7 @@ fn read_manifest(
     let bytes = match filesystem.read_regular_bounded_no_follow(root, &destination, maximum_bytes) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => return ManifestRead::Missing,
-        Err(_) if std::fs::symlink_metadata(root.as_str()).is_err() => {
+        Err(_) if !adapter_helpers::path_exists(root) => {
             return ManifestRead::Missing;
         }
         Err(_) => return ManifestRead::Unreadable,

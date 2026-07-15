@@ -12,7 +12,7 @@ Combining per-projection current and desired byte parts into `ManagedProjectionP
 
 ### Assemble trees, files, manifests, and dual fingerprints
 
-**File**: `crates/harnesses/src/adapters/gemini_managed.rs:61`
+**File**: `crates/harnesses/src/adapters/gemini_managed.rs:77`
 
 ```rust
 fn plan_plugin(
@@ -26,7 +26,7 @@ fn plan_plugin(
     };
     let (skill_root, config_root) = destination_paths(context)?;
     let (trees, mut current_parts, mut desired_parts, skill_manifest) =
-        plan_skills(&skill_root, context, plugin.as_ref())?;
+        plan_skills_with_policy(&skill_root, context, plugin.as_ref(), SKILL_POLICY)?;
     let (mcp_write, mcp_manifest) = plan_mcp(
         &config_root,
         context,
@@ -48,13 +48,14 @@ fn plan_plugin(
 
 ### Reject a replaced owned skill tree
 
-**File**: `crates/harnesses/src/adapters/opencode_managed.rs:335`
+**File**: `crates/harnesses/src/adapters/configuration_constrained/common.rs:341`
 
 ```rust
 fn verify_prior_skill(
     prior: &[ManagedProjection],
     destination: &RelativeArtifactPath,
     current: Option<&ObservedTree>,
+    policy: SkillProjectionPolicy,
 ) -> Result<(), ManagedProjectionError> {
     let Some(expected) = prior.iter().find_map(|projection| match projection {
         ManagedProjection::Skill { id, fingerprint } if id == destination => Some(fingerprint),
@@ -62,10 +63,13 @@ fn verify_prior_skill(
     }) else {
         return Ok(());
     };
-    let observed = current.map(|(_, tree)| fingerprint_tree(destination, tree));
-    if observed.as_ref() != Some(expected) {
+    if current
+        .map(|(_, tree)| fingerprint_tree(destination, tree))
+        .as_ref()
+        != Some(expected)
+    {
         return Err(ManagedProjectionError::Drifted {
-            detail: "An owned OpenCode skill projection is missing or was replaced.",
+            detail: policy.diagnostics.drifted,
         });
     }
     Ok(())
@@ -74,7 +78,7 @@ fn verify_prior_skill(
 
 ### Distinguish owned drift from an unowned MCP conflict
 
-**File**: `crates/harnesses/src/adapters/qwen_managed.rs:504`
+**File**: `crates/harnesses/src/adapters/qwen_managed.rs:574`
 
 ```rust
 if let Some(expected_fingerprint) = prior {
@@ -93,16 +97,20 @@ if let Some(expected_fingerprint) = prior {
 
 ### Centralize the shape for a harness family
 
-**File**: `crates/harnesses/src/adapters/configuration_constrained/common.rs:24`
+**File**: `crates/harnesses/src/adapters/configuration_constrained/common.rs:140`
 
 ```rust
-pub(crate) fn plan_skills(
+pub(crate) fn plan_skills<P: SkillProjectionSource + ?Sized>(
     skill_root: &AbsolutePath,
     context: &ManagedProjectionContext<'_>,
-    plugin: Option<&SelectedPortablePlugin>,
-    target_name: &'static str,
+    plugin: Option<&P>,
 ) -> Result<SkillProjectionPlan, ManagedProjectionError> {
-    // Observe each destination, verify prior ownership, and produce writes.
+    plan_skills_with_policy(
+        skill_root,
+        context,
+        plugin,
+        SkillProjectionPolicy::agent_skill_contract(),
+    )
 }
 ```
 

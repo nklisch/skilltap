@@ -124,7 +124,8 @@ impl HarnessAdapter for ZooAdapter {
             }
         }
         let mut surface_labels = Vec::new();
-        if matches!(scope, Scope::Project(project) if path_exists(project, ".roo/mcp.json")) {
+        if matches!(scope, Scope::Project(project) if adapter_helpers::child_path_exists(project, ".roo/mcp.json"))
+        {
             surface_labels.push("project.zoo.mcp");
         }
         // The global document lives under editor global storage; that root is
@@ -166,8 +167,4 @@ impl ReadOnlyTargetPort for ZooReadOnlyTarget {
             "effective_reload",
         ]
     }
-}
-
-fn path_exists(root: &AbsolutePath, child: &str) -> bool {
-    std::fs::symlink_metadata(std::path::Path::new(root.as_str()).join(child)).is_ok()
 }

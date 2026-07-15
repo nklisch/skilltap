@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-unify-file-managed-skill-planning
 kind: story
-stage: implementing
+stage: done
 tags: [cleanup]
 parent: null
 depends_on: []
@@ -27,3 +27,12 @@ Gemini, OpenCode, and Kiro duplicate the shared `plan_skills`, `skill_tree`, `fi
 
 ## Removal
 Narrow or unify the source-plugin view accepted by shared planning, preserve target-specific diagnostics where useful, migrate the three adapters to `configuration_constrained::common`, and delete the local copies. Verify lifecycle behavior and fingerprints remain unchanged.
+
+## Verification
+
+Migrated Gemini, OpenCode, and Kiro to a shared, policy-driven skill projection planner while preserving complete-source validation, diagnostics, Kiro Power handling, manifests, fingerprints, and drift semantics.
+
+- `cargo test -p skilltap-harnesses`: 163 passed.
+- `cargo clippy -p skilltap-harnesses --all-targets -- -D warnings`: clean.
+- Independent standard review: no material findings.
+- `git diff --check`: clean.

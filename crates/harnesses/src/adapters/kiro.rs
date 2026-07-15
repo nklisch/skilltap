@@ -143,7 +143,10 @@ impl HarnessAdapter for KiroAdapter {
             }
         }
 
-        let surface_labels = if settings_path.as_ref().is_some_and(path_exists) {
+        let surface_labels = if settings_path
+            .as_ref()
+            .is_some_and(adapter_helpers::path_exists)
+        {
             vec![settings_label]
         } else {
             Vec::new()
@@ -186,10 +189,6 @@ impl SkillProjectionPort for KiroSkillProjection {
             Scope::Project(project) => adapter_helpers::absolute_child(project, ".kiro/skills"),
         }
     }
-}
-
-fn path_exists(path: &AbsolutePath) -> bool {
-    std::fs::symlink_metadata(path.as_str()).is_ok()
 }
 
 #[cfg(test)]
