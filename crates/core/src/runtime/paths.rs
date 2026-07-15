@@ -302,6 +302,20 @@ mod tests {
     }
 
     #[test]
+    fn absent_or_empty_kiro_home_uses_home_fallback() {
+        for environment in [
+            TestEnvironment::default().with(EnvironmentVariable::Home, "/Users/nathan"),
+            TestEnvironment::default()
+                .with(EnvironmentVariable::Home, "/Users/nathan")
+                .with(EnvironmentVariable::KiroHome, ""),
+        ] {
+            let paths = PlatformPaths::resolve_for(SupportedPlatform::MacOs, &environment).unwrap();
+            assert_eq!(paths.kiro_home().as_str(), "/Users/nathan/.kiro");
+            assert_eq!(paths.global_agents().as_str(), "/Users/nathan/AGENTS.md");
+        }
+    }
+
+    #[test]
     fn absent_or_empty_claude_config_uses_home_fallback() {
         for environment in [
             TestEnvironment::default().with(EnvironmentVariable::Home, "/Users/nathan"),

@@ -4,6 +4,10 @@ mod codex_managed;
 mod file_managed;
 mod gemini;
 mod gemini_managed;
+#[cfg(test)]
+mod kiro;
+#[cfg(test)]
+mod kiro_managed;
 mod opencode;
 mod opencode_managed;
 
