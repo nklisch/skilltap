@@ -1782,29 +1782,63 @@ fn managed_declaration_status_projection(
             .flatten() else {
                 continue;
             };
-            if profile.capability != CapabilitySupport::Unverified {
-                continue;
+            let mut unverified = Vec::new();
+            if profile.capability == CapabilitySupport::Unverified {
+                unverified.push((
+                    "managed.projection".to_owned(),
+                    "managed_projection".to_owned(),
+                ));
             }
-            let id = format!("{target}:{}:declaration", resource.key());
-            *outcome = outcome.clone().with_resource(
-                OutputEntry::new(id, "attention")
-                    .with_field("target", target.as_str())
-                    .with_field("scope", scope_label(resource.key().scope()))
-                    .with_field("resource", resource.key().to_string())
-                    .with_field("layer", "declared")
-                    .with_field("declared", "healthy")
-                    .with_field("effective", "unverified")
-                    .with_field("ownership", "skilltap"),
-            );
-            *outcome = outcome.clone().with_warning(
-                Warning::new(
-                    "managed.effective_unverified",
-                    "The managed declaration is owned and verified on disk, but effective harness loading remains unverified.",
-                )
-                .with_context("harness", target.as_str())
-                .with_context("scope", scope_label(resource.key().scope())),
-            );
-            outcome.result = ResultClass::AttentionRequired;
+            for projection in binding.managed_projections() {
+                let (capability, component) = match projection {
+                    ManagedProjection::Skill { id, .. } => (
+                        CapabilityId::new("component.skill")
+                            .expect("static skill capability is valid"),
+                        format!("skill:{}", id.as_str()),
+                    ),
+                    ManagedProjection::Mcp { id, .. } => (
+                        CapabilityId::new("component.mcp").expect("static MCP capability is valid"),
+                        format!("mcp:{}", id.as_str()),
+                    ),
+                    // Omitted projections are optional consequences, not
+                    // required managed components and do not make effective
+                    // status unverified on their own.
+                    ManagedProjection::Omitted { .. } => continue,
+                };
+                if profile
+                    .profile
+                    .mutation_support(resource.key().scope(), &capability)
+                    == Some(CapabilitySupport::Unverified)
+                {
+                    unverified.push((capability.as_str().to_owned(), component));
+                }
+            }
+            for (capability, component) in unverified {
+                let id = format!("{target}:{}:declaration:{component}", resource.key());
+                *outcome = outcome.clone().with_resource(
+                    OutputEntry::new(id, "attention")
+                        .with_field("target", target.as_str())
+                        .with_field("scope", scope_label(resource.key().scope()))
+                        .with_field("resource", resource.key().to_string())
+                        .with_field("component", component.clone())
+                        .with_field("capability", capability.clone())
+                        .with_field("layer", "declared")
+                        .with_field("declared", "healthy")
+                        .with_field("effective", "unverified")
+                        .with_field("ownership", "skilltap"),
+                );
+                *outcome = outcome.clone().with_warning(
+                    Warning::new(
+                        "managed.effective_unverified",
+                        "The managed declaration is owned and verified on disk, but a required harness component remains unverified.",
+                    )
+                    .with_context("harness", target.as_str())
+                    .with_context("scope", scope_label(resource.key().scope()))
+                    .with_context("component", component)
+                    .with_context("capability", capability),
+                );
+                outcome.result = ResultClass::AttentionRequired;
+            }
         }
     }
 }

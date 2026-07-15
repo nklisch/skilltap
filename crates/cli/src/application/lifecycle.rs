@@ -866,7 +866,7 @@ impl StatusApplication<'_> {
                 .managed_entries
                 .insert(operation_id.clone(), planned.entry);
             if let Some(seed) = planned.seed {
-                builder.seeds.insert(resource.key().clone(), seed);
+                let _ = merge_resource_seed(&mut builder.seeds, seed);
             }
             builder.operations.push(operation);
             return Some(operation_id);
@@ -988,7 +988,7 @@ impl StatusApplication<'_> {
         };
         let native_id = request.native_name.clone();
         let seed = native_state_seed(resource, target, &native_id, timestamp, &before);
-        builder.seeds.insert(resource.key().clone(), seed);
+        let _ = merge_resource_seed(&mut builder.seeds, seed);
         builder.native_bindings.push(NativeLifecycleBinding {
             operation_id: operation_id.clone(),
             executable: profile.executable_identity,
@@ -1263,7 +1263,10 @@ impl StatusApplication<'_> {
         let mut native_bindings = Vec::new();
         let mut managed_entries = BTreeMap::new();
         let mut seeds = BTreeMap::new();
-        let mut target_projection_keys = BTreeSet::new();
+        // Target-local success is the only authority allowed to publish a new
+        // desired binding. The proposed inventory below is planning input until
+        // the executor returns terminal results.
+        let mut successful_targets: BTreeMap<ResourceKey, BTreeSet<HarnessId>> = BTreeMap::new();
         let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
             .expect("bounded lifecycle process limits are valid");
         let json_limits =
@@ -1290,8 +1293,6 @@ impl StatusApplication<'_> {
         };
         let capability = CapabilityId::new(capability_name)
             .expect("static lifecycle capability identifier is valid");
-        let mut authorized_targets = Vec::new();
-
         for concrete_scope in &scope.resolved {
             let (mutating_targets, next_outcome) =
                 super::conditional_profile::filter_targets_for_capability(
@@ -1332,32 +1333,29 @@ impl StatusApplication<'_> {
                     .collect::<Vec<_>>(),
             };
             for request in scope_requests {
-                // Establish at least one real mutation route before changing
-                // desired inventory. Observe-only/file-only candidates have
-                // neither an exact native profile nor a managed projection;
-                // publishing their desired resource would violate the
-                // no-write contract even though route selection later blocks.
+                // Establish an exact mutation channel before constructing the
+                // desired resource. Reachable executables and observe-only file
+                // surfaces are not mutation routes.
                 let routable_targets = mutating_targets
                     .iter()
                     .filter(|target_id| {
-                        // This is intentionally a static preflight. Native
-                        // profile detection is performed once by route
-                        // selection; probing here would consume stateful
-                        // version fixtures and could change existing
-                        // revalidation behavior. A configured binary or a
-                        // declared managed projection is enough to defer to
-                        // that authoritative route selection.
-                        let has_binary = documents
-                            .config
-                            .harnesses()
-                            .get(target_id)
-                            .and_then(|policy| policy.binary.as_ref())
-                            .is_some();
-                        let has_managed_projection = self
-                            .registry
-                            .adapter(target_id)
-                            .is_some_and(|adapter| adapter.managed_projection().is_some());
-                        has_binary || has_managed_projection
+                        let available = lifecycle_mutation_route_available(
+                            self.registry,
+                            &documents.config,
+                            target_id,
+                        );
+                        if !available {
+                            outcome.result = ResultClass::AttentionRequired;
+                            outcome = outcome.clone().with_warning(
+                                Warning::new(
+                                    "native_profile_unavailable",
+                                    "The selected harness has no exact mutation-authorized lifecycle route; no desired or native state was changed.",
+                                )
+                                .with_context("harness", target_id.as_str())
+                                .with_context("scope", scope_label(concrete_scope)),
+                            );
+                        }
+                        available
                     })
                     .cloned()
                     .collect::<Vec<_>>();
@@ -1366,17 +1364,8 @@ impl StatusApplication<'_> {
                     continue;
                 };
                 if mutating_targets.iter().next().is_none() {
-                    outcome.result = ResultClass::AttentionRequired;
-                    outcome = outcome.with_warning(
-                        Warning::new(
-                            "native_profile_unavailable",
-                            "The selected harness is observe-only for this lifecycle action; no desired or native state was changed.",
-                        )
-                        .with_context("scope", scope_label(concrete_scope)),
-                    );
                     continue;
                 }
-                authorized_targets.extend(mutating_targets.iter().cloned());
                 let resource = if request.is_update() || removal {
                     let key = request.resource_key(concrete_scope).map_err(|_| {
                         ErrorDetail::new(
@@ -1463,7 +1452,6 @@ impl StatusApplication<'_> {
                     }
                 }
 
-                let warning_count = outcome.warnings.len();
                 let mut native_ids: BTreeMap<HarnessId, NativeId> = documents
                     .state
                     .as_ref()
@@ -1615,11 +1603,14 @@ impl StatusApplication<'_> {
                         let operation_id = planned.operation.id().clone();
                         operations.push(planned.operation);
                         managed_entries.insert(operation_id, planned.entry);
-                        if let Some(seed) = planned.seed {
-                            seeds.insert(resource.key().clone(), seed);
-                        }
-                        if removal {
-                            target_projection_keys.insert(resource.key().clone());
+                        if let Some(seed) = planned.seed
+                            && merge_resource_seed(&mut seeds, seed).is_err()
+                        {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(ErrorDetail::new(
+                                "state_seed_invalid",
+                                "The lifecycle target state could not be merged safely.",
+                            ));
                         }
                         continue;
                     }
@@ -1801,6 +1792,10 @@ impl StatusApplication<'_> {
                                         .with_field("target", target_id.as_str())
                                         .with_field("scope", scope_label(concrete_scope)),
                                     );
+                                    successful_targets
+                                        .entry(resource.key().clone())
+                                        .or_default()
+                                        .insert(target_id.clone());
                                 }
                                 continue;
                             }
@@ -1939,44 +1934,40 @@ impl StatusApplication<'_> {
                                 ));
                             }
                         };
-                    seeds.insert(resource.key().clone(), native_state);
-                }
-                if removal
-                    && inventory.resources().contains_key(resource.key())
-                    && outcome.warnings.len() == warning_count
-                {
-                    target_projection_keys.insert(resource.key().clone());
+                    if merge_resource_seed(&mut seeds, native_state).is_err() {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "state_seed_invalid",
+                            "The native lifecycle target state could not be merged safely.",
+                        ));
+                    }
                 }
             }
         }
 
-        let authorized_targets = HarnessSet::new(authorized_targets).ok();
-        if authorized_targets.is_none() {
-            return outcome
-                .with_summary("operations", 0_u64)
-                .with_summary("changed", false);
-        }
-        let authorized_targets = authorized_targets.expect("checked above");
-        let inventory_changed = inventory != original_inventory;
         if operations.is_empty() && !outcome.errors.is_empty() {
             let operation_count = outcome.operations.len() as u64;
             return outcome
                 .with_summary("operations", operation_count)
                 .with_summary("changed", false);
         }
-        if inventory_changed && !removal && self.inventory.replace(&inventory).is_err() {
-            outcome.result = ResultClass::Invalid;
-            return outcome.with_error(ErrorDetail::new(
-                "inventory_publish_failed",
-                "The desired inventory could not be published before the native operation.",
-            ));
-        }
         if operations.is_empty() {
-            if removal {
-                inventory = match project_inventory_targets(
+            inventory = if removal {
+                match project_inventory_removals(&original_inventory, &successful_targets) {
+                    Ok(inventory) => inventory,
+                    Err(()) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "inventory_publish_failed",
+                            "The desired inventory could not be updated safely.",
+                        ));
+                    }
+                }
+            } else {
+                match project_inventory_targets_for_success(
+                    &original_inventory,
                     &inventory,
-                    &target_projection_keys,
-                    &authorized_targets,
+                    &successful_targets,
                 ) {
                     Ok(inventory) => inventory,
                     Err(()) => {
@@ -1986,16 +1977,14 @@ impl StatusApplication<'_> {
                             "The desired inventory could not be updated safely.",
                         ));
                     }
-                };
-            }
-            if removal
-                && inventory != original_inventory
-                && self.inventory.replace(&inventory).is_err()
-            {
+                }
+            };
+            let inventory_changed = inventory != original_inventory;
+            if inventory_changed && self.inventory.replace(&inventory).is_err() {
                 outcome.result = ResultClass::Invalid;
                 return outcome.with_error(ErrorDetail::new(
                     "inventory_publish_failed",
-                    "The desired inventory could not be published after the native removal.",
+                    "The desired inventory could not be published safely.",
                 ));
             }
             if let Err(()) = seed_state_if_missing(self.state, &seeds) {
@@ -2006,12 +1995,8 @@ impl StatusApplication<'_> {
                 ));
             }
             if removal
-                && project_state_targets_after_remove(
-                    self.state,
-                    &target_projection_keys,
-                    &authorized_targets,
-                )
-                .is_err()
+                && project_state_targets_after_remove_by_target(self.state, &successful_targets)
+                    .is_err()
             {
                 outcome.result = ResultClass::Invalid;
                 return outcome.with_error(ErrorDetail::new(
@@ -2019,13 +2004,15 @@ impl StatusApplication<'_> {
                     "The native lifecycle state could not be updated safely.",
                 ));
             }
+            let changed =
+                inventory_changed || state_changed_since(self.state, documents.state.as_ref());
             if outcome.errors.is_empty() && outcome.warnings.is_empty() {
                 outcome.result = ResultClass::Completed;
             }
             let operation_count = outcome.operations.len() as u64;
             return outcome
                 .with_summary("operations", operation_count)
-                .with_summary("changed", false)
+                .with_summary("changed", changed)
                 .with_next_action(NextAction::new(
                     "inspect_status",
                     "Inspect status if the native resource may have drifted externally.",
@@ -2108,9 +2095,44 @@ impl StatusApplication<'_> {
                     "reobserve_before_retry",
                     "Re-observe the selected harness before retrying the lifecycle operation.",
                 );
-                return outcome
+                let mut outcome = outcome
                     .with_error(native_execution_error(&error).with_next_action(action.clone()))
                     .with_next_action(action);
+                if let Some(operation_id) = error.after_apply_operation()
+                    && let Some(operation) = plan.get(operation_id)
+                {
+                    let recovered_targets = BTreeMap::from([(
+                        operation.selector().resource().clone(),
+                        BTreeSet::from([operation.target().clone()]),
+                    )]);
+                    let recovered = if removal {
+                        project_inventory_removals(&original_inventory, &recovered_targets)
+                    } else {
+                        project_inventory_targets_for_success(
+                            &original_inventory,
+                            &inventory,
+                            &recovered_targets,
+                        )
+                    };
+                    match recovered {
+                        Ok(recovered) if recovered != original_inventory => {
+                            if self.inventory.replace(&recovered).is_err() {
+                                outcome = outcome.with_error(ErrorDetail::new(
+                                    "inventory_publish_failed",
+                                    "The desired inventory could not be recovered after the native action boundary failed.",
+                                ));
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(()) => {
+                            outcome = outcome.with_error(ErrorDetail::new(
+                                "inventory_publish_failed",
+                                "The desired inventory could not be recovered after the native action boundary failed.",
+                            ));
+                        }
+                    }
+                }
+                return outcome;
             }
         };
         let observation = match self.native_observation {
@@ -2144,6 +2166,16 @@ impl StatusApplication<'_> {
         }
         for result in report.result.operations().values() {
             let status = operation_result_status(result.outcome());
+            if matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            ) && let Some(operation) = report.result.plan().get(result.operation_id())
+            {
+                successful_targets
+                    .entry(operation.selector().resource().clone())
+                    .or_default()
+                    .insert(operation.target().clone());
+            }
             outcome = outcome.with_operation(crate::OperationOutcome::new(
                 result.operation_id().to_string(),
                 status,
@@ -2196,18 +2228,28 @@ impl StatusApplication<'_> {
                     .with_next_action(action);
             }
         }
-        if removal
-            && report.result.operations().values().all(|result| {
-                matches!(
-                    result.outcome(),
-                    OperationOutcome::Applied | OperationOutcome::NoChange
-                )
-            })
-        {
-            inventory = match project_inventory_targets(
+        let successful = report.result.operations().values().all(|result| {
+            matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            )
+        });
+        inventory = if removal {
+            match project_inventory_removals(&original_inventory, &successful_targets) {
+                Ok(inventory) => inventory,
+                Err(()) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "inventory_publish_failed",
+                        "The desired inventory could not be updated safely.",
+                    ));
+                }
+            }
+        } else {
+            match project_inventory_targets_for_success(
+                &original_inventory,
                 &inventory,
-                &target_projection_keys,
-                &targets.resolved,
+                &successful_targets,
             ) {
                 Ok(inventory) => inventory,
                 Err(()) => {
@@ -2217,40 +2259,24 @@ impl StatusApplication<'_> {
                         "The desired inventory could not be updated safely.",
                     ));
                 }
-            };
-            if inventory != original_inventory && self.inventory.replace(&inventory).is_err() {
-                outcome.result = ResultClass::Invalid;
-                return outcome.with_error(ErrorDetail::new(
-                    "inventory_publish_failed",
-                    "The desired inventory could not be updated safely.",
-                ));
             }
-            if project_state_targets_after_remove(
-                self.state,
-                &target_projection_keys,
-                &targets.resolved,
-            )
-            .is_err()
-            {
-                outcome.result = ResultClass::Invalid;
-                return outcome.with_error(ErrorDetail::new(
-                    "state_publish_failed",
-                    "The native lifecycle state could not be updated safely.",
-                ));
-            }
-        }
-        let successful = report.result.operations().values().all(|result| {
-            matches!(
-                result.outcome(),
-                OperationOutcome::Applied | OperationOutcome::NoChange
-            )
-        });
-        if removal && inventory_changed && successful && self.inventory.replace(&inventory).is_err()
-        {
+        };
+        let inventory_changed = inventory != original_inventory;
+        if inventory_changed && self.inventory.replace(&inventory).is_err() {
             outcome.result = ResultClass::Invalid;
             return outcome.with_error(ErrorDetail::new(
                 "inventory_publish_failed",
-                "The desired inventory could not be published after the native removal.",
+                "The desired inventory could not be published safely.",
+            ));
+        }
+        if removal
+            && project_state_targets_after_remove_by_target(self.state, &successful_targets)
+                .is_err()
+        {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "state_publish_failed",
+                "The native lifecycle state could not be updated safely.",
             ));
         }
         if observation.failed_targets == 0
@@ -2260,9 +2286,19 @@ impl StatusApplication<'_> {
         {
             outcome.result = ResultClass::Completed;
         }
+        let state_changed = state_changed_since(self.state, documents.state.as_ref())
+            && report
+                .result
+                .operations()
+                .values()
+                .any(|result| matches!(result.outcome(), OperationOutcome::Applied));
+        // Inventory backfill after a verified NoChange is bookkeeping, not a
+        // fresh lifecycle mutation. This keeps recovery and immediate repeats
+        // idempotent while still publishing the missing desired binding.
+        let changed = report.changed || state_changed;
         outcome = outcome
             .with_summary("operations", report.result.operations().len() as u64)
-            .with_summary("changed", report.changed);
+            .with_summary("changed", changed);
         if successful {
             outcome = outcome.with_next_action(NextAction::new(
                 "verify_status",

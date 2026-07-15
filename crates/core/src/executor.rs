@@ -142,6 +142,20 @@ pub enum ExecutionError {
 }
 
 impl ExecutionError {
+    /// Return the operation whose journal boundary failed after the adapter may
+    /// already have applied its action. Callers use this to recover durable
+    /// desired state without treating pre-apply failures as successful work.
+    pub fn after_apply_operation(&self) -> Option<&OperationId> {
+        match self {
+            Self::Journal {
+                operation,
+                after_apply: true,
+                ..
+            } => Some(operation),
+            _ => None,
+        }
+    }
+
     /// Construct an apply failure suitable for returning from an
     /// [`ExecutionPort`].
     pub fn apply_failure(reason: AttentionReason) -> Self {

@@ -50,13 +50,20 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                 )
             })?,
         };
-        let native_attempt_seed = self.seeds.get(resource).is_some_and(|seed| {
-            !seed.targets().is_empty()
-                && seed.targets().values().all(|target| {
-                    target.provenance() == Provenance::Native
-                        && target.ownership() == Ownership::Harness
-                        && target.managed_projections().is_empty()
-                })
+        // A mixed-target plan may carry several seeds for one logical
+        // resource. Journal exactly the operation's target so a blocked or
+        // unselected sibling can never be published as a side effect.
+        let seed = self.seeds.get(resource).and_then(|seed| {
+            seed.target(operation.target())
+                .cloned()
+                .and_then(|target| ResourceState::new(resource.clone(), [target]).ok())
+        });
+        let native_attempt_seed = seed.as_ref().is_some_and(|seed| {
+            seed.targets().values().all(|target| {
+                target.provenance() == Provenance::Native
+                    && target.ownership() == Ownership::Harness
+                    && target.managed_projections().is_empty()
+            })
         });
         let publish_seed = native_attempt_seed
             || matches!(
@@ -66,7 +73,7 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
         let pending_managed_attempt =
             !native_attempt_seed && matches!(result.outcome(), OperationOutcome::Pending);
         let current = if current.resources().contains_key(resource) {
-            if publish_seed && let Some(seed) = self.seeds.get(resource) {
+            if publish_seed && let Some(seed) = seed.as_ref() {
                 current.refresh_resource_state(seed.clone()).map_err(|_| {
                     ExecutionError::journal_failure(
                         skilltap_core::domain::EvidenceCode::new("state.seed_refresh_failed")
@@ -77,7 +84,7 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                         .expect("static evidence detail is valid"),
                     )
                 })?
-            } else if pending_managed_attempt && let Some(seed) = self.seeds.get(resource) {
+            } else if pending_managed_attempt && let Some(seed) = seed.as_ref() {
                 let existing = current
                     .resources()
                     .get(resource)
@@ -90,7 +97,7 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
             } else {
                 current
             }
-        } else if publish_seed && let Some(seed) = self.seeds.get(resource) {
+        } else if publish_seed && let Some(seed) = seed.as_ref() {
             current.with_resource_state(seed.clone()).map_err(|_| {
                 ExecutionError::journal_failure(
                     skilltap_core::domain::EvidenceCode::new("state.seed_conflict")
@@ -101,7 +108,7 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                     .expect("static evidence detail is valid"),
                 )
             })?
-        } else if pending_managed_attempt && let Some(seed) = self.seeds.get(resource) {
+        } else if pending_managed_attempt && let Some(seed) = seed.as_ref() {
             let attempt_targets = managed_pending_resource(None, seed, result.operation_id())
                 .map_err(|_| managed_attempt_journal_failure())?;
             current

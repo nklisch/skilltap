@@ -1901,6 +1901,29 @@ enum LifecycleRoute {
     Managed(Option<Box<PlannedManagedLifecycle>>),
 }
 
+/// Preflight a target without opening a source checkout or probing a versioned
+/// executable. A configured binary proves reachability only; a target is
+/// routable here only when its adapter exposes an actual lifecycle write port.
+/// Exact version and profile authority remain the selector's responsibility so
+/// detection diagnostics and revalidation retain their original semantics.
+fn lifecycle_mutation_route_available(
+    registry: &skilltap_harnesses::TargetRegistry,
+    config: &ConfigDocument,
+    target: &HarnessId,
+) -> bool {
+    let configured = config
+        .harnesses()
+        .get(target)
+        .and_then(|policy| policy.binary.as_ref())
+        .is_some();
+    if !configured {
+        return false;
+    }
+    registry.adapter(target).is_some_and(|adapter| {
+        adapter.native_lifecycle().is_some() || adapter.managed_projection().is_some()
+    })
+}
+
 struct LifecycleRouteContext<'a> {
     registry: &'a skilltap_harnesses::TargetRegistry,
     documents: &'a StatusDocuments,
@@ -2651,6 +2674,110 @@ fn project_inventory_targets(
         }
     }
     Ok(next)
+}
+
+/// Publish only desired bindings whose planned operation reached a valid
+/// terminal result. A resource may have several target-local bindings, so a
+/// blocked declaration must not make the whole resource disappear or cause its
+/// inventory entry to be published for that target.
+fn project_inventory_targets_for_success(
+    original: &InventoryDocument,
+    proposed: &InventoryDocument,
+    successful: &BTreeMap<ResourceKey, BTreeSet<HarnessId>>,
+) -> Result<InventoryDocument, ()> {
+    let mut next = original.clone();
+    for (key, selected) in successful {
+        let Some(proposed_resource) = proposed.resources().get(key) else {
+            continue;
+        };
+        let selected = proposed_resource
+            .targets()
+            .iter()
+            .filter(|target| selected.contains(*target))
+            .cloned()
+            .collect::<Vec<_>>();
+        if selected.is_empty() {
+            continue;
+        }
+        let selected = HarnessSet::new(selected).map_err(|_| ())?;
+        let projected = proposed_resource
+            .with_targets(selected.clone())
+            .map_err(|_| ())?;
+        if let Some(existing) = next.resources().get(key).cloned() {
+            // A single desired resource cannot safely represent two source
+            // identities. Refuse publication rather than silently rewriting an
+            // unselected sibling when a selected update changes its source.
+            if existing.source() != projected.source() {
+                return Err(());
+            }
+            let targets = existing
+                .targets()
+                .iter()
+                .chain(selected.iter())
+                .cloned()
+                .collect::<Vec<_>>();
+            let merged = existing
+                .with_targets(HarnessSet::new(targets).map_err(|_| ())?)
+                .map_err(|_| ())?;
+            next = next.replace_resource(merged).map_err(|_| ())?;
+        } else {
+            next = next.with_resource(projected).map_err(|_| ())?;
+        }
+    }
+    Ok(next)
+}
+
+/// Remove only target bindings whose removal operation was valid. This is the
+/// removal counterpart to [`project_inventory_targets_for_success`].
+fn project_inventory_removals(
+    original: &InventoryDocument,
+    successful: &BTreeMap<ResourceKey, BTreeSet<HarnessId>>,
+) -> Result<InventoryDocument, ()> {
+    let mut next = original.clone();
+    for (key, selected) in successful {
+        let selected = HarnessSet::new(selected.iter().cloned()).map_err(|_| ())?;
+        next = project_inventory_targets(&next, &BTreeSet::from([key.clone()]), &selected)?;
+    }
+    Ok(next)
+}
+
+/// Merge target-local state seeds without allowing the last planned target to
+/// overwrite earlier siblings in a mixed-target lifecycle plan.
+fn merge_resource_seed(
+    seeds: &mut BTreeMap<ResourceKey, ResourceState>,
+    next: ResourceState,
+) -> Result<(), ()> {
+    let key = next.key().clone();
+    let merged = match seeds.remove(&key) {
+        None => next,
+        Some(mut current) => {
+            for target in next.targets().values() {
+                current = current.with_target(target.clone()).map_err(|_| ())?;
+            }
+            current
+        }
+    };
+    seeds.insert(key, merged);
+    Ok(())
+}
+
+fn state_changed_since(repository: &dyn StateRepository, original: Option<&StateDocument>) -> bool {
+    match repository.load() {
+        Ok(DocumentState::Present(current)) => Some(&current) != original,
+        Ok(DocumentState::Missing) => original.is_some(),
+        Err(_) => true,
+    }
+}
+
+fn project_state_targets_after_remove_by_target(
+    repository: &dyn StateRepository,
+    successful: &BTreeMap<ResourceKey, BTreeSet<HarnessId>>,
+) -> Result<(), ()> {
+    for (key, targets) in successful {
+        let selected = HarnessSet::new(targets.iter().cloned()).map_err(|_| ())?;
+        project_state_targets_after_remove(repository, &BTreeSet::from([key.clone()]), &selected)?;
+    }
+    Ok(())
 }
 
 fn project_state_targets_after_remove(
