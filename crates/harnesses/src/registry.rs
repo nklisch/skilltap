@@ -13,6 +13,7 @@ use crate::{
     CanonicalObservation, DetectionError,
     adapters::{
         ClaudeAdapter, CodexAdapter, FactoryAdapter, GeminiAdapter, OpenCodeAdapter, PiAdapter,
+        QwenAdapter,
     },
     conditional_profile::ConditionalProfilePort,
     lifecycle::{
@@ -279,6 +280,7 @@ impl TargetRegistry {
             ClaudeAdapter::static_ref(),
             FactoryAdapter::static_ref(),
             GeminiAdapter::static_ref(),
+            QwenAdapter::static_ref(),
             OpenCodeAdapter::static_ref(),
             PiAdapter::static_ref(),
         ])
@@ -439,9 +441,11 @@ mod tests {
 
         assert_eq!(
             registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
-            ["codex", "claude", "droid", "gemini", "opencode", "pi"]
+            [
+                "codex", "claude", "droid", "gemini", "qwen", "opencode", "pi"
+            ]
         );
-        assert_eq!(registry.iter().count(), 6);
+        assert_eq!(registry.iter().count(), 7);
         assert_eq!(registry.first_party_targets().count(), 2);
         assert!(
             registry

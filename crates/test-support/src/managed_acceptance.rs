@@ -112,6 +112,10 @@ pub struct ManagedProjectionProfile {
 }
 
 impl ManagedProjectionProfile {
+    pub const fn qwen() -> Self {
+        Self::new("qwen", &[], Some(".qwen/settings.json"), ".qwen/skills")
+    }
+
     pub const fn codex() -> Self {
         Self::new(
             "codex",

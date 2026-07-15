@@ -13,7 +13,7 @@ use skilltap_core::{
 };
 use skilltap_harnesses::{
     ClaudeAdapter, CodexAdapter, CodexConfigError, DetectionError, FactoryAdapter, HarnessAdapter,
-    PiAdapter, ProbeError, TargetRegistry,
+    PiAdapter, ProbeError, QwenAdapter, TargetRegistry,
     detect_configured_installation as detect_configured_installation_with_environment,
     detect_installation as detect_installation_with_environment, observe_codex_canonical_resources,
     observe_codex_config, probe_profile, unreachable_installation,
@@ -210,6 +210,12 @@ fn exact_real_versions_are_reachable_and_select_exact_profiles() {
             "claude",
             "2.1.201",
         ),
+        (
+            QwenAdapter::static_ref(),
+            FakeHarnessProfile::qwen(),
+            "qwen",
+            "0.19.10",
+        ),
     ] {
         let (root, _fixture) = install_profile(&profile, binary);
         let (process_limits, json_limits) = limits();
@@ -254,6 +260,37 @@ fn factory_adjacent_version_is_observe_only_and_detection_is_zero_write() {
     assert_eq!(native_version.as_str(), "0.171.1");
     assert!(
         FactoryAdapter::static_ref()
+            .select_profile(native_version)
+            .mutation_capabilities()
+            .is_none()
+    );
+    assert_eq!(before, after);
+    assert_eq!(
+        fixture.captured_invocation().unwrap().arguments(),
+        &[b"--version".to_vec()]
+    );
+}
+
+#[test]
+fn qwen_adjacent_version_is_observe_only_and_detection_is_zero_write() {
+    let profile = FakeHarnessProfile::qwen_with_version("0.19.11");
+    let (root, fixture) = install_profile(&profile, "qwen");
+    let before = fs::read_dir(root.path()).unwrap().count();
+    let (process_limits, json_limits) = limits();
+    let installation = detect_installation(
+        QwenAdapter::static_ref(),
+        root.path().as_os_str().to_os_string(),
+        process_limits,
+        json_limits,
+    )
+    .unwrap();
+    let after = fs::read_dir(root.path()).unwrap().count();
+    let HarnessReachability::Reachable { native_version, .. } = installation.reachability() else {
+        panic!("Qwen fixture must remain reachable");
+    };
+    assert_eq!(native_version.as_str(), "0.19.11");
+    assert!(
+        QwenAdapter::static_ref()
             .select_profile(native_version)
             .mutation_capabilities()
             .is_none()
@@ -489,7 +526,9 @@ fn blocked_candidate_reports_match_registry_absence_and_first_party_bootstrap_sc
     let registry = TargetRegistry::canonical();
     assert_eq!(
         registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
-        ["codex", "claude", "droid", "gemini", "opencode", "pi"]
+        [
+            "codex", "claude", "droid", "gemini", "qwen", "opencode", "pi"
+        ]
     );
     assert_eq!(
         registry

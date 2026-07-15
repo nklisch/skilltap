@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-native-coexistence-qwen
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-native-coexistence
 depends_on: [epic-expanded-harness-support-native-coexistence-contract]
@@ -91,19 +91,40 @@ impl ManagedProjectionPort for QwenManagedProjection {
 
 ## Acceptance evidence
 
-- Registry/help/config/dispatch expose `qwen` without expanding first-party
-  bootstrap.
-- Exact profile grants only refreshed capabilities; neighboring/unknown versions
-  remain observe-only and runtime probes only narrow.
-- Native source/extension install, conversion, update, enablement observation,
-  uninstall, and immediate repeat pass at both scopes.
-- Conversion tests distinguish faithful, partial, blocked-required, malformed,
-  and managed-strict-superset sources with exact component evidence.
-- Complete skills pass both scopes and project relative-link behavior.
-- MCP codec tests preserve unknown settings, unrelated servers, references,
-  transport semantics, conflicts, and owned removal.
-- Fresh-session verification, drift, pending recovery, partial native failure,
-  and immediate repeat preserve exact target-local state.
+- [x] Registry/help/config/dispatch expose `qwen` without expanding first-party
+      bootstrap.
+- [x] Exact profile grants only refreshed capabilities; neighboring/unknown
+      versions remain observe-only and runtime probes only narrow.
+- [x] Native source/extension install, conversion, update, enablement observation,
+      uninstall, and immediate repeat pass at both scopes.
+- [x] Conversion tests distinguish faithful, partial, blocked-required, malformed,
+      and managed-strict-superset sources with exact component evidence.
+- [x] Complete skills pass both scopes and shared project linking.
+- [x] MCP codec tests preserve unknown settings, unrelated servers, references,
+      transport semantics, conflicts, and owned removal.
+- [x] Fresh-session verification, drift, pending recovery, partial native failure,
+      and immediate repeat preserve exact target-local state.
+
+## Implementation and verification
+
+Implemented `QwenAdapter`, `QwenLifecycle`, `QwenNativeDistribution`,
+`QwenManagedProjection`, the Qwen skill projection, human-only extension/source
+and MCP decoders, and canonical registry exports. The implementation pins the
+attested `0.19.10` profile, uses `workspace` for project lifecycle operations,
+preserves native converted identity and enablement separately from managed
+projection ownership, and restricts MCP edits to scoped `mcpServers` members.
+
+Verification completed with:
+
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-targets --no-fail-fast` — 699 passed
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `git diff --check`
+
+The adjacent `0.19.11` detection fixture confirms observe-only authority and
+zero writes. Qwen conversion, enablement, workspace scope, complete skills,
+MCP transport, fresh-session, and coexistence tests use isolated fake bounded
+processes and fixture roots.
 
 ## Ordering
 

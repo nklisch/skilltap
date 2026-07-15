@@ -116,6 +116,7 @@ pub struct IsolatedMachine {
     codex_home: PathBuf,
     claude_home: PathBuf,
     factory_home: PathBuf,
+    qwen_home: PathBuf,
     kiro_home: PathBuf,
     pi_home: PathBuf,
     pi_package_dir: PathBuf,
@@ -131,6 +132,7 @@ impl IsolatedMachine {
         let codex_home = home.join(".codex");
         let claude_home = home.join(".claude");
         let factory_home = home.join(".factory");
+        let qwen_home = home.join(".qwen");
         let kiro_home = home.join(".kiro");
         let pi_home = home.join(".pi/agent");
         let pi_package_dir = pi_home.join("npm");
@@ -141,6 +143,7 @@ impl IsolatedMachine {
         fs::create_dir_all(&codex_home)?;
         fs::create_dir_all(&claude_home)?;
         fs::create_dir_all(&factory_home)?;
+        fs::create_dir_all(&qwen_home)?;
         fs::create_dir_all(&kiro_home)?;
         fs::create_dir_all(&pi_home)?;
         fs::create_dir_all(&pi_package_dir)?;
@@ -153,6 +156,7 @@ impl IsolatedMachine {
             codex_home,
             claude_home,
             factory_home,
+            qwen_home,
             kiro_home,
             pi_home,
             pi_package_dir,
@@ -182,6 +186,10 @@ impl IsolatedMachine {
 
     pub fn factory_home(&self) -> &Path {
         &self.factory_home
+    }
+
+    pub fn qwen_home(&self) -> &Path {
+        &self.qwen_home
     }
 
     pub fn kiro_home(&self) -> &Path {

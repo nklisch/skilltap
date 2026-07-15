@@ -470,6 +470,72 @@ fn render_script(
     if lifecycle_dialect != LifecycleDialect::None
         || (version_response.is_none() && matches!(mode, FakeNativeMode::VersionKnown))
     {
+        if lifecycle_dialect == LifecycleDialect::Qwen {
+            script.push_str(&format!(
+                r#"lifecycle={lifecycle}
+if [ "${{1-}} ${{2-}} ${{3-}}" = "extensions sources list" ]; then
+  printf 'Configured extension sources:\n'
+  for path in "$lifecycle"/qwen-source-*; do
+    [ -f "$path" ] || continue
+    name=${{path##*/}}
+    name=${{name#qwen-source-}}
+    printf '  %s\n    Source: local\n    Type: local\n' "$name"
+  done
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "extensions sources add" ]; then
+  : > "$lifecycle/qwen-source-team"
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "extensions sources remove" ]; then
+  /bin/rm -f "$lifecycle/qwen-source-${{3-}}"
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "extensions sources update" ]; then exit 0; fi
+if [ "${{1-}} ${{2-}}" = "extensions list" ]; then
+  scope=${{4-}}
+  found=0
+  for path in "$lifecycle"/qwen-extension-*; do
+    [ -f "$path" ] || continue
+    name=${{path##*/}}
+    name=${{name#qwen-extension-}}
+    enabled=0
+    [ -f "$lifecycle/qwen-enabled-${{scope}}-$name" ] && enabled=1
+    [ "$enabled" = 1 ] || continue
+    found=1
+    printf 'Installed extensions:\n  %s\n    Version: 1.0.0\n    Source: local\n    Type: local\n    Enabled (User): %s\n    Enabled (Workspace): %s\n    Skills:\n      - %s\n' "$name" "$([ "$scope" = user ] && echo true || echo false)" "$([ "$scope" = workspace ] && echo true || echo false)" "$name"
+  done
+  [ "$found" = 1 ] || printf 'Installed extensions:\n  none\n'
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "extensions install" ] || [ "${{1-}} ${{2-}}" = "extensions uninstall" ]; then
+  name=${{3-}}
+  scope=${{5-}}
+  safe=$(printf '%s' "$name" | tr / _)
+  if [ "${{2-}}" = install ]; then
+    : > "$lifecycle/qwen-extension-$safe"
+    : > "$lifecycle/qwen-enabled-$scope-$safe"
+  else
+    /bin/rm -f "$lifecycle/qwen-extension-$safe" "$lifecycle/qwen-enabled-user-$safe" "$lifecycle/qwen-enabled-workspace-$safe"
+  fi
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "extensions enable" ] || [ "${{1-}} ${{2-}}" = "extensions disable" ]; then
+  name=${{3-}}
+  scope=${{5-}}
+  safe=$(printf '%s' "$name" | tr / _)
+  if [ "${{2-}}" = enable ]; then : > "$lifecycle/qwen-enabled-$scope-$safe"; else /bin/rm -f "$lifecycle/qwen-enabled-$scope-$safe"; fi
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "extensions update" ]; then exit 0; fi
+if [ "${{1-}} ${{2-}}" = "mcp list" ]; then
+  printf 'No MCP servers configured.\n'
+  exit 0
+fi
+"#,
+                lifecycle = shell_quote(&captures.join("lifecycle")),
+            ));
+        }
         if lifecycle_dialect == LifecycleDialect::Factory {
             script.push_str(&format!(
                 r#"lifecycle={lifecycle}

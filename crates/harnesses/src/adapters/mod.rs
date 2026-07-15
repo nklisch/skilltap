@@ -15,6 +15,8 @@ mod opencode_managed;
 mod pi;
 mod pi_profile;
 mod pi_settings;
+mod qwen;
+mod qwen_managed;
 
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
@@ -30,6 +32,11 @@ pub use opencode::{OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeSkillPr
 pub use opencode_managed::OpenCodeManagedProjection;
 pub use pi::{PiAdapter, PiSkillProjection};
 pub use pi_profile::PiConditionalProfile;
+pub use qwen::{
+    QwenAdapter, QwenEffectiveStateProbe, QwenExtensionRecord, QwenLifecycle,
+    QwenNativeDistribution, QwenSkillProjection, decode_qwen_extensions, decode_qwen_mcp_status,
+};
+pub use qwen_managed::QwenManagedProjection;
 
 #[cfg(test)]
 mod tests {
@@ -68,6 +75,13 @@ mod tests {
                 OpenCodeAdapter::static_ref(),
                 "1.18.1",
                 "opencode-1-18-1",
+                true,
+                true,
+            ),
+            (
+                QwenAdapter::static_ref(),
+                "0.19.10",
+                "qwen-0-19-10",
                 true,
                 true,
             ),
@@ -173,6 +187,7 @@ mod tests {
         let opencode = registry
             .adapter(&HarnessId::new("opencode").unwrap())
             .unwrap();
+        let qwen = registry.adapter(&HarnessId::new("qwen").unwrap()).unwrap();
 
         let pi = registry.adapter(&HarnessId::new("pi").unwrap()).unwrap();
         assert_eq!(pi.identity(), super::PiAdapter::static_ref().identity());
@@ -208,6 +223,12 @@ mod tests {
         assert!(opencode.skill_projection().is_some());
         assert!(opencode.managed_projection().is_some());
         assert!(opencode.effective_state_probe().is_some());
+        assert_eq!(qwen.identity(), QwenAdapter::static_ref().identity());
+        assert!(qwen.native_lifecycle().is_some());
+        assert!(qwen.native_distribution().is_some());
+        assert!(qwen.managed_projection().is_some());
+        assert!(qwen.effective_state_probe().is_some());
+        assert!(qwen.skill_projection().is_some());
     }
 
     #[test]

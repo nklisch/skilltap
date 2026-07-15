@@ -24,8 +24,10 @@ pub use adapters::{
     FactoryAdapter, FactoryLifecycle, FactoryManagedProjection, FactoryNativeDistribution,
     FactorySkillProjection, GeminiAdapter, GeminiEffectiveStateProbe, GeminiManagedProjection,
     GeminiSkillProjection, OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeManagedProjection,
-    OpenCodeSkillProjection, PiAdapter, PiConditionalProfile, PiSkillProjection,
-    decode_factory_plugin_list,
+    OpenCodeSkillProjection, PiAdapter, PiConditionalProfile, PiSkillProjection, QwenAdapter,
+    QwenEffectiveStateProbe, QwenExtensionRecord, QwenLifecycle, QwenManagedProjection,
+    QwenNativeDistribution, QwenSkillProjection, decode_factory_plugin_list,
+    decode_qwen_extensions, decode_qwen_mcp_status,
 };
 
 mod plugin_graph;

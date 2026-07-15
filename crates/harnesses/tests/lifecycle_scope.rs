@@ -8,8 +8,9 @@ use skilltap_core::{
 };
 use skilltap_harnesses::{
     ClaudeAdapter, FactoryAdapter, NativeLifecycleAction, NativeLifecycleDispatch,
-    NativeLifecycleRequest, NativeObservationFailure, NativeResourceObservation,
-    decode_factory_plugin_list, observe_native_resource,
+    NativeLifecycleRequest, NativeObservationFailure, NativeResourceObservation, QwenAdapter,
+    QwenExtensionRecord, decode_factory_plugin_list, decode_qwen_extensions,
+    observe_native_resource,
 };
 use skilltap_test_support::TempRoot;
 
@@ -87,6 +88,57 @@ fn factory_native_lifecycle_and_human_postcondition_are_scope_exact() {
                 NativeId::new("e8801fa").unwrap(),
             )),
         }
+    );
+}
+
+#[test]
+fn qwen_native_vectors_and_human_enablement_observation_preserve_workspace_scope() {
+    let adapter = QwenAdapter::static_ref();
+    let project = Scope::Project(AbsolutePath::new("/tmp/qwen-project").unwrap());
+    let request = NativeLifecycleRequest {
+        action: NativeLifecycleAction::PluginInstall,
+        scope: project.clone(),
+        name: NativeId::new("fixture").unwrap(),
+        source: Some(skilltap_core::domain::SourceLocator::new("/tmp/qwen-source").unwrap()),
+    };
+    let dispatch = NativeLifecycleDispatch::new(
+        adapter.identity().id,
+        adapter.native_lifecycle().unwrap(),
+        request.clone(),
+    );
+    assert_eq!(
+        skilltap_harnesses::native_arguments(&dispatch),
+        Ok([
+            "extensions",
+            "install",
+            "/tmp/qwen-source:fixture",
+            "--scope",
+            "workspace"
+        ]
+        .map(OsString::from)
+        .to_vec())
+    );
+    assert_eq!(
+        adapter
+            .native_lifecycle()
+            .unwrap()
+            .observation_arguments(&request)
+            .unwrap(),
+        ["extensions", "list", "--scope", "workspace"].map(OsString::from)
+    );
+    let records = decode_qwen_extensions(b"Installed extensions:\n  fixture\n    Version: 1.0.0\n    Enabled (User): false\n    Enabled (Workspace): true\n", JsonLimits::new(4096, 16).unwrap()).unwrap();
+    assert_eq!(
+        records,
+        vec![QwenExtensionRecord {
+            name: "fixture".to_owned(),
+            version: Some(NativeId::new("1.0.0").unwrap()),
+            path: None,
+            source: None,
+            source_type: None,
+            enabled_user: false,
+            enabled_workspace: true,
+            components: Default::default()
+        }]
     );
 }
 

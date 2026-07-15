@@ -40,6 +40,7 @@ pub enum LifecycleDialect {
     Codex,
     Claude,
     Factory,
+    Qwen,
     None,
 }
 
@@ -54,6 +55,7 @@ enum LayoutBase {
     Codex,
     Claude,
     Factory,
+    Qwen,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -163,6 +165,38 @@ impl FakeHarnessProfile {
         }
     }
 
+    pub const fn qwen() -> Self {
+        Self::qwen_with_version("0.19.10")
+    }
+
+    pub const fn qwen_with_version(version: &'static str) -> Self {
+        Self {
+            id: "qwen",
+            version_response: VersionResponse::TextSuffix {
+                version,
+                suffix: "",
+            },
+            lifecycle_dialect: LifecycleDialect::Qwen,
+            managed_projection: Some(ManagedProjectionProfile::new(
+                "qwen",
+                &[],
+                Some(".qwen/settings.json"),
+                ".qwen/skills",
+            )),
+            conditional_profile: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Qwen,
+                global_mcp_base: LayoutBase::Qwen,
+                global_skill: "skills/contract-skill",
+                global_mcp: "settings.json",
+                project_skill: ".qwen/skills/contract-skill",
+                project_mcp: ".qwen/settings.json",
+                mcp_initial: br#"{"mcpServers":{"contract":{"command":"contract-server"}}}"#,
+                mcp_reloaded: br#"{"mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
+            },
+        }
+    }
+
     pub const fn claude() -> Self {
         Self {
             id: "claude",
@@ -239,12 +273,14 @@ impl FakeHarnessProfile {
             LayoutBase::Codex => machine.codex_home(),
             LayoutBase::Claude => machine.claude_home(),
             LayoutBase::Factory => machine.factory_home(),
+            LayoutBase::Qwen => machine.qwen_home(),
         };
         let mcp_base = match self.layout.global_mcp_base {
             LayoutBase::Home => machine.home(),
             LayoutBase::Codex => machine.codex_home(),
             LayoutBase::Claude => machine.claude_home(),
             LayoutBase::Factory => machine.factory_home(),
+            LayoutBase::Qwen => machine.qwen_home(),
         };
         Ok(AcceptanceLayout {
             global: ScopeLayout {
@@ -514,6 +550,7 @@ mod tests {
             FakeHarnessProfile::codex(),
             FakeHarnessProfile::claude(),
             FakeHarnessProfile::droid(),
+            FakeHarnessProfile::qwen(),
         ] {
             let machine = IsolatedMachine::new("skilltap-acceptance-matrix").unwrap();
             let report = acceptance_matrix(&profile, &machine).unwrap();
@@ -535,6 +572,12 @@ mod tests {
                 .managed_projection()
                 .map(ManagedProjectionProfile::id),
             Some("droid")
+        );
+        assert_eq!(
+            FakeHarnessProfile::qwen()
+                .managed_projection()
+                .map(ManagedProjectionProfile::id),
+            Some("qwen")
         );
         assert!(FakeHarnessProfile::claude().managed_projection().is_none());
     }
@@ -575,6 +618,49 @@ mod tests {
                 .status()
                 .unwrap()
                 .success()
+        );
+    }
+
+    #[test]
+    fn qwen_fixture_preserves_workspace_enablement_and_human_list_output() {
+        let root = TempRoot::new("skilltap-qwen-lifecycle-fixture").unwrap();
+        let native = FakeHarnessProfile::qwen()
+            .build(root.path(), FakeNativeMode::VersionKnown)
+            .unwrap();
+        assert!(
+            native
+                .command()
+                .args(["extensions", "install", "demo", "--scope", "user"])
+                .status()
+                .unwrap()
+                .success()
+        );
+        let listed = native
+            .command()
+            .args(["extensions", "list", "--scope", "user"])
+            .output()
+            .unwrap();
+        assert_eq!(
+            listed.stdout,
+            b"Installed extensions:\n  demo\n    Version: 1.0.0\n    Source: local\n    Type: local\n    Enabled (User): true\n    Enabled (Workspace): false\n    Skills:\n      - demo\n"
+        );
+        assert!(
+            native
+                .command()
+                .args(["extensions", "enable", "demo", "--scope", "workspace"])
+                .status()
+                .unwrap()
+                .success()
+        );
+        let workspace = native
+            .command()
+            .args(["extensions", "list", "--scope", "workspace"])
+            .output()
+            .unwrap();
+        assert!(
+            String::from_utf8(workspace.stdout)
+                .unwrap()
+                .contains("Enabled (Workspace): true")
         );
     }
 
