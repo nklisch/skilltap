@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, ffi::OsString, fs, path::Path};
 
 use skilltap_core::{
     domain::{
-        AbsolutePath, ConfiguredBinary, HarnessInstallation, HarnessReachability, Scope,
+        AbsolutePath, ConfiguredBinary, HarnessId, HarnessInstallation, HarnessReachability, Scope,
         UnreachableReason,
     },
     runtime::{
@@ -13,11 +13,15 @@ use skilltap_core::{
 };
 use skilltap_harnesses::{
     ClaudeAdapter, CodexAdapter, CodexConfigError, DetectionError, HarnessAdapter, ProbeError,
+    TargetRegistry,
     detect_configured_installation as detect_configured_installation_with_environment,
     detect_installation as detect_installation_with_environment, observe_codex_canonical_resources,
     observe_codex_config, probe_profile, unreachable_installation,
 };
-use skilltap_test_support::{FakeHarnessProfile, FakeNativeMode, FakeNativeProcess, TempRoot};
+use skilltap_test_support::{
+    BLOCKED_CANDIDATES, CandidateAdmissionReport, CandidateDisposition, FakeHarnessProfile,
+    FakeNativeMode, FakeNativeProcess, TempRoot, blocked_candidate_admission_reports,
+};
 
 #[derive(Default)]
 struct TestEnvironment(BTreeMap<&'static str, OsString>);
@@ -387,6 +391,47 @@ fn missing_binary_and_explicit_unreachable_results_do_not_probe() {
         }
     ));
     assert!(!Path::new("/tmp/skilltap").exists());
+}
+
+#[test]
+fn blocked_candidate_reports_match_registry_absence_and_first_party_bootstrap_scope() {
+    let reports = blocked_candidate_admission_reports();
+    assert_eq!(
+        reports
+            .iter()
+            .map(CandidateAdmissionReport::candidate)
+            .collect::<Vec<_>>(),
+        BLOCKED_CANDIDATES.to_vec()
+    );
+    assert!(
+        reports
+            .iter()
+            .all(|report| report.disposition() == CandidateDisposition::Blocked)
+    );
+
+    let registry = TargetRegistry::canonical();
+    assert_eq!(
+        registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
+        ["codex", "claude", "gemini", "opencode"]
+    );
+    assert_eq!(
+        registry
+            .first_party_targets()
+            .map(|adapter| adapter.identity().id.to_string())
+            .collect::<Vec<_>>(),
+        ["codex".to_owned(), "claude".to_owned()]
+    );
+
+    for report in reports {
+        let id = HarnessId::new(report.candidate()).unwrap();
+        assert!(!registry.contains(&id));
+        assert!(registry.adapter(&id).is_none());
+        assert!(
+            registry
+                .iter()
+                .all(|adapter| adapter.identity().id.as_str() != report.candidate())
+        );
+    }
 }
 
 #[test]

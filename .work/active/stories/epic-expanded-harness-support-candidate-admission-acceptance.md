@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-candidate-admission-acceptance
 kind: story
-stage: implementing
+stage: done
 tags: [testing]
 parent: epic-expanded-harness-support-candidate-admission
 depends_on: [epic-expanded-harness-support-candidate-admission-zoo-admission, epic-expanded-harness-support-candidate-admission-zcode-admission, epic-expanded-harness-support-candidate-admission-cursor-admission]
@@ -46,20 +46,43 @@ actual registered adapters; bootstrap stays Codex/Claude-only.
 
 ## Acceptance evidence
 
-- [ ] Cursor, Zoo, and ZCode each have exactly one disposition matching their
-      boundary and admission stories.
-- [ ] Every admitted target passes exact detection, both scopes, whole skills,
-      MCP schema/precedence/secrets, effective reload, trust/policy health where
-      relevant, drift, ownership, update/removal, pending recovery, partial and
-      required compatibility, and immediate-repeat no-change.
-- [ ] Every observe-only target is inspectable but has no mutation capabilities,
-      skill/managed projection port, native lifecycle, or write operation.
-- [ ] Every blocked target remains absent with no guessed surface.
-- [ ] One candidate's success cannot alter or authorize either sibling.
-- [ ] Operator HOME/XDG/editor roots, extension storage, caches, and credentials
-      remain byte-for-byte untouched by tests.
-- [ ] Workspace tests, all-feature Clippy with warnings denied, formatting, and
-      `git diff --check` pass before the feature enters review.
+- [x] Cursor, Zoo, and ZCode each have exactly one `blocked` disposition matching
+      their boundary and admission stories.
+- [x] No admitted or observe-only acceptance fixture was added for a blocked
+      target; the aggregate report records the absence of native evidence.
+- [x] Every blocked target remains absent from the canonical registry, compiled
+      help, config mutation, and `--target all` output, with no production
+      adapter, path constant, profile, or port added.
+- [x] Selecting a blocked candidate cannot alter or authorize Codex/Claude
+      sibling configuration or state; first-party bootstrap remains Codex/Claude.
+- [x] Compiled tests use isolated machine roots and leave operator HOME/XDG,
+      caches, credentials, and native state outside the test boundary.
+- [x] Workspace tests, all-feature Clippy with warnings denied, formatting, and
+      `git diff --check` pass.
+
+## Implementation notes
+
+- Added the final blocked candidate report set to the dependency-neutral
+  candidate matrix. Cursor, Zoo, and ZCode each produce exactly one `blocked`
+  report with no invented native evidence or acceptance fixture.
+- Added a harness-registry test that pins the canonical target set, proves all
+  three candidate IDs are absent, and pins first-party bootstrap to Codex and
+  Claude.
+- Added compiled CLI coverage for registry-derived help, `--target all`, all
+  relevant candidate mutation entry points, sibling config/state preservation,
+  and non-first-party bootstrap rejection. All commands reject before mutation.
+- No production adapter, path constant, profile, port, native fixture, or
+  candidate target code was added.
+
+## Verification
+
+- Focused candidate report, harness detection/registry, and compiled CLI tests
+  passed.
+- `cargo check --workspace --all-features` passed.
+- `cargo test --workspace --all-features` passed: 656 tests.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+  passed.
+- `cargo fmt --all -- --check` and `git diff --check` passed.
 
 ## Ordering
 

@@ -9,7 +9,7 @@ use serde_json::Value;
 use skilltap_core::VERSION;
 use skilltap_test_support::{
     FakeHarnessProfile, FakeLifecycleAction, FakeNativeMode, FakeNativeProcess, IsolatedMachine,
-    captured_stderr, captured_stdout, compiled_binary,
+    blocked_candidate_admission_reports, captured_stderr, captured_stdout, compiled_binary,
 };
 
 const ENABLED_CONFIG: &str = r#"schema = 1
@@ -552,6 +552,100 @@ fn unregistered_harness_is_rejected_before_state_creation() {
     assert_eq!(value["errors"][0]["code"], "target_not_registered");
     assert_eq!(value["errors"][0]["context"]["harness"], "not-registered");
     assert!(!config_root(&machine).exists());
+}
+
+#[test]
+fn blocked_candidates_have_no_help_mutation_or_target_all_surface() {
+    let reports = blocked_candidate_admission_reports();
+    assert!(reports.iter().all(|report| report.is_blocked()));
+
+    let machine = machine();
+    for arguments in [
+        vec!["--help"],
+        vec!["status", "--help"],
+        vec!["plan", "--help"],
+        vec!["sync", "--help"],
+        vec!["bootstrap", "--help"],
+        vec!["harness", "enable", "--help"],
+    ] {
+        let output = run(&machine, &arguments);
+        assert_code(&output, 0);
+        let help = stdout(&output);
+        for report in &reports {
+            assert!(
+                !help.contains(report.candidate()),
+                "{} unexpectedly appears in help for {arguments:?}",
+                report.candidate()
+            );
+        }
+    }
+
+    let target_all = run(&machine, &["plan", "--target", "all", "--json"]);
+    let target_all_value = json(&target_all);
+    for report in &reports {
+        assert!(!target_all_value.to_string().contains(report.candidate()));
+    }
+
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let before = snapshot_native_tree(&config_root(&machine));
+
+    for report in &reports {
+        let target = report.candidate();
+        let attempts = [
+            vec!["harness", "enable", target, "--json"],
+            vec!["harness", "disable", target, "--json"],
+            vec![
+                "marketplace",
+                "add",
+                "https://example.invalid/team.git",
+                "--target",
+                target,
+                "--json",
+            ],
+            vec![
+                "plugin",
+                "install",
+                "demo@team",
+                "--target",
+                target,
+                "--json",
+            ],
+            vec!["skill", "update", "--target", target, "--json"],
+            vec!["bootstrap", "--target", target, "--json"],
+        ];
+        for arguments in attempts {
+            let output = run(&machine, &arguments);
+            assert_code(&output, 1);
+            let value = json(&output);
+            assert_eq!(value["errors"][0]["code"], "target_not_registered");
+            assert_eq!(value["errors"][0]["context"]["harness"], target);
+            assert_eq!(snapshot_native_tree(&config_root(&machine)), before);
+        }
+    }
+
+    let list = run(&machine, &["harness", "list", "--json"]);
+    let list_value = json(&list);
+    for report in &reports {
+        assert!(!list_value.to_string().contains(report.candidate()));
+    }
+    for sibling in ["codex", "claude"] {
+        assert!(
+            list_value["resources"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|resource| resource["id"] == sibling)
+        );
+    }
+
+    for target in ["gemini", "opencode"] {
+        let bootstrap = run(&machine, &["bootstrap", "--target", target, "--json"]);
+        assert_code(&bootstrap, 1);
+        assert_eq!(
+            json(&bootstrap)["errors"][0]["code"],
+            "bootstrap_target_unavailable"
+        );
+    }
 }
 
 #[test]

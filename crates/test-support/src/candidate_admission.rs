@@ -1,5 +1,12 @@
 use std::{collections::BTreeSet, fmt};
 
+/// Candidates whose boundary and admission stories concluded `blocked`.
+///
+/// These reports intentionally contain no native evidence or fake harness
+/// fixture. A blocked candidate must not borrow acceptance evidence from a
+/// registered sibling or acquire a guessed mutation surface.
+pub const BLOCKED_CANDIDATES: [&str; 3] = ["cursor", "zoo", "zcode"];
+
 /// Evidence required before a candidate can be admitted as a mutable target.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum CandidateAdmissionCheck {
@@ -174,6 +181,13 @@ pub fn candidate_admission_gate(
     }
 }
 
+/// Produce the final aggregate reports for candidates with blocked
+/// dispositions. No target-specific runner exists for these candidates: the
+/// absence of evidence is the tested reason they remain blocked.
+pub fn blocked_candidate_admission_reports() -> [CandidateAdmissionReport; 3] {
+    BLOCKED_CANDIDATES.map(|candidate| candidate_admission_gate(candidate, |_| false))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,5 +259,24 @@ mod tests {
 
         assert!(evidence.contains(CandidateAdmissionCheck::ExactInstallationIdentity));
         assert_eq!(evidence.checks().count(), 1);
+    }
+
+    #[test]
+    fn blocked_candidate_reports_match_the_final_disposition_matrix() {
+        let reports = blocked_candidate_admission_reports();
+
+        assert_eq!(
+            reports
+                .iter()
+                .map(CandidateAdmissionReport::candidate)
+                .collect::<Vec<_>>(),
+            BLOCKED_CANDIDATES.to_vec()
+        );
+        assert!(reports.iter().all(CandidateAdmissionReport::is_blocked));
+        assert!(
+            reports
+                .iter()
+                .all(|report| report.missing().len() == CandidateAdmissionCheck::ALL.len())
+        );
     }
 }

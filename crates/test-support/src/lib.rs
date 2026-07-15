@@ -14,8 +14,9 @@ mod native_process;
 #[cfg(unix)]
 pub use barrier::FileBarrier;
 pub use candidate_admission::{
-    CandidateAdmissionCheck, CandidateAdmissionEvidence, CandidateAdmissionReport,
-    CandidateDisposition, candidate_admission_gate,
+    BLOCKED_CANDIDATES, CandidateAdmissionCheck, CandidateAdmissionEvidence,
+    CandidateAdmissionReport, CandidateDisposition, blocked_candidate_admission_reports,
+    candidate_admission_gate,
 };
 #[cfg(unix)]
 pub use external_tree::{ExternalTreeFixture, InjectedIoFault, ReplacementRace};
