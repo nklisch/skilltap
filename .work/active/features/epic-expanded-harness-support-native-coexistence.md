@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-native-coexistence
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -30,6 +30,18 @@ scope, precedence, enterprise or trust constraints, structured observation,
 and verified version profiles while sharing target-neutral execution and state
 machinery. The feature includes isolated native validation and complete
 acceptance-contract evidence for all three targets.
+
+## Review result
+
+The required standard independent pass approved the completed family with no
+material findings. Copilot `1.0.70` is managed-only: structured MCP projection
+and observation are supported, complete skills use acknowledged declaration
+management, and no native plugin or marketplace command can be constructed.
+Factory and Qwen remained unchanged through the component-capability helper
+split. Two future status-wiring notes remain non-blocking: consume Copilot's
+policy-to-finding converter when generic effective probes reach status, and
+preserve the deliberate separation between enterprise policy findings and the
+generic trust channel.
 
 ## Epic context
 
