@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, ffi::OsString};
 
 use skilltap_core::{
     domain::{
-        AbsolutePath, CapabilityProfileSelection, CapabilityScope, HarnessId, NativeId,
+        AbsolutePath, CapabilityProfileSelection, HarnessId, NativeId,
         NativeVersion, Scope,
     },
     runtime::{
@@ -183,13 +183,6 @@ impl HarnessAdapter for GeminiAdapter {
 
     fn effective_state_probe(&self) -> Option<&dyn EffectiveStateProbePort> {
         Some(&PROBE)
-    }
-
-    fn supports_managed_projection(&self, _scope: CapabilityScope) -> bool {
-        // The managed projection is compiled only for VERIFIED_VERSION. The
-        // lifecycle coordinator must still pair this with profile selection;
-        // this port merely declares the target's scoped surface.
-        true
     }
 
     fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {

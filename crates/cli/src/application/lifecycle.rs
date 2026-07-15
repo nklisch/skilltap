@@ -18,6 +18,51 @@ struct DaemonNativeExecution {
     operations: Vec<DaemonOperationRef>,
 }
 
+fn standalone_skill_operation(
+    operation_id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    path: AbsolutePath,
+    partial: bool,
+) -> Result<skilltap_core::domain::Operation, skilltap_core::domain::OperationContractError> {
+    if !partial {
+        return skilltap_core::lifecycle_operation::faithful_file_operation(
+            operation_id,
+            target,
+            resource,
+            OperationAction::SkillInstall,
+            path,
+        );
+    }
+    let component = ComponentId::new(resource.id().as_str().to_owned())
+        .expect("standalone skill component id is valid");
+    partial_file_operation(
+        operation_id,
+        target.clone(),
+        resource,
+        OperationAction::SkillInstall,
+        path,
+        [CompatibilityEvidence::new(
+            EvidenceCode::new("skill.frontmatter_unverified").expect("static evidence code is valid"),
+            target,
+            [component.clone()],
+            EvidenceDetail::new(
+                "The skill is loadable, but its frontmatter is not fully strict for this target.",
+            )
+            .expect("static evidence detail is valid"),
+        )],
+        [MaterialConsequence::new(
+            ConsequenceCode::new("skill.frontmatter_unverified")
+                .expect("static consequence code is valid"),
+            [component],
+            skilltap_core::domain::ConsequenceSummary::new(
+                "The skill will be installed while strict frontmatter compatibility remains unverified.",
+            )
+            .expect("static consequence summary is valid"),
+        )],
+    )
+}
+
 fn daemon_capability_name(kind: NativeLifecycleKind) -> &'static str {
     match kind {
         NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
@@ -710,7 +755,6 @@ impl StatusApplication<'_> {
             process_limits,
             json_limits,
             timestamp,
-            acknowledged: false,
             filesystem: self.managed_filesystem(),
         }) {
             Ok(route) => route,
@@ -780,7 +824,6 @@ impl StatusApplication<'_> {
                         paths,
                         timestamp: observed_at,
                         json_limits,
-                        acknowledged: false,
                         filesystem: self.managed_filesystem(),
                         checkout: None,
                     },
@@ -1421,7 +1464,6 @@ impl StatusApplication<'_> {
                                 ));
                             }
                         },
-                        acknowledged,
                         filesystem: self.managed_filesystem(),
                     }) {
                         Ok(route) => route,
@@ -1511,7 +1553,6 @@ impl StatusApplication<'_> {
                                     paths: &paths,
                                     timestamp: timestamp.expect("timestamp validated above"),
                                     json_limits,
-                                    acknowledged,
                                     filesystem: self.managed_filesystem(),
                                     checkout: None,
                                 },
@@ -2352,7 +2393,7 @@ impl StatusApplication<'_> {
             }
         };
         let mut compatibility_label = "compatible";
-        let mut partial_compatibility = false;
+        let mut partial_targets = BTreeSet::new();
         for compatibility in SkillCompatibility::evaluate(&skill, &targets.resolved) {
             match (compatibility.class(), compatibility.loadability()) {
                 (CompatibilityClass::Compatible, SkillLoadability::Loadable) => {}
@@ -2368,7 +2409,7 @@ impl StatusApplication<'_> {
                 }
                 (CompatibilityClass::Unknown, SkillLoadability::Unknown) => {
                     compatibility_label = "warning";
-                    partial_compatibility = true;
+                    partial_targets.insert(compatibility.target().clone());
                     outcome = outcome.with_warning(
                         Warning::new(
                             "skill_frontmatter_warning",
@@ -2487,6 +2528,66 @@ impl StatusApplication<'_> {
                 .expect("bounded conditional profile process limits are valid");
         let conditional_json_limits = JsonLimits::new(256 * 1024, 64)
             .expect("bounded conditional profile JSON limits are valid");
+        let search_path = std::env::var_os("PATH");
+        let native_environment = match paths.native_process_environment(search_path.clone()) {
+            Ok(environment) => environment,
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return outcome.with_error(ErrorDetail::new(
+                    "native_environment_unavailable",
+                    "The bounded native process environment could not be resolved.",
+                ));
+            }
+        };
+        let mut profile_target_ids = Vec::new();
+        for target_id in targets.resolved.iter() {
+            match configured_adapter_profile(
+                self.registry,
+                &documents.config,
+                target_id,
+                NativeProfileRequest {
+                    scope: &Scope::Global,
+                    environment: &native_environment,
+                    process_limits: conditional_process_limits,
+                    json_limits: conditional_json_limits,
+                    search_path: search_path.clone(),
+                    capability_name: if command == "skill update" || command == "sync" {
+                        "skill.update"
+                    } else {
+                        "skill.install"
+                    },
+                },
+            ) {
+                Ok(Some(profile)) if profile.capability == CapabilitySupport::Supported => {
+                    profile_target_ids.push(target_id.clone());
+                }
+                Ok(Some(profile)) => {
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "skill_mutation_unavailable",
+                            "The selected harness profile is not verified for standalone skill mutation; no files were written for it.",
+                        )
+                        .with_context("harness", target_id.as_str())
+                        .with_context("support", format!("{:?}", profile.capability)),
+                    );
+                }
+                Ok(None) | Err(_) => {
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "skill_mutation_unavailable",
+                            "The selected harness profile could not be verified for standalone skill mutation; no files were written for it.",
+                        )
+                        .with_context("harness", target_id.as_str()),
+                    );
+                }
+            }
+        }
+        let mutation_capability_name = if command == "skill update" || command == "sync" {
+            "skill.update"
+        } else {
+            "skill.install"
+        };
+        let profile_targets = HarnessSet::new(profile_target_ids).ok();
         let timestamp = match Timestamp::from_system_time(std::time::SystemTime::now()) {
             Ok(timestamp) => timestamp,
             Err(_) => {
@@ -2508,11 +2609,31 @@ impl StatusApplication<'_> {
                     conditional_process_limits,
                     conditional_json_limits,
                     &filesystem,
-                    &CapabilityId::new("skill.install").expect("static skill capability is valid"),
+                    &CapabilityId::new(mutation_capability_name)
+                        .expect("static skill capability is valid"),
                     outcome,
                 );
             outcome = next_outcome;
             let Some(mutating_targets) = mutating_targets else {
+                continue;
+            };
+            let Some(profile_targets) = profile_targets.as_ref() else {
+                outcome = outcome.with_warning(Warning::new(
+                    "skill_mutation_unavailable",
+                    "No verified standalone skill mutation profile is available; no files were written.",
+                ));
+                continue;
+            };
+            let authorized_target_ids = mutating_targets
+                .iter()
+                .filter(|target| profile_targets.contains(target))
+                .cloned()
+                .collect::<Vec<_>>();
+            let Some(mutating_targets) = HarnessSet::new(authorized_target_ids).ok() else {
+                outcome = outcome.with_warning(Warning::new(
+                    "skill_mutation_unavailable",
+                    "No selected harness has a verified standalone skill mutation profile; no files were written.",
+                ));
                 continue;
             };
             let key = ResourceKey::new(
@@ -2534,8 +2655,7 @@ impl StatusApplication<'_> {
                     .as_ref()
                     .and_then(|state| state.resources().get(&key))
                     .and_then(|state| {
-                        targets
-                            .resolved
+                        profile_targets
                             .iter()
                             .find_map(|target| state.target(target))
                     })
@@ -2568,67 +2688,6 @@ impl StatusApplication<'_> {
                     ));
                 }
             };
-            if partial_compatibility {
-                let acknowledgment_selector = OperationSelector::Resource {
-                    resource: key.clone(),
-                };
-                let candidate = UpdateCandidate {
-                    resource: key.clone(),
-                    // Compatibility acknowledgment is a foreground
-                    // decision even when the source revision itself did not
-                    // change (for example, the first install or a repeated
-                    // materialization). Use a private revision pair solely
-                    // to exercise the update-selection contract; the actual
-                    // source revision remains recorded below.
-                    current_revision: Some(skilltap_core::domain::ResolvedRevision::Native(
-                        NativeId::new("skilltap-partial-current").expect("static native id"),
-                    )),
-                    available_revision: Some(skilltap_core::domain::ResolvedRevision::Native(
-                        NativeId::new("skilltap-partial-available").expect("static native id"),
-                    )),
-                    resolution_error: None,
-                    pinned: update_intent == UpdateIntent::Pinned,
-                    drifted: false,
-                    compatibility_changed: false,
-                    requires_acknowledgment: true,
-                    intent: update_intent,
-                    acknowledgment_selectors: [acknowledgment_selector].into_iter().collect(),
-                };
-                let update_plan = match plan_foreground_updates(ForegroundUpdateRequest {
-                    resources: std::slice::from_ref(&desired),
-                    candidates: std::slice::from_ref(&candidate),
-                    mode: documents.config.updates().mode,
-                }) {
-                    Ok(plan) => plan,
-                    Err(_error) => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(ErrorDetail::new(
-                            "foreground_update_plan_invalid",
-                            "The partial skill update could not be validated safely.",
-                        ));
-                    }
-                };
-                if let Err(_error) = select_foreground_updates_with_acknowledgment(
-                    &update_plan,
-                    &BTreeSet::new(),
-                    acknowledged,
-                ) {
-                    outcome.result = ResultClass::AttentionRequired;
-                    return outcome
-                        .with_warning(
-                            Warning::new(
-                                "partial_operation_requires_acknowledgment",
-                                "The skill is loadable but not fully strict for the selected harness; rerun with `--yes` to accept the reported loss.",
-                            ),
-                        )
-                        .with_next_action(NextAction::new(
-                            "accept_partial",
-                            "Review the compatibility warning, then retry with `--yes` if the partial result is acceptable.",
-                        ))
-                        .with_summary("operations", 0_u64)
-                        .with_summary("changed", false);
-                }
-            }
             inventory = match inventory.with_resource(desired) {
                 Ok(inventory) => inventory,
                 Err(_) => {
@@ -2738,14 +2797,13 @@ impl StatusApplication<'_> {
                     } else {
                         skill_operation_id(target_id, &key)
                     };
-                    let operation =
-                        match skilltap_core::lifecycle_operation::faithful_file_operation(
-                            operation_id.clone(),
-                            target_id.clone(),
-                            key.clone(),
-                            OperationAction::SkillInstall,
-                            full_path,
-                        ) {
+                    let operation = match standalone_skill_operation(
+                        operation_id.clone(),
+                        target_id.clone(),
+                        key.clone(),
+                        full_path,
+                        partial_targets.contains(target_id),
+                    ) {
                             Ok(operation) => operation,
                             Err(_) => {
                                 outcome.result = ResultClass::Invalid;
@@ -2777,12 +2835,12 @@ impl StatusApplication<'_> {
                 } else {
                     skill_operation_id(target_id, &key)
                 };
-                let operation = match skilltap_core::lifecycle_operation::faithful_file_operation(
+                let operation = match standalone_skill_operation(
                     operation_id.clone(),
                     target_id.clone(),
                     key.clone(),
-                    OperationAction::SkillInstall,
                     full_path,
+                    partial_targets.contains(target_id),
                 ) {
                     Ok(operation) => operation,
                     Err(_) => {
@@ -2850,6 +2908,22 @@ impl StatusApplication<'_> {
                 };
                 seeds.insert(key, state);
             }
+        }
+        if !acknowledged && operations.iter().any(|operation| {
+            operation.class() == skilltap_core::domain::OperationClass::Partial
+        }) {
+            outcome.result = ResultClass::AttentionRequired;
+            return outcome
+                .with_warning(Warning::new(
+                    "partial_operation_requires_acknowledgment",
+                    "The skill plan contains an exact compatibility consequence; rerun the same command with `--yes` to accept it.",
+                ))
+                .with_next_action(NextAction::new(
+                    "acknowledge_partial_operation",
+                    "Review the skill plan and rerun the same command with `--yes`.",
+                ))
+                .with_summary("operations", operations.len() as u64)
+                .with_summary("changed", false);
         }
         let empty_inventory = documents.inventory.clone().unwrap_or_else(|| {
             InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
@@ -2932,14 +3006,25 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let report =
-            match execute_plan(&SystemConfigurationLock, &lock_path, &port, &journal, &plan) {
-                Ok(report) => report,
-                Err(error) => {
-                    outcome.result = ResultClass::AttentionRequired;
-                    return outcome.with_error(native_execution_error(&error));
-                }
-            };
+        let acknowledgments = if acknowledged {
+            ExecutionAcknowledgments::foreground_all(&plan)
+        } else {
+            ExecutionAcknowledgments::default()
+        };
+        let report = match execute_plan_with_acknowledgments(
+            &SystemConfigurationLock,
+            &lock_path,
+            &port,
+            &journal,
+            &plan,
+            &acknowledgments,
+        ) {
+            Ok(report) => report,
+            Err(error) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return outcome.with_error(native_execution_error(&error));
+            }
+        };
         for result in report.result.operations().values() {
             outcome = outcome.with_operation(crate::OperationOutcome::new(
                 result.operation_id().to_string(),
@@ -3267,12 +3352,61 @@ impl StatusApplication<'_> {
                 .expect("bounded conditional profile process limits are valid");
         let conditional_json_limits = JsonLimits::new(256 * 1024, 64)
             .expect("bounded conditional profile JSON limits are valid");
+        let search_path = std::env::var_os("PATH");
+        let native_environment = match paths.native_process_environment(search_path.clone()) {
+            Ok(environment) => environment,
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return outcome.with_error(ErrorDetail::new(
+                    "native_environment_unavailable",
+                    "The bounded native process environment could not be resolved.",
+                ));
+            }
+        };
+        let mut profile_target_ids = Vec::new();
+        for target_id in targets.resolved.iter() {
+            match configured_adapter_profile(
+                self.registry,
+                &documents.config,
+                target_id,
+                NativeProfileRequest {
+                    scope: &Scope::Global,
+                    environment: &native_environment,
+                    process_limits: conditional_process_limits,
+                    json_limits: conditional_json_limits,
+                    search_path: search_path.clone(),
+                    capability_name: "skill.remove",
+                },
+            ) {
+                Ok(Some(profile)) if profile.capability == CapabilitySupport::Supported => {
+                    profile_target_ids.push(target_id.clone());
+                }
+                Ok(Some(_)) | Ok(None) | Err(_) => {
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "skill_mutation_unavailable",
+                            "The selected harness profile is not verified for standalone skill removal; no files were removed for it.",
+                        )
+                        .with_context("harness", target_id.as_str()),
+                    );
+                }
+            }
+        }
+        if profile_target_ids.is_empty() {
+            outcome.result = ResultClass::AttentionRequired;
+            return outcome.with_error(ErrorDetail::new(
+                "skill_mutation_unavailable",
+                "No selected harness has a verified standalone skill removal profile.",
+            ));
+        }
+        let profile_targets = HarnessSet::new(profile_target_ids)
+            .expect("verified profile target set is non-empty");
         for concrete_scope in &scope.resolved {
             let (mutating_targets, next_outcome) =
                 super::conditional_profile::filter_targets_for_capability(
                     self.registry,
                     &documents.config,
-                    &targets.resolved,
+                    &profile_targets,
                     concrete_scope,
                     &paths,
                     conditional_process_limits,
@@ -3543,14 +3677,25 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let report =
-            match execute_plan(&SystemConfigurationLock, &lock_path, &port, &journal, &plan) {
-                Ok(report) => report,
-                Err(error) => {
-                    outcome.result = ResultClass::AttentionRequired;
-                    return outcome.with_error(native_execution_error(&error));
-                }
-            };
+        let acknowledgments = if acknowledged {
+            ExecutionAcknowledgments::foreground_all(&plan)
+        } else {
+            ExecutionAcknowledgments::default()
+        };
+        let report = match execute_plan_with_acknowledgments(
+            &SystemConfigurationLock,
+            &lock_path,
+            &port,
+            &journal,
+            &plan,
+            &acknowledgments,
+        ) {
+            Ok(report) => report,
+            Err(error) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return outcome.with_error(native_execution_error(&error));
+            }
+        };
         let report_successful = report.result.operations().values().all(|result| {
             matches!(
                 result.outcome(),

@@ -171,12 +171,6 @@ pub trait HarnessAdapter: Sync {
         None
     }
 
-    /// Retained during the authority migration. New callers must use the
-    /// exact compiled profile and `managed_declaration_contract` instead.
-    fn supports_managed_projection(&self, _scope: CapabilityScope) -> bool {
-        false
-    }
-
     /// An agent action returned instead of unattended first-party bootstrap.
     fn bootstrap_next_action(&self) -> Option<&'static str> {
         None

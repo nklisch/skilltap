@@ -43,7 +43,6 @@ pub struct ManagedProjectionContext<'a> {
     pub kind: ManagedLifecycleKind,
     pub input: ManagedProjectionInput<'a>,
     pub prior: &'a [ManagedProjection],
-    pub acknowledged: bool,
     pub filesystem: &'a dyn ConfinedFileSystem,
     pub json_limits: JsonLimits,
 }
@@ -181,7 +180,6 @@ mod tests {
                     checkout: &checkout,
                 },
                 prior: &[],
-                acknowledged: false,
                 filesystem: &filesystem,
                 json_limits,
             })
@@ -208,7 +206,6 @@ mod tests {
                 kind: ManagedLifecycleKind::PluginRemove,
                 input: ManagedProjectionInput::Remove,
                 prior: &planned_apply.manifest,
-                acknowledged: false,
                 filesystem: &filesystem,
                 json_limits,
             })

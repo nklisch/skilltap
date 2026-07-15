@@ -214,13 +214,6 @@ fn plan_skills(
             names.insert(id.as_str().to_owned());
         }
     }
-    if !omitted.is_empty() && !context.acknowledged && !removal {
-        return Err(ManagedProjectionError::Other {
-            code: "partial_operation_requires_acknowledgment",
-            summary: "The plugin has optional components outside OpenCode skill/MCP load paths; rerun with `--yes` to accept their omission.",
-        });
-    }
-
     let mut trees = Vec::new();
     let mut current_parts = Vec::new();
     let mut desired_parts = Vec::new();
@@ -454,12 +447,6 @@ fn plan_mcp(
             Err(_) => {
                 if is_required_mcp(declarations, &name) {
                     return Err(ManagedProjectionError::RequiredUnsupported);
-                }
-                if !context.acknowledged && !removal {
-                    return Err(ManagedProjectionError::Other {
-                        code: "partial_operation_requires_acknowledgment",
-                        summary: "The plugin contains an optional MCP server that cannot be projected faithfully to OpenCode; rerun with `--yes` to accept its omission.",
-                    });
                 }
                 manifest.push(omitted_component(
                     &ComponentId::new(format!("mcp:{name}")).map_err(|_| {

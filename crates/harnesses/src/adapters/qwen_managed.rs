@@ -377,12 +377,6 @@ fn plan_skills(
             names.insert(id.as_str().to_owned());
         }
     }
-    if !omitted.is_empty() && !context.acknowledged && !removal {
-        return Err(ManagedProjectionError::Other {
-            code: "partial_operation_requires_acknowledgment",
-            summary: "The plugin contains optional components outside Qwen skill/MCP load paths; rerun with `--yes` to accept their omission.",
-        });
-    }
     let mut trees = Vec::new();
     let mut current_parts = Vec::new();
     let mut desired_parts = Vec::new();
@@ -604,12 +598,6 @@ fn plan_mcp(
             Ok(value) => value,
             Err(_) if is_required_mcp(declarations, &name) => {
                 return Err(ManagedProjectionError::RequiredUnsupported);
-            }
-            Err(_) if !context.acknowledged && !removal => {
-                return Err(ManagedProjectionError::Other {
-                    code: "partial_operation_requires_acknowledgment",
-                    summary: "The plugin contains an MCP server that cannot be projected faithfully to Qwen; rerun with `--yes` to accept its omission.",
-                });
             }
             Err(_) => {
                 manifest.push(ManagedProjection::Omitted {

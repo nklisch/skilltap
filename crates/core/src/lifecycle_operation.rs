@@ -9,7 +9,8 @@ use crate::domain::{
     AcknowledgmentRequirement, AffectedSurface, CommandArgument, CompatibilityClass,
     CompatibilityEvidence, CompatibilityResult, ComponentId, ConsequenceCode, ConsequenceSummary,
     EvidenceCode, EvidenceDetail, HarnessId, MaterialConsequence, NativeId, Operation,
-    OperationAction, OperationClass, OperationId, OperationReason, OperationSelector,
+    OperationAction, OperationClass, OperationDependency, OperationId, OperationReason,
+    OperationSelector,
     OperationSemantics, Provenance, ResourceKey, Reversibility, TransferFidelity,
 };
 
@@ -161,6 +162,84 @@ pub fn native_noop_operation(
         [],
         AcknowledgmentRequirement::not_required(),
         None,
+    )
+}
+
+/// Build a partial managed-file operation whose exact consequence must be
+/// accepted by a foreground caller.
+pub fn partial_file_operation(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+    path: crate::domain::AbsolutePath,
+    evidence: impl IntoIterator<Item = CompatibilityEvidence>,
+    consequences: impl IntoIterator<Item = MaterialConsequence>,
+) -> Result<Operation, crate::domain::OperationContractError> {
+    partial_file_operation_with_dependencies(
+        id,
+        target,
+        resource,
+        action,
+        path,
+        evidence,
+        consequences,
+        [],
+    )
+}
+
+pub fn partial_file_operation_with_dependencies(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+    path: crate::domain::AbsolutePath,
+    evidence: impl IntoIterator<Item = CompatibilityEvidence>,
+    consequences: impl IntoIterator<Item = MaterialConsequence>,
+    dependencies: impl IntoIterator<Item = OperationDependency>,
+) -> Result<Operation, crate::domain::OperationContractError> {
+    let consequences = consequences.into_iter().collect::<std::collections::BTreeSet<_>>();
+    let compatibility = CompatibilityResult::new(
+        target.clone(),
+        CompatibilityClass::TargetSpecific,
+        TransferFidelity::Partial,
+        evidence,
+        consequences.clone(),
+    )
+    .expect("partial file operations require valid evidence and consequences");
+    let selectors = acknowledgment_selectors(&resource, &consequences);
+    let acknowledgment = AcknowledgmentRequirement::required(
+        selectors.clone(),
+        consequences.clone(),
+    )?;
+    let attention = Some(crate::domain::AttentionReason::acknowledgment_required(
+        selectors,
+        consequences,
+    )?);
+    let semantics = OperationSemantics::new(
+        action,
+        resource.scope().clone(),
+        OperationReason::new(
+            EvidenceCode::new("managed.file.partial").expect("static evidence code is valid"),
+            EvidenceDetail::new(
+                "The complete managed skill tree will be published with an acknowledged compatibility consequence.",
+            )
+            .expect("static evidence detail is valid"),
+        ),
+        compatibility,
+        Provenance::Direct,
+        [AffectedSurface::file(path)],
+    );
+    Operation::new(
+        id,
+        target,
+        OperationSelector::Resource { resource },
+        semantics,
+        OperationClass::Partial,
+        Reversibility::Reversible,
+        dependencies,
+        acknowledgment,
+        attention,
     )
 }
 

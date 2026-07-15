@@ -236,12 +236,6 @@ fn plan_skills(
             consequence: evidence("unsupported_optional_component_omitted"),
         });
     }
-    if !omitted.is_empty() && !context.acknowledged && !removal {
-        return Err(ManagedProjectionError::Other {
-            code: "partial_operation_requires_acknowledgment",
-            summary: "The plugin contains Kiro Power-adjacent steering or other unsupported optional components; rerun with `--yes` to accept their omission.",
-        });
-    }
     manifest.extend(omitted);
 
     for projection in context.prior {
@@ -469,12 +463,6 @@ fn plan_mcp(
             Err(_) => {
                 if is_required_mcp(declarations, &name) {
                     return Err(ManagedProjectionError::RequiredUnsupported);
-                }
-                if !context.acknowledged && !removal {
-                    return Err(ManagedProjectionError::Other {
-                        code: "partial_operation_requires_acknowledgment",
-                        summary: "The plugin contains an MCP server that cannot be projected faithfully to Kiro; rerun with `--yes` to accept its omission.",
-                    });
                 }
                 manifest.push(ManagedProjection::Omitted {
                     id: ComponentId::new(format!("mcp:{name}")).map_err(|_| {

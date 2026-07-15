@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-declaration-managed-migration-regressions
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-declaration-managed
 depends_on: [epic-expanded-harness-support-declaration-managed-authority-contract, epic-expanded-harness-support-declaration-managed-planner-acknowledgment, epic-expanded-harness-support-declaration-managed-execution-status]
@@ -58,6 +58,18 @@ schemas.
 - A managed port without a declaration contract cannot exploit `Unverified`.
 - Final greps find no broad support gate, default-unverified mutation fallback,
   adapter acknowledgment branch, or synthetic partial revision marker.
+
+## Implementation notes
+
+- Expanded adapter profiles now carry independent global/project skill and
+  managed-component capabilities, and standalone global/project skill mutation
+  intersects conditional authorization with exact configured profile support.
+- Removed the broad managed-projection support gate and adapter-local partial
+  acknowledgment branches; managed adapters now emit omission evidence for the
+  shared planner/executor contract.
+- Replaced the standalone synthetic partial revision candidate with validated
+  `OperationClass::Partial` operations and exact foreground acknowledgment.
+- Existing compiled CLI regressions pass unchanged: `69 passed`.
 
 ## Ordering constraint
 

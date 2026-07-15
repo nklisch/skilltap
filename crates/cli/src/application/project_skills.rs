@@ -12,7 +12,7 @@ use skilltap_core::{
     domain::{
         AbsolutePath, CapabilityId, CompatibilityClass, ComponentGraph, DesiredOrigin,
         DesiredResource, Fingerprint, FingerprintAlgorithm, GitCommit, HarnessId, HarnessSet,
-        NativeId, OperationAction, OperationDependency, OperationId, Ownership, Provenance,
+        CapabilitySupport, NativeId, OperationAction, OperationDependency, OperationId, Ownership, Provenance,
         ResourceId, ResourceKey, ResourceKind, Scope, Source, UpdateIntent,
     },
     project_skill::{
@@ -33,6 +33,55 @@ use skilltap_core::{
         StateDocument, StateRepository, TargetResourceState, Timestamp,
     },
 };
+
+fn project_skill_operation(
+    operation_id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    path: AbsolutePath,
+    dependencies: Vec<OperationDependency>,
+    partial: bool,
+) -> Result<skilltap_core::domain::Operation, skilltap_core::domain::OperationContractError> {
+    if !partial {
+        return skilltap_core::lifecycle_operation::faithful_file_operation_with_dependencies(
+            operation_id,
+            target,
+            resource,
+            OperationAction::SkillInstall,
+            path,
+            dependencies,
+        );
+    }
+    let component = skilltap_core::domain::ComponentId::new(resource.id().as_str().to_owned())
+        .expect("project skill component id is valid");
+    skilltap_core::lifecycle_operation::partial_file_operation_with_dependencies(
+        operation_id,
+        target.clone(),
+        resource,
+        OperationAction::SkillInstall,
+        path,
+        [skilltap_core::domain::CompatibilityEvidence::new(
+            skilltap_core::domain::EvidenceCode::new("skill.frontmatter_unverified")
+                .expect("static evidence code is valid"),
+            target,
+            [component.clone()],
+            skilltap_core::domain::EvidenceDetail::new(
+                "The project skill is loadable, but its frontmatter is not fully strict for this target.",
+            )
+            .expect("static evidence detail is valid"),
+        )],
+        [skilltap_core::domain::MaterialConsequence::new(
+            skilltap_core::domain::ConsequenceCode::new("skill.frontmatter_unverified")
+                .expect("static consequence code is valid"),
+            [component],
+            skilltap_core::domain::ConsequenceSummary::new(
+                "The project skill will be installed while strict frontmatter compatibility remains unverified.",
+            )
+            .expect("static consequence summary is valid"),
+        )],
+        dependencies,
+    )
+}
 
 use super::{
     ErrorDetail, NextAction, Outcome, OutputEntry, ResultClass, StatusApplication, Warning,
@@ -1004,7 +1053,72 @@ pub(super) fn execute_project_skill_install(
         ));
     }
 
-    let mut partial = false;
+    let Some(project) = scope.resolved.iter().find_map(|scope| match scope {
+        Scope::Project(project) => Some(project),
+        Scope::Global => None,
+    }) else {
+        return outcome;
+    };
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded conditional profile process limits are valid");
+    let json_limits =
+        JsonLimits::new(256 * 1024, 64).expect("bounded conditional profile JSON limits are valid");
+    let search_path = std::env::var_os("PATH");
+    let environment = match paths.native_process_environment(search_path.clone()) {
+        Ok(environment) => environment,
+        Err(_) => {
+            outcome.result = ResultClass::AttentionRequired;
+            return outcome.with_error(ErrorDetail::new(
+                "native_environment_unavailable",
+                "The bounded native process environment could not be resolved.",
+            ));
+        }
+    };
+    let capability_name = if command == "skill update" || command == "sync" {
+        "skill.update"
+    } else {
+        "skill.install"
+    };
+    let config = application
+        .config
+        .load()
+        .ok()
+        .and_then(|document| match document {
+            DocumentState::Present(document) => Some(document),
+            DocumentState::Missing => None,
+        })
+        .unwrap_or_else(ConfigDocument::defaults);
+    let mut profile_target_ids = Vec::new();
+    for target in targets.iter() {
+        match super::configured_adapter_profile(
+            application.registry,
+            &config,
+            target,
+            super::NativeProfileRequest {
+                scope: &Scope::Project(project.clone()),
+                environment: &environment,
+                process_limits,
+                json_limits,
+                search_path: search_path.clone(),
+                capability_name,
+            },
+        ) {
+            Ok(Some(profile)) if profile.capability == CapabilitySupport::Supported => {
+                profile_target_ids.push(target.clone());
+            }
+            Ok(Some(_)) | Ok(None) | Err(_) => {
+                outcome = outcome.with_warning(
+                    Warning::new(
+                        "skill_mutation_unavailable",
+                        "The selected harness profile is not verified for project skill mutation; no files were written for it.",
+                    )
+                    .with_context("target", target.as_str()),
+                );
+            }
+        }
+    }
+    let profile_targets = HarnessSet::new(profile_target_ids).ok();
+    let mut partial_targets = BTreeSet::new();
     for target in targets.iter() {
         let Some(adapter) = application.registry.adapter(target) else {
             outcome.result = ResultClass::Invalid;
@@ -1028,12 +1142,6 @@ pub(super) fn execute_project_skill_install(
                     "Use a target with a verified project skill load path, then retry.",
                 ));
         };
-        let Some(project) = scope.resolved.iter().find_map(|scope| match scope {
-            Scope::Project(project) => Some(project),
-            Scope::Global => None,
-        }) else {
-            return outcome;
-        };
         let Some(native_root) = projection.destination(&paths, &Scope::Project(project.clone()))
         else {
             outcome.result = ResultClass::AttentionRequired;
@@ -1049,7 +1157,7 @@ pub(super) fn execute_project_skill_install(
         match (compatibility.class(), compatibility.loadability()) {
             (CompatibilityClass::Compatible, SkillLoadability::Loadable) => {}
             (CompatibilityClass::Unknown, SkillLoadability::Unknown) => {
-                partial = true;
+                partial_targets.insert(target.clone());
                 outcome = outcome.with_warning(
                     Warning::new(
                         "skill_frontmatter_warning",
@@ -1076,38 +1184,10 @@ pub(super) fn execute_project_skill_install(
         }
         let _ = native_root;
     }
-    if partial && !acknowledged {
-        outcome.result = ResultClass::AttentionRequired;
-        return outcome
-            .with_warning(Warning::new(
-                "partial_operation_requires_acknowledgment",
-                "The project skill is not strictly conforming for every selected target; rerun with `--yes` to acknowledge the disclosed compatibility consequence.",
-            ))
-            .with_next_action(NextAction::new(
-                "accept_partial",
-                "Review the project skill compatibility warning, then retry with `--yes` if acceptable.",
-            ))
-            .with_summary("operations", 0_u64)
-            .with_summary("changed", false);
-    }
-
     let filesystem = SystemFileSystem;
     let limits =
         ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
             .expect("bounded project skill limits are valid");
-    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
-        .expect("bounded conditional profile process limits are valid");
-    let json_limits =
-        JsonLimits::new(256 * 1024, 64).expect("bounded conditional profile JSON limits are valid");
-    let config = application
-        .config
-        .load()
-        .ok()
-        .and_then(|document| match document {
-            DocumentState::Present(document) => Some(document),
-            DocumentState::Missing => None,
-        })
-        .unwrap_or_else(ConfigDocument::defaults);
     let mut inventory = application
         .inventory
         .load()
@@ -1159,11 +1239,30 @@ pub(super) fn execute_project_skill_install(
                 process_limits,
                 json_limits,
                 &filesystem,
-                &CapabilityId::new("skill.install").expect("static skill capability is valid"),
+                &CapabilityId::new(capability_name).expect("static skill capability is valid"),
                 outcome,
             );
         outcome = next_outcome;
         let Some(mutating_targets) = mutating_targets else {
+            continue;
+        };
+        let Some(profile_targets) = profile_targets.as_ref() else {
+            outcome = outcome.with_warning(Warning::new(
+                "skill_mutation_unavailable",
+                "No verified project skill mutation profile is available; no files were written.",
+            ));
+            continue;
+        };
+        let authorized_target_ids = mutating_targets
+            .iter()
+            .filter(|target| profile_targets.contains(target))
+            .cloned()
+            .collect::<Vec<_>>();
+        let Some(mutating_targets) = HarnessSet::new(authorized_target_ids).ok() else {
+            outcome = outcome.with_warning(Warning::new(
+                "skill_mutation_unavailable",
+                "No selected harness has a verified project skill mutation profile; no files were written.",
+            ));
             continue;
         };
         let existing_resource = inventory.resources().get(&key);
@@ -1305,12 +1404,15 @@ pub(super) fn execute_project_skill_install(
                 .next()
                 .cloned()
                 .expect("non-empty mutation targets");
-            let operation = match skilltap_core::lifecycle_operation::faithful_file_operation(
+            let operation = match project_skill_operation(
                 operation_id.clone(),
                 target,
                 key.clone(),
-                OperationAction::SkillInstall,
                 path,
+                Vec::new(),
+                mutating_targets
+                    .iter()
+                    .any(|target| partial_targets.contains(target)),
             ) {
                 Ok(operation) => operation,
                 Err(_) => {
@@ -1437,15 +1539,14 @@ pub(super) fn execute_project_skill_install(
                 .cloned()
                 .map(OperationDependency::new)
                 .collect::<Vec<_>>();
-            let operation =
-                match skilltap_core::lifecycle_operation::faithful_file_operation_with_dependencies(
-                    operation_id.clone(),
-                    target.clone(),
-                    key.clone(),
-                    OperationAction::SkillInstall,
-                    destination_path,
-                    dependencies,
-                ) {
+            let operation = match project_skill_operation(
+                operation_id.clone(),
+                target.clone(),
+                key.clone(),
+                destination_path,
+                dependencies,
+                partial_targets.contains(target),
+            ) {
                     Ok(operation) => operation,
                     Err(_) => {
                         outcome.result = ResultClass::Invalid;
@@ -1532,6 +1633,22 @@ pub(super) fn execute_project_skill_install(
             .with_summary("operations", 0_u64)
             .with_summary("changed", false);
     }
+    if !acknowledged && operations.iter().any(|operation| {
+        operation.class() == skilltap_core::domain::OperationClass::Partial
+    }) {
+        outcome.result = ResultClass::AttentionRequired;
+        return outcome
+            .with_warning(Warning::new(
+                "partial_operation_requires_acknowledgment",
+                "The project skill plan contains an exact compatibility consequence; rerun with `--yes` to accept it.",
+            ))
+            .with_next_action(NextAction::new(
+                "accept_partial",
+                "Review the project skill plan, then retry with `--yes` if acceptable.",
+            ))
+            .with_summary("operations", operations.len() as u64)
+            .with_summary("changed", false);
+    }
     if inventory != original_inventory && application.inventory.replace(&inventory).is_err() {
         outcome.result = ResultClass::Invalid;
         return outcome.with_error(ErrorDetail::new(
@@ -1589,16 +1706,22 @@ pub(super) fn execute_project_skill_install(
             outcome.result = ResultClass::Invalid;
             return outcome.with_error(ErrorDetail::new(
                 "lock_path_invalid",
-                "The skilltap configuration lock path is invalid.",
+                "The lock path is invalid.",
             ));
         }
     };
-    let report = match skilltap_core::executor::execute_plan(
+    let acknowledgments = if acknowledged {
+        skilltap_core::executor::ExecutionAcknowledgments::foreground_all(&plan)
+    } else {
+        skilltap_core::executor::ExecutionAcknowledgments::default()
+    };
+    let report = match skilltap_core::executor::execute_plan_with_acknowledgments(
         &skilltap_core::runtime::SystemConfigurationLock,
         &lock_path,
         &port,
         &journal,
         &plan,
+        &acknowledgments,
     ) {
         Ok(report) => report,
         Err(error) => {
@@ -1787,6 +1910,61 @@ pub(super) fn execute_project_skill_remove(
     let mut target_projection_keys = BTreeSet::new();
     let mut authorized_targets = Vec::new();
     let mut blocked = false;
+    let Some(project) = scope.resolved.iter().find_map(|scope| match scope {
+        Scope::Project(project) => Some(project),
+        Scope::Global => None,
+    }) else {
+        return outcome;
+    };
+    let search_path = std::env::var_os("PATH");
+    let environment = match paths.native_process_environment(search_path.clone()) {
+        Ok(environment) => environment,
+        Err(_) => {
+            outcome.result = ResultClass::AttentionRequired;
+            return outcome.with_error(ErrorDetail::new(
+                "native_environment_unavailable",
+                "The bounded native process environment could not be resolved.",
+            ));
+        }
+    };
+    let mut profile_target_ids = Vec::new();
+    for target in targets.iter() {
+        match super::configured_adapter_profile(
+            application.registry,
+            &config,
+            target,
+            super::NativeProfileRequest {
+                scope: &Scope::Project(project.clone()),
+                environment: &environment,
+                process_limits,
+                json_limits,
+                search_path: search_path.clone(),
+                capability_name: "skill.remove",
+            },
+        ) {
+            Ok(Some(profile)) if profile.capability == CapabilitySupport::Supported => {
+                profile_target_ids.push(target.clone());
+            }
+            Ok(Some(_)) | Ok(None) | Err(_) => {
+                outcome = outcome.with_warning(
+                    Warning::new(
+                        "skill_mutation_unavailable",
+                        "The selected harness profile is not verified for project skill removal; no files were removed for it.",
+                    )
+                    .with_context("target", target.as_str()),
+                );
+            }
+        }
+    }
+    if profile_target_ids.is_empty() {
+        outcome.result = ResultClass::AttentionRequired;
+        return outcome.with_error(ErrorDetail::new(
+            "skill_mutation_unavailable",
+            "No selected harness has a verified project skill removal profile.",
+        ));
+    }
+    let profile_targets = HarnessSet::new(profile_target_ids)
+        .expect("verified project removal profile targets are non-empty");
 
     for concrete_scope in &scope.resolved {
         let Scope::Project(project) = concrete_scope else {
@@ -1796,7 +1974,7 @@ pub(super) fn execute_project_skill_remove(
             super::conditional_profile::filter_targets_for_capability(
                 application.registry,
                 &config,
-                &targets.resolved,
+                &profile_targets,
                 concrete_scope,
                 &paths,
                 process_limits,

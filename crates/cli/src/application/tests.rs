@@ -613,10 +613,6 @@ impl skilltap_harnesses::HarnessAdapter for FakeManagedAdapter {
     fn managed_projection(&self) -> Option<&dyn skilltap_harnesses::ManagedProjectionPort> {
         Some(&FAKE_MANAGED_PROJECTION)
     }
-
-    fn supports_managed_projection(&self, _scope: skilltap_core::domain::CapabilityScope) -> bool {
-        true
-    }
 }
 
 impl skilltap_harnesses::ManagedProjectionPort for FakeManagedProjection {

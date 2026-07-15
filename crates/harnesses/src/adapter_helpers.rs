@@ -101,7 +101,13 @@ pub(crate) fn compiled_capabilities(
         support("marketplace.register", true),
         support("marketplace.remove", true),
         support("marketplace.update", true),
+        support("skill.install", true),
+        support("skill.update", true),
+        support("skill.remove", true),
+        support("component.skill", true),
+        support("component.mcp", managed_projection),
     ]);
+    let project_managed = project_lifecycle || managed_projection;
     let project = CapabilitySet::new([
         support("harness.observe", true),
         support("managed.projection", managed_projection),
@@ -111,6 +117,11 @@ pub(crate) fn compiled_capabilities(
         support("marketplace.register", project_lifecycle),
         support("marketplace.remove", project_lifecycle),
         support("marketplace.update", project_lifecycle),
+        support("skill.install", project_managed),
+        support("skill.update", project_managed),
+        support("skill.remove", project_managed),
+        support("component.skill", true),
+        support("component.mcp", managed_projection),
     ]);
     ScopedCapabilitySets::new(global, project)
 }

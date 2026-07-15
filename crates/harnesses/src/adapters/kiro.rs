@@ -148,10 +148,6 @@ impl HarnessAdapter for KiroAdapter {
         Some(&PROBE)
     }
 
-    fn supports_managed_projection(&self, _scope: CapabilityScope) -> bool {
-        true
-    }
-
     fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {
         Some(paths.kiro_home().clone())
     }

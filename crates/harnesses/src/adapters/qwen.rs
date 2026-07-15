@@ -170,9 +170,6 @@ impl HarnessAdapter for QwenAdapter {
     fn effective_state_probe(&self) -> Option<&dyn EffectiveStateProbePort> {
         Some(&PROBE)
     }
-    fn supports_managed_projection(&self, _scope: CapabilityScope) -> bool {
-        true
-    }
     fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {
         absolute_child(paths.home(), QWEN_HOME)
     }

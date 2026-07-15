@@ -99,10 +99,6 @@ impl HarnessAdapter for CodexAdapter {
         Some(paths.codex_home().clone())
     }
 
-    fn supports_managed_projection(&self, scope: CapabilityScope) -> bool {
-        scope == CapabilityScope::Project
-    }
-
     fn bootstrap_next_action(&self) -> Option<&'static str> {
         Some(self.bootstrap_capability_next_action())
     }

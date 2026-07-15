@@ -168,10 +168,6 @@ impl HarnessAdapter for FactoryAdapter {
         Some(FactoryManagedProjection::static_ref())
     }
 
-    fn supports_managed_projection(&self, _scope: CapabilityScope) -> bool {
-        true
-    }
-
     fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {
         factory_home(paths.home())
     }

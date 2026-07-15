@@ -154,7 +154,6 @@ fn plan_plugin(
         declarations,
         context.prior,
         removal,
-        context.acknowledged,
     )
 }
 
@@ -207,7 +206,6 @@ fn plan_codex_component_projections(
     declarations: &[ComponentDeclaration],
     prior: &[ManagedProjection],
     removal: bool,
-    acknowledged: bool,
 ) -> Result<ManagedProjectionPlan, ManagedProjectionError> {
     let mut skill_names = BTreeSet::new();
     let mut unsupported_optional = BTreeSet::new();
@@ -229,13 +227,6 @@ fn plan_codex_component_projections(
             skill_names.insert(id.as_str().to_owned());
         }
     }
-    if !unsupported_optional.is_empty() && !acknowledged && !removal {
-        return Err(adapter_error(
-            "partial_operation_requires_acknowledgment",
-            "The plugin has optional components outside Codex project skill/MCP load paths; rerun with `--yes` to accept their omission.",
-        ));
-    }
-
     let root = AbsolutePath::new(format!("{}/.agents/skills", project.as_str())).map_err(|_| {
         adapter_error(
             "managed_project_plugin_path_invalid",
@@ -327,7 +318,6 @@ fn plan_codex_component_projections(
         plugin,
         prior,
         removal,
-        acknowledged,
         (&mut current_parts, &mut desired_parts),
     )?;
     if trees.is_empty() && mcp_write.is_none() {
@@ -433,7 +423,6 @@ fn plan_codex_mcp_config(
     plugin: Option<&ArtifactTree>,
     prior: &[ManagedProjection],
     removal: bool,
-    acknowledged: bool,
     fingerprint_parts: (&mut Vec<u8>, &mut Vec<u8>),
 ) -> Result<(Option<ManagedFileWrite>, Vec<ManagedProjection>), ManagedProjectionError> {
     let (current_parts, desired_parts) = fingerprint_parts;
@@ -494,12 +483,6 @@ fn plan_codex_mcp_config(
             detail: "An MCP server name is invalid.",
         })?;
         if !removal && server.is_some_and(mcp_depends_on_plugin_root) {
-            if !acknowledged {
-                return Err(adapter_error(
-                    "partial_operation_requires_acknowledgment",
-                    "An MCP server depends on a plugin-root-relative executable that cannot be projected faithfully; rerun with `--yes` to omit it.",
-                ));
-            }
             if let Ok(id) = skilltap_core::domain::ComponentId::new(format!("mcp:{name}")) {
                 manifest.push(ManagedProjection::Omitted {
                     id,

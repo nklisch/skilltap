@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, ffi::OsString};
 
 use skilltap_core::{
     domain::{
-        AbsolutePath, CapabilityProfileSelection, CapabilityScope, HarnessId, NativeId,
+        AbsolutePath, CapabilityProfileSelection, HarnessId, NativeId,
         NativeVersion, Scope,
     },
     runtime::{
@@ -195,10 +195,6 @@ impl HarnessAdapter for OpenCodeAdapter {
 
     fn effective_state_probe(&self) -> Option<&dyn EffectiveStateProbePort> {
         Some(&PROBE)
-    }
-
-    fn supports_managed_projection(&self, _scope: CapabilityScope) -> bool {
-        true
     }
 
     fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {

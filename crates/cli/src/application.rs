@@ -20,17 +20,13 @@ use skilltap_core::{
         ObservationKey, ObservationLayer, ObservationRequest, ObservationSeverity,
         ObservationSubject, ObservationSummary, ObservationTarget, ObservedResource,
         OperationAction, OperationDependency, OperationId, OperationOutcome, OperationResult,
-        OperationSelector, Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth,
+        Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth,
         ResourceId, ResourceKey, ResourceKind, Scope, Source, SourceKind, SourceLocator,
         UpdateIntent,
     },
     executor::{
         ExecutionAcknowledgments, ExecutionError, ExecutionJournal, ExecutionPort, execute_plan,
         execute_plan_with_acknowledgments,
-    },
-    foreground_update::{
-        ForegroundUpdateRequest, plan_foreground_updates,
-        select_foreground_updates_with_acknowledgment,
     },
     instructions::{
         InstructionBridgeMode as CoreInstructionBridgeMode, InstructionBridgeRepresentation,
@@ -39,7 +35,7 @@ use skilltap_core::{
     },
     lifecycle_operation::{
         managed_materialization_operation, managed_partial_materialization_operation,
-        native_operation,
+        native_operation, partial_file_operation,
     },
     lifecycle_representation::{
         LifecycleRepresentation, LifecycleRepresentationError, RepresentationCandidate,
@@ -1429,7 +1425,6 @@ struct ManagedPlanContext<'a> {
     paths: &'a PlatformPaths,
     timestamp: Timestamp,
     json_limits: JsonLimits,
-    acknowledged: bool,
     filesystem: &'a dyn ManagedLifecycleFileSystem,
     /// A caller-resolved checkout shared with native distribution assessment.
     checkout: Option<&'a ResolvedSourceCheckout>,
@@ -1462,7 +1457,6 @@ fn plan_managed_lifecycle(
         paths,
         timestamp,
         json_limits,
-        acknowledged: _,
         filesystem,
         checkout: provided_checkout,
     } = context;
@@ -1608,7 +1602,6 @@ fn plan_managed_lifecycle(
             prior: prior_projections,
             // The adapter reports optional loss; the planner owns whether the
             // resulting exact partial operation is accepted.
-            acknowledged: true,
             filesystem,
             json_limits,
         })
@@ -1868,7 +1861,6 @@ struct LifecycleRouteContext<'a> {
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
     timestamp: Timestamp,
-    acknowledged: bool,
     filesystem: &'a dyn ManagedLifecycleFileSystem,
 }
 
@@ -1892,7 +1884,6 @@ fn select_lifecycle_route(
         process_limits,
         json_limits,
         timestamp,
-        acknowledged,
         filesystem,
     } = context;
     let existing_state = documents
@@ -2036,7 +2027,6 @@ fn select_lifecycle_route(
                     paths,
                     timestamp,
                     json_limits,
-                    acknowledged,
                     filesystem,
                     checkout: Some(&checkout),
                 },
@@ -2068,8 +2058,7 @@ fn select_lifecycle_route(
         RepresentationEvidence::Fresh { native, managed }
     } else {
         RepresentationEvidence::Fresh {
-            native: if !adapter
-                .supports_managed_projection(skilltap_core::domain::CapabilityScope::from(scope))
+            native: if adapter.managed_projection().is_none()
                 && adapter.native_lifecycle().is_some()
             {
                 Some(RepresentationCandidate {
@@ -2084,9 +2073,7 @@ fn select_lifecycle_route(
                         plan: empty_materialization_plan(target),
                     })
             },
-            managed: if adapter
-                .supports_managed_projection(skilltap_core::domain::CapabilityScope::from(scope))
-            {
+            managed: if adapter.managed_projection().is_some() {
                 Some(RepresentationCandidate {
                     representation: LifecycleRepresentation::Managed,
                     plan: empty_materialization_plan(target),
