@@ -20,9 +20,8 @@ use skilltap_core::{
         ObservationKey, ObservationLayer, ObservationRequest, ObservationSeverity,
         ObservationSubject, ObservationSummary, ObservationTarget, ObservedResource,
         OperationAction, OperationDependency, OperationId, OperationOutcome, OperationResult,
-        Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth,
-        ResourceId, ResourceKey, ResourceKind, Scope, Source, SourceKind, SourceLocator,
-        UpdateIntent,
+        Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth, ResourceId, ResourceKey,
+        ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
     },
     executor::{
         ExecutionAcknowledgments, ExecutionError, ExecutionJournal, ExecutionPort, execute_plan,

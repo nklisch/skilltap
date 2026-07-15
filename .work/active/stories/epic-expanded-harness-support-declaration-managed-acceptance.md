@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-declaration-managed-acceptance
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-declaration-managed
 depends_on: [epic-expanded-harness-support-declaration-managed-daemon-safety, epic-expanded-harness-support-declaration-managed-migration-regressions]
@@ -59,6 +59,16 @@ status, rollback, and daemon policy in isolated environments.
 - Unknown/adjacent versions never mutate through any command even with `--yes`.
 - `cargo test --workspace --all-targets`, all-feature Clippy with warnings
   denied, formatting, and `git diff --check` pass.
+
+## Implementation notes
+
+- Production-aware compiled CLI coverage exercises exact profile routing,
+  conditional target isolation, managed partial acknowledgment, foreign
+  collisions, rollback-safe writes, unknown-version no-write behavior, status,
+  sync, and daemon paths in isolated machine roots.
+- Existing managed-adapter and standalone skill matrices remain green after the
+  shared operation contract migration; the full workspace/all-target suite
+  passes with `704` tests.
 
 ## Ordering constraint
 

@@ -10,10 +10,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use sha2::{Digest, Sha256};
 use skilltap_core::{
     domain::{
-        AbsolutePath, CapabilityId, CompatibilityClass, ComponentGraph, DesiredOrigin,
-        DesiredResource, Fingerprint, FingerprintAlgorithm, GitCommit, HarnessId, HarnessSet,
-        CapabilitySupport, NativeId, OperationAction, OperationDependency, OperationId, Ownership, Provenance,
-        ResourceId, ResourceKey, ResourceKind, Scope, Source, UpdateIntent,
+        AbsolutePath, CapabilityId, CapabilitySupport, CompatibilityClass, ComponentGraph,
+        DesiredOrigin, DesiredResource, Fingerprint, FingerprintAlgorithm, GitCommit, HarnessId,
+        HarnessSet, NativeId, OperationAction, OperationDependency, OperationId, Ownership,
+        Provenance, ResourceId, ResourceKey, ResourceKind, Scope, Source, UpdateIntent,
     },
     project_skill::{
         ProjectSkillLinkHealth, TargetProjectSkillProjection, project_skill_projection,
@@ -1547,15 +1547,15 @@ pub(super) fn execute_project_skill_install(
                 dependencies,
                 partial_targets.contains(target),
             ) {
-                    Ok(operation) => operation,
-                    Err(_) => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(ErrorDetail::new(
-                            "operation_contract_invalid",
-                            "The project skill link operation could not be represented safely.",
-                        ));
-                    }
-                };
+                Ok(operation) => operation,
+                Err(_) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "operation_contract_invalid",
+                        "The project skill link operation could not be represented safely.",
+                    ));
+                }
+            };
             operations.push(operation);
             link_entries.insert(
                 operation_id,
@@ -1633,9 +1633,11 @@ pub(super) fn execute_project_skill_install(
             .with_summary("operations", 0_u64)
             .with_summary("changed", false);
     }
-    if !acknowledged && operations.iter().any(|operation| {
-        operation.class() == skilltap_core::domain::OperationClass::Partial
-    }) {
+    if !acknowledged
+        && operations
+            .iter()
+            .any(|operation| operation.class() == skilltap_core::domain::OperationClass::Partial)
+    {
         outcome.result = ResultClass::AttentionRequired;
         return outcome
             .with_warning(Warning::new(

@@ -10,8 +10,8 @@ use crate::domain::{
     CompatibilityEvidence, CompatibilityResult, ComponentId, ConsequenceCode, ConsequenceSummary,
     EvidenceCode, EvidenceDetail, HarnessId, MaterialConsequence, NativeId, Operation,
     OperationAction, OperationClass, OperationDependency, OperationId, OperationReason,
-    OperationSelector,
-    OperationSemantics, Provenance, ResourceKey, Reversibility, TransferFidelity,
+    OperationSelector, OperationSemantics, Provenance, ResourceKey, Reversibility,
+    TransferFidelity,
 };
 
 /// Build a faithful, lock-eligible native lifecycle operation.
@@ -188,6 +188,7 @@ pub fn partial_file_operation(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn partial_file_operation_with_dependencies(
     id: OperationId,
     target: HarnessId,
@@ -198,7 +199,9 @@ pub fn partial_file_operation_with_dependencies(
     consequences: impl IntoIterator<Item = MaterialConsequence>,
     dependencies: impl IntoIterator<Item = OperationDependency>,
 ) -> Result<Operation, crate::domain::OperationContractError> {
-    let consequences = consequences.into_iter().collect::<std::collections::BTreeSet<_>>();
+    let consequences = consequences
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
     let compatibility = CompatibilityResult::new(
         target.clone(),
         CompatibilityClass::TargetSpecific,
@@ -208,10 +211,8 @@ pub fn partial_file_operation_with_dependencies(
     )
     .expect("partial file operations require valid evidence and consequences");
     let selectors = acknowledgment_selectors(&resource, &consequences);
-    let acknowledgment = AcknowledgmentRequirement::required(
-        selectors.clone(),
-        consequences.clone(),
-    )?;
+    let acknowledgment =
+        AcknowledgmentRequirement::required(selectors.clone(), consequences.clone())?;
     let attention = Some(crate::domain::AttentionReason::acknowledgment_required(
         selectors,
         consequences,
@@ -486,6 +487,7 @@ fn acknowledgment_selectors(
     selectors
 }
 
+#[allow(clippy::too_many_arguments)]
 fn managed_operation(
     id: OperationId,
     target: HarnessId,

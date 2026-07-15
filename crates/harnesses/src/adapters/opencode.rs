@@ -1,10 +1,7 @@
 use std::{collections::BTreeMap, ffi::OsString};
 
 use skilltap_core::{
-    domain::{
-        AbsolutePath, CapabilityProfileSelection, HarnessId, NativeId,
-        NativeVersion, Scope,
-    },
+    domain::{AbsolutePath, CapabilityProfileSelection, HarnessId, NativeId, NativeVersion, Scope},
     runtime::{
         ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, JsonLimits,
         ObservationRuntimeError, PlatformPaths, SystemExternalTreeObserver,

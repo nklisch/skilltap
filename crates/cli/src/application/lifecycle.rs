@@ -2804,15 +2804,15 @@ impl StatusApplication<'_> {
                         full_path,
                         partial_targets.contains(target_id),
                     ) {
-                            Ok(operation) => operation,
-                            Err(_) => {
-                                outcome.result = ResultClass::Invalid;
-                                return outcome.with_error(ErrorDetail::new(
+                        Ok(operation) => operation,
+                        Err(_) => {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(ErrorDetail::new(
                                 "operation_contract_invalid",
                                 "The managed skill replacement operation could not be constructed safely.",
                             ));
-                            }
-                        };
+                        }
+                    };
                     operations.push(operation);
                     entries.insert(
                         operation_id,
@@ -2909,9 +2909,11 @@ impl StatusApplication<'_> {
                 seeds.insert(key, state);
             }
         }
-        if !acknowledged && operations.iter().any(|operation| {
-            operation.class() == skilltap_core::domain::OperationClass::Partial
-        }) {
+        if !acknowledged
+            && operations.iter().any(|operation| {
+                operation.class() == skilltap_core::domain::OperationClass::Partial
+            })
+        {
             outcome.result = ResultClass::AttentionRequired;
             return outcome
                 .with_warning(Warning::new(
@@ -3399,8 +3401,8 @@ impl StatusApplication<'_> {
                 "No selected harness has a verified standalone skill removal profile.",
             ));
         }
-        let profile_targets = HarnessSet::new(profile_target_ids)
-            .expect("verified profile target set is non-empty");
+        let profile_targets =
+            HarnessSet::new(profile_target_ids).expect("verified profile target set is non-empty");
         for concrete_scope in &scope.resolved {
             let (mutating_targets, next_outcome) =
                 super::conditional_profile::filter_targets_for_capability(
