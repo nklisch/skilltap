@@ -15,6 +15,7 @@ use crate::{
     conditional_profile::ConditionalProfilePort,
     lifecycle::{NativeLifecycleError, NativeLifecycleRequest},
     managed_projection::ManagedProjectionPort,
+    native_distribution::NativeDistributionPort,
 };
 
 /// Whether a target participates in skilltap's self-hosted first-party plugin
@@ -128,6 +129,13 @@ pub trait HarnessAdapter: Sync {
 
     /// Target-specific acquisition and projection for managed fallback.
     fn managed_projection(&self) -> Option<&dyn ManagedProjectionPort> {
+        None
+    }
+
+    /// Target-native source distribution assessment. This is intentionally
+    /// separate from lifecycle mutation authority and receives one resolved
+    /// checkout supplied by shared orchestration.
+    fn native_distribution(&self) -> Option<&dyn NativeDistributionPort> {
         None
     }
 

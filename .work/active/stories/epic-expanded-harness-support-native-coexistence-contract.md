@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-native-coexistence-contract
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-native-coexistence
 depends_on: []
@@ -144,8 +144,8 @@ Evidence refreshed 2026-07-14 against official documentation, official release
 metadata, and isolated homes/projects under `/tmp`; no operator harness state or
 repository source was used as a probe target. The delegated tool surface did not
 expose the requested Z.ai tools, so the URLs below were fetched directly from
-their official hosts. This is evidence for the parallel source implementation,
-not completion of this routing story; `stage` remains `implementing`.
+their official hosts. This is evidence for the parallel source implementation; implementation
+closure for this routing story is recorded below.
 
 ### Factory Droid
 
@@ -359,3 +359,29 @@ are also documentation-only for exact `0.171.0`; they must remain disabled in
 that profile. Finally, this delegated pass could not satisfy the requested Z.ai
 transport because no Z.ai tool was exposed; a parent context with that tool must
 re-fetch the listed URLs if transport provenance is a hard gate.
+
+## Implementation closure
+
+- Added the pure `LifecycleRepresentation` selector and target-local state
+  inference. Native/adopted bindings remain native, materialized skilltap
+  bindings remain managed, and native-plus-managed evidence fails closed.
+  Materialized marketplace state may have an empty projection manifest; its
+  provenance/ownership pair is the valid managed pin.
+- Added the adapter-owned `NativeDistributionPort` and concrete assessment
+  context. No Factory, Qwen, or Copilot registry entries or behavior dispatch
+  were added.
+- Shared orchestration now pins existing state and target-local marketplace
+  representation, compares fresh native/managed plans through one resolved
+  checkout, and never falls back from selected native evidence after profile
+  narrowing or unknown-version detection.
+- Generalized managed lifecycle planning/execution names and plumbing to
+  concrete-scope lifecycle ports while retaining Codex's global-native and
+  project-managed adapter behavior.
+- Added pure selection, mixed-target/global-project state, and assessment-port
+  boundary tests. Existing Codex, Gemini, OpenCode, native failure, recovery,
+  idempotence, and compiled lifecycle acceptance tests remain green.
+- Verification passed: `cargo test --workspace --all-targets`,
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
+  `cargo fmt --all -- --check`, and `git diff --check`.
+- This story intentionally leaves dependent Factory, Qwen, and Copilot adapter
+  registration and dispatch to their child stories.

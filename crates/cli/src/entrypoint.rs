@@ -538,7 +538,7 @@ fn with_system_application(
         #[cfg(test)]
         test_platform_paths: None,
         #[cfg(test)]
-        test_managed_project_filesystem: None,
+        test_managed_filesystem: None,
     })
 }
 

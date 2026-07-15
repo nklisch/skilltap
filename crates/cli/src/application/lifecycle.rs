@@ -4,7 +4,7 @@ use super::*;
 struct NativeLifecyclePlanBuilder {
     operations: Vec<skilltap_core::domain::Operation>,
     native_bindings: Vec<NativeLifecycleBinding>,
-    managed_entries: BTreeMap<OperationId, ManagedProjectLifecycleEntry>,
+    managed_entries: BTreeMap<OperationId, ManagedLifecycleEntry>,
     seeds: BTreeMap<ResourceKey, ResourceState>,
     foreign_operations: BTreeSet<OperationId>,
 }
@@ -127,9 +127,9 @@ impl StatusApplication<'_> {
         PlatformPaths::resolve(&ProcessEnvironment)
     }
 
-    fn managed_project_filesystem(&self) -> &dyn ManagedProjectFileSystem {
+    fn managed_filesystem(&self) -> &dyn ManagedLifecycleFileSystem {
         #[cfg(test)]
-        if let Some(filesystem) = self.test_managed_project_filesystem {
+        if let Some(filesystem) = self.test_managed_filesystem {
             return filesystem;
         }
         &SystemFileSystem
@@ -421,8 +421,8 @@ impl StatusApplication<'_> {
         .with_foreign_operations(builder.foreign_operations.iter().cloned());
         let port = HybridLifecyclePort {
             native: native_port,
-            managed: ManagedProjectLifecyclePort {
-                filesystem: self.managed_project_filesystem(),
+            managed: ManagedLifecyclePort {
+                filesystem: self.managed_filesystem(),
                 entries: builder.managed_entries,
                 registry: self.registry,
                 config: &documents.config,
@@ -627,11 +627,39 @@ impl StatusApplication<'_> {
                 );
             }
         };
-        if self.registry.adapter(target).is_some_and(|adapter| {
-            adapter.supports_managed_projection(skilltap_core::domain::CapabilityScope::from(
-                resource.scope(),
-            ))
+        let route = match select_lifecycle_route(LifecycleRouteContext {
+            registry: self.registry,
+            documents,
+            paths,
+            target,
+            kind,
+            request: &request,
+            resource,
+            scope: resource.scope(),
+            environment: native_environment,
+            search_path: std::env::var_os("PATH"),
+            process_limits,
+            json_limits,
+            timestamp,
+            acknowledged: false,
+            filesystem: self.managed_filesystem(),
         }) {
+            Ok(route) => route,
+            Err(error) => {
+                *outcome = outcome
+                    .clone()
+                    .with_warning(Warning::new(error.code.clone(), error.summary.clone()));
+                return self.add_daemon_blocked_operation(
+                    builder,
+                    resource,
+                    target,
+                    operation_id,
+                    dependencies,
+                    outcome,
+                );
+            }
+        };
+        if let LifecycleRoute::Managed(preplanned) = route {
             let managed_profile = configured_adapter_profile(
                 self.registry,
                 &documents.config,
@@ -667,61 +695,65 @@ impl StatusApplication<'_> {
                 }
             };
             let observed_at = timestamp;
-            match plan_managed_lifecycle(
-                self.registry,
-                target,
-                kind,
-                &request,
-                resource,
-                managed_profile,
-                ManagedProjectPlanContext {
-                    scope: resource.scope(),
-                    documents,
-                    paths,
-                    timestamp: observed_at,
-                    json_limits,
-                    acknowledged: false,
-                    filesystem: self.managed_project_filesystem(),
-                },
-            ) {
-                Ok(planned) => {
-                    let operation = match planned.operation.with_added_dependencies(dependencies) {
-                        Ok(operation) => operation,
-                        Err(_) => {
-                            return self.add_daemon_blocked_operation(
-                                builder,
-                                resource,
-                                target,
-                                operation_id,
-                                BTreeSet::new(),
-                                outcome,
-                            );
-                        }
-                    };
-                    builder.foreign_operations.insert(operation_id.clone());
-                    builder
-                        .managed_entries
-                        .insert(operation_id.clone(), planned.entry);
-                    if let Some(seed) = planned.seed {
-                        builder.seeds.insert(resource.key().clone(), seed);
+            let planned = if let Some(planned) = preplanned {
+                *planned
+            } else {
+                match plan_managed_lifecycle(
+                    self.registry,
+                    target,
+                    kind,
+                    &request,
+                    resource,
+                    managed_profile,
+                    ManagedPlanContext {
+                        scope: resource.scope(),
+                        documents,
+                        paths,
+                        timestamp: observed_at,
+                        json_limits,
+                        acknowledged: false,
+                        filesystem: self.managed_filesystem(),
+                        checkout: None,
+                    },
+                ) {
+                    Ok(planned) => planned,
+                    Err(error) => {
+                        *outcome = outcome
+                            .clone()
+                            .with_warning(Warning::new(error.code, error.summary));
+                        return self.add_daemon_blocked_operation(
+                            builder,
+                            resource,
+                            target,
+                            operation_id,
+                            dependencies,
+                            outcome,
+                        );
                     }
-                    builder.operations.push(operation);
-                    return Some(operation_id);
                 }
-                Err(error) => {
-                    *outcome = outcome
-                        .clone()
-                        .with_warning(Warning::new(error.code, error.summary));
+            };
+            let operation = match planned.operation.with_added_dependencies(dependencies) {
+                Ok(operation) => operation,
+                Err(_) => {
                     return self.add_daemon_blocked_operation(
                         builder,
                         resource,
                         target,
                         operation_id,
-                        dependencies,
+                        BTreeSet::new(),
                         outcome,
                     );
                 }
+            };
+            builder.foreign_operations.insert(operation_id.clone());
+            builder
+                .managed_entries
+                .insert(operation_id.clone(), planned.entry);
+            if let Some(seed) = planned.seed {
+                builder.seeds.insert(resource.key().clone(), seed);
             }
+            builder.operations.push(operation);
+            return Some(operation_id);
         }
         let profile = configured_native_profile(
             self.registry,
@@ -1293,11 +1325,40 @@ impl StatusApplication<'_> {
                     .unwrap_or_default();
                 let mut native_route_selected = false;
                 for target_id in mutating_targets.iter() {
-                    if self.registry.adapter(target_id).is_some_and(|adapter| {
-                        adapter.supports_managed_projection(
-                            skilltap_core::domain::CapabilityScope::from(concrete_scope),
-                        )
+                    let route = match select_lifecycle_route(LifecycleRouteContext {
+                        registry: self.registry,
+                        documents: &documents,
+                        paths: &paths,
+                        target: target_id,
+                        kind,
+                        request: &request,
+                        resource: &resource,
+                        scope: concrete_scope,
+                        environment: &native_environment,
+                        search_path: search_path.clone(),
+                        process_limits,
+                        json_limits,
+                        timestamp: match timestamp {
+                            Ok(timestamp) => timestamp,
+                            Err(()) => {
+                                outcome.result = ResultClass::Invalid;
+                                return outcome.with_error(ErrorDetail::new(
+                                    "clock_unavailable",
+                                    "The operation timestamp could not be recorded safely.",
+                                ));
+                            }
+                        },
+                        acknowledged,
+                        filesystem: self.managed_filesystem(),
                     }) {
+                        Ok(route) => route,
+                        Err(error) => {
+                            outcome.result = ResultClass::AttentionRequired;
+                            outcome = outcome.with_error(error);
+                            continue;
+                        }
+                    };
+                    if let LifecycleRoute::Managed(preplanned) = route {
                         let desired_here = documents.inventory.as_ref().is_some_and(|inventory| {
                             inventory
                                 .resources()
@@ -1314,85 +1375,80 @@ impl StatusApplication<'_> {
                         if removal && !desired_here && !owned_here {
                             continue;
                         }
-                        let managed_profile = configured_adapter_profile(
-                            self.registry,
-                            &documents.config,
-                            target_id,
-                            NativeProfileRequest {
-                                scope: concrete_scope,
-                                environment: &native_environment,
-                                process_limits,
-                                json_limits,
-                                search_path: search_path.clone(),
-                                capability_name: "managed.projection",
-                            },
-                        );
-                        let managed_profile = match managed_profile {
-                            Ok(Some(profile))
-                                if profile.capability == CapabilitySupport::Supported =>
-                            {
-                                profile
-                            }
-                            Ok(Some(_)) | Ok(None) => {
-                                outcome.result = ResultClass::AttentionRequired;
-                                outcome = outcome.with_warning(
-                                    Warning::new(
-                                        "native_capability_unverified",
-                                        "The selected managed projection is not verified for mutation.",
-                                    )
-                                    .with_context("harness", target_id.as_str())
-                                    .with_context("scope", scope_label(concrete_scope)),
-                                );
-                                continue;
-                            }
-                            Err(error) => {
-                                outcome.result = ResultClass::AttentionRequired;
-                                let binary = documents
-                                    .config
-                                    .harnesses()
-                                    .get(target_id)
-                                    .map(|policy| policy.binary.as_str())
-                                    .unwrap_or_else(|| target_id.as_str());
-                                let diagnostic =
-                                    detection_diagnostic(&error, target_id.as_str(), binary);
-                                outcome = outcome
-                                    .with_warning(diagnostic.warning)
-                                    .with_next_action(diagnostic.next_action);
-                                continue;
-                            }
-                        };
-                        let observed_at = match timestamp {
-                            Ok(timestamp) => timestamp,
-                            Err(()) => {
-                                outcome.result = ResultClass::Invalid;
-                                return outcome.with_error(ErrorDetail::new(
-                                    "clock_unavailable",
-                                    "The operation timestamp could not be recorded safely.",
-                                ));
-                            }
-                        };
-                        let planned = match plan_managed_lifecycle(
-                            self.registry,
-                            target_id,
-                            kind,
-                            &request,
-                            &resource,
-                            managed_profile,
-                            ManagedProjectPlanContext {
-                                scope: concrete_scope,
-                                documents: &documents,
-                                paths: &paths,
-                                timestamp: observed_at,
-                                json_limits,
-                                acknowledged,
-                                filesystem: self.managed_project_filesystem(),
-                            },
-                        ) {
-                            Ok(planned) => planned,
-                            Err(error) => {
-                                outcome.result = ResultClass::AttentionRequired;
-                                outcome = outcome.with_error(error);
-                                continue;
+                        let planned = if let Some(planned) = preplanned {
+                            *planned
+                        } else {
+                            let managed_profile = configured_adapter_profile(
+                                self.registry,
+                                &documents.config,
+                                target_id,
+                                NativeProfileRequest {
+                                    scope: concrete_scope,
+                                    environment: &native_environment,
+                                    process_limits,
+                                    json_limits,
+                                    search_path: search_path.clone(),
+                                    capability_name: "managed.projection",
+                                },
+                            );
+                            let managed_profile = match managed_profile {
+                                Ok(Some(profile))
+                                    if profile.capability == CapabilitySupport::Supported =>
+                                {
+                                    profile
+                                }
+                                Ok(Some(_)) | Ok(None) => {
+                                    outcome.result = ResultClass::AttentionRequired;
+                                    outcome = outcome.with_warning(
+                                        Warning::new(
+                                            "native_capability_unverified",
+                                            "The selected managed projection is not verified for mutation.",
+                                        )
+                                        .with_context("harness", target_id.as_str())
+                                        .with_context("scope", scope_label(concrete_scope)),
+                                    );
+                                    continue;
+                                }
+                                Err(error) => {
+                                    outcome.result = ResultClass::AttentionRequired;
+                                    let binary = documents
+                                        .config
+                                        .harnesses()
+                                        .get(target_id)
+                                        .map(|policy| policy.binary.as_str())
+                                        .unwrap_or_else(|| target_id.as_str());
+                                    let diagnostic =
+                                        detection_diagnostic(&error, target_id.as_str(), binary);
+                                    outcome = outcome
+                                        .with_warning(diagnostic.warning)
+                                        .with_next_action(diagnostic.next_action);
+                                    continue;
+                                }
+                            };
+                            match plan_managed_lifecycle(
+                                self.registry,
+                                target_id,
+                                kind,
+                                &request,
+                                &resource,
+                                managed_profile,
+                                ManagedPlanContext {
+                                    scope: concrete_scope,
+                                    documents: &documents,
+                                    paths: &paths,
+                                    timestamp: timestamp.expect("timestamp validated above"),
+                                    json_limits,
+                                    acknowledged,
+                                    filesystem: self.managed_filesystem(),
+                                    checkout: None,
+                                },
+                            ) {
+                                Ok(planned) => planned,
+                                Err(error) => {
+                                    outcome.result = ResultClass::AttentionRequired;
+                                    outcome = outcome.with_error(error);
+                                    continue;
+                                }
                             }
                         };
                         let operation_id = planned.operation.id().clone();
@@ -1833,8 +1889,8 @@ impl StatusApplication<'_> {
         .with_foreign_operations(foreign_operations);
         let port = HybridLifecyclePort {
             native: native_port,
-            managed: ManagedProjectLifecyclePort {
-                filesystem: self.managed_project_filesystem(),
+            managed: ManagedLifecyclePort {
+                filesystem: self.managed_filesystem(),
                 entries: managed_entries,
                 registry: self.registry,
                 config: &documents.config,

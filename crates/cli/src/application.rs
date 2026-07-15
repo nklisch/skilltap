@@ -11,16 +11,17 @@ use skilltap_core::{
     },
     domain::{
         AbsolutePath, ArtifactFile, CapabilityId, CapabilityProfileSelection, CapabilitySupport,
-        CommandArgument, CompatibilityClass, ComponentGraph, ConfiguredBinary, DesiredOrigin,
-        DesiredResource, EvidenceCode, EvidenceDetail, ExecutableIdentity, Fingerprint, GitCommit,
-        HarnessId, HarnessObservation, HarnessObservationOutcome, HarnessReachability, HarnessSet,
-        NativeId, NativeVersion, ObservationAdapterError, ObservationBatch, ObservationEvidence,
-        ObservationFields, ObservationFinding, ObservationFindingCode, ObservationKey,
-        ObservationLayer, ObservationRequest, ObservationSeverity, ObservationSubject,
-        ObservationSummary, ObservationTarget, ObservedResource, OperationAction,
-        OperationDependency, OperationId, OperationOutcome, OperationResult, OperationSelector,
-        Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth, ResourceId, ResourceKey,
-        ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
+        CommandArgument, CompatibilityClass, ComponentGraph, ComponentId, ConfiguredBinary,
+        DesiredOrigin, DesiredResource, EvidenceCode, EvidenceDetail, ExecutableIdentity,
+        Fingerprint, GitCommit, HarnessId, HarnessObservation, HarnessObservationOutcome,
+        HarnessReachability, HarnessSet, NativeId, NativeVersion, ObservationAdapterError,
+        ObservationBatch, ObservationEvidence, ObservationFields, ObservationFinding,
+        ObservationFindingCode, ObservationKey, ObservationLayer, ObservationRequest,
+        ObservationSeverity, ObservationSubject, ObservationSummary, ObservationTarget,
+        ObservedResource, OperationAction, OperationDependency, OperationId, OperationOutcome,
+        OperationResult, OperationSelector, Ownership, Plan, ProfileAuthority, Provenance,
+        ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope, Source, SourceKind,
+        SourceLocator, UpdateIntent,
     },
     executor::{ExecutionError, ExecutionJournal, ExecutionPort, execute_plan},
     foreground_update::{
@@ -33,7 +34,12 @@ use skilltap_core::{
         fingerprint_contents, relative_symlink_target, resolve_symlink_target,
     },
     lifecycle_operation::native_operation,
+    lifecycle_representation::{
+        LifecycleRepresentation, LifecycleRepresentationError, RepresentationCandidate,
+        RepresentationEvidence, applied_lifecycle_representation, select_lifecycle_representation,
+    },
     managed_projection::{ManagedFileWrite, ManagedPluginWrite, ResolvedSourceCheckout},
+    materialization::MaterializationPlan,
     runtime::{
         ConfinedEntryObservation, DirectoryTreeFileSystem, ExecutableResolutionRequest,
         ExecutableResolver, ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest,
@@ -59,10 +65,11 @@ use skilltap_core::{
 };
 use skilltap_harnesses::{
     DetectionError, GitSourceRevisionResolver, ManagedLifecycleKind, ManagedProjectionContext,
-    ManagedProjectionInput, NativeLifecycleAction, NativeLifecycleBinding, NativeLifecycleDispatch,
-    NativeLifecyclePort, NativeLifecycleRequest, NativeObservationFailure,
-    NativeResourceObservation, ObservedNativeRevisionResolver, detect_configured_installation,
-    native_arguments, normalize_observations, observe_native_resource,
+    ManagedProjectionInput, NativeDistributionContext, NativeLifecycleAction,
+    NativeLifecycleBinding, NativeLifecycleDispatch, NativeLifecyclePort, NativeLifecycleRequest,
+    NativeObservationFailure, NativeResourceObservation, ObservedNativeRevisionResolver,
+    detect_configured_installation, native_arguments, normalize_observations,
+    observe_native_resource,
 };
 
 pub(super) struct DetectionDiagnostic {
@@ -156,8 +163,8 @@ use status::{NativeObservation, StatusDocuments, StatusScope, StatusTargetError,
 
 use execution::{
     HybridLifecyclePort, InstructionEntry, InstructionPort, InstructionWrite,
-    ManagedProjectFileSystem, ManagedProjectFileWrite, ManagedProjectLifecycleEntry,
-    ManagedProjectLifecyclePort, ManagedProjectPluginWrite, ManagedSkillAction, ManagedSkillEntry,
+    ManagedLifecycleEntry, ManagedLifecycleFileSystem, ManagedLifecycleFileWrite,
+    ManagedLifecyclePluginWrite, ManagedLifecyclePort, ManagedSkillAction, ManagedSkillEntry,
     ManagedSkillPort, StateExecutionJournal,
 };
 
@@ -172,7 +179,7 @@ pub(crate) struct StatusApplication<'a> {
     #[cfg(test)]
     pub(crate) test_platform_paths: Option<PlatformPaths>,
     #[cfg(test)]
-    pub(crate) test_managed_project_filesystem: Option<&'a dyn ManagedProjectFileSystem>,
+    pub(crate) test_managed_filesystem: Option<&'a dyn ManagedLifecycleFileSystem>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1425,20 +1432,23 @@ fn lifecycle_operation_id(
         .expect("lifecycle operation id is valid")
 }
 
-struct PlannedManagedProjectLifecycle {
+struct PlannedManagedLifecycle {
     operation: skilltap_core::domain::Operation,
-    entry: ManagedProjectLifecycleEntry,
+    entry: ManagedLifecycleEntry,
     seed: Option<ResourceState>,
+    materialization: MaterializationPlan,
 }
 
-struct ManagedProjectPlanContext<'a> {
+struct ManagedPlanContext<'a> {
     scope: &'a Scope,
     documents: &'a StatusDocuments,
     paths: &'a PlatformPaths,
     timestamp: Timestamp,
     json_limits: JsonLimits,
     acknowledged: bool,
-    filesystem: &'a dyn ManagedProjectFileSystem,
+    filesystem: &'a dyn ManagedLifecycleFileSystem,
+    /// A caller-resolved checkout shared with native distribution assessment.
+    checkout: Option<&'a ResolvedSourceCheckout>,
 }
 
 fn plan_managed_lifecycle(
@@ -1448,8 +1458,8 @@ fn plan_managed_lifecycle(
     request: &NativeLifecycleSpec,
     resource: &DesiredResource,
     profile: ConfiguredAdapterProfile,
-    context: ManagedProjectPlanContext<'_>,
-) -> Result<PlannedManagedProjectLifecycle, ErrorDetail> {
+    context: ManagedPlanContext<'_>,
+) -> Result<PlannedManagedLifecycle, ErrorDetail> {
     if profile.capability != CapabilitySupport::Supported {
         return Err(ErrorDetail::new(
             "conditional_profile_mutation_unauthorized",
@@ -1471,7 +1481,7 @@ fn plan_managed_lifecycle(
             "The selected target does not provide managed project projection.",
         )
     })?;
-    let ManagedProjectPlanContext {
+    let ManagedPlanContext {
         scope,
         documents,
         paths,
@@ -1479,6 +1489,7 @@ fn plan_managed_lifecycle(
         json_limits,
         acknowledged,
         filesystem,
+        checkout: provided_checkout,
     } = context;
     let existing_state = documents
         .state
@@ -1507,20 +1518,26 @@ fn plan_managed_lifecycle(
         kind,
         NativeLifecycleKind::MarketplaceRemove | NativeLifecycleKind::PluginRemove
     );
+    let resolved_checkout: Option<ResolvedSourceCheckout>;
     let checkout = match resource.kind() {
         ResourceKind::Marketplace if removal => None,
         ResourceKind::Marketplace => {
-            let source = resource
-                .source()
-                .or_else(|| target_state.and_then(TargetResourceState::source))
-                .cloned()
-                .ok_or_else(|| {
-                    managed_project_error(
-                        "managed_project_source_missing",
-                        "The managed project marketplace has no explicit source.",
-                    )
-                })?;
-            Some(resolve_managed_source_checkout(paths, source)?)
+            if let Some(checkout) = provided_checkout {
+                Some(checkout)
+            } else {
+                let source = resource
+                    .source()
+                    .or_else(|| target_state.and_then(TargetResourceState::source))
+                    .cloned()
+                    .ok_or_else(|| {
+                        managed_project_error(
+                            "managed_project_source_missing",
+                            "The managed project marketplace has no explicit source.",
+                        )
+                    })?;
+                resolved_checkout = Some(resolve_managed_source_checkout(paths, source)?);
+                resolved_checkout.as_ref()
+            }
         }
         ResourceKind::Plugin if removal => {
             if target_state.is_none() {
@@ -1538,45 +1555,51 @@ fn plan_managed_lifecycle(
             None
         }
         ResourceKind::Plugin => {
-            let selector =
-                skilltap_core::marketplace::PluginSelector::parse(request.native_name.as_str())
-                    .map_err(|_| {
+            if let Some(checkout) = provided_checkout {
+                Some(checkout)
+            } else {
+                let selector =
+                    skilltap_core::marketplace::PluginSelector::parse(request.native_name.as_str())
+                        .map_err(|_| {
+                            managed_project_error(
+                                "invalid_plugin_selector",
+                                "The managed project plugin selector is invalid.",
+                            )
+                        })?;
+                let marketplace_key = ResourceKey::new(
+                    ResourceId::new(format!("marketplace:{}", selector.marketplace().as_str()))
+                        .map_err(|_| {
+                            managed_project_error(
+                                "managed_project_marketplace_invalid",
+                                "The selected marketplace identifier is invalid.",
+                            )
+                        })?,
+                    scope.clone(),
+                );
+                let marketplace_source = documents
+                    .inventory
+                    .as_ref()
+                    .and_then(|inventory| inventory.resources().get(&marketplace_key))
+                    .and_then(DesiredResource::source)
+                    .or_else(|| {
+                        documents
+                            .state
+                            .as_ref()
+                            .and_then(|state| state.resources().get(&marketplace_key))
+                            .and_then(|state| state.target(target))
+                            .and_then(TargetResourceState::source)
+                    })
+                    .cloned()
+                    .ok_or_else(|| {
                         managed_project_error(
-                            "invalid_plugin_selector",
-                            "The managed project plugin selector is invalid.",
+                            "managed_project_marketplace_missing",
+                            "Register the selected marketplace in this project before installing its plugin.",
                         )
                     })?;
-            let marketplace_key = ResourceKey::new(
-                ResourceId::new(format!("marketplace:{}", selector.marketplace().as_str()))
-                    .map_err(|_| {
-                        managed_project_error(
-                            "managed_project_marketplace_invalid",
-                            "The selected marketplace identifier is invalid.",
-                        )
-                    })?,
-                scope.clone(),
-            );
-            let marketplace_source = documents
-                .inventory
-                .as_ref()
-                .and_then(|inventory| inventory.resources().get(&marketplace_key))
-                .and_then(DesiredResource::source)
-                .or_else(|| {
-                    documents
-                        .state
-                        .as_ref()
-                        .and_then(|state| state.resources().get(&marketplace_key))
-                        .and_then(|state| state.target(target))
-                        .and_then(TargetResourceState::source)
-                })
-                .cloned()
-                .ok_or_else(|| {
-                    managed_project_error(
-                        "managed_project_marketplace_missing",
-                        "Register the selected marketplace in this project before installing its plugin.",
-                    )
-                })?;
-            Some(resolve_managed_source_checkout(paths, marketplace_source)?)
+                resolved_checkout =
+                    Some(resolve_managed_source_checkout(paths, marketplace_source)?);
+                resolved_checkout.as_ref()
+            }
         }
         _ => {
             return Err(managed_project_error(
@@ -1585,11 +1608,9 @@ fn plan_managed_lifecycle(
             ));
         }
     };
-    let input = checkout
-        .as_ref()
-        .map_or(ManagedProjectionInput::Remove, |checkout| {
-            ManagedProjectionInput::Apply { checkout }
-        });
+    let input = checkout.map_or(ManagedProjectionInput::Remove, |checkout| {
+        ManagedProjectionInput::Apply { checkout }
+    });
     let native_request = NativeLifecycleRequest {
         action: request.native_action,
         scope: scope.clone(),
@@ -1620,6 +1641,13 @@ fn plan_managed_lifecycle(
     let mut managed_projections = plan.manifest;
     managed_projections.sort();
     managed_projections.dedup();
+    let materialization = materialization_plan_from_projections(target, &managed_projections)
+        .ok_or_else(|| {
+            managed_project_error(
+                "managed_project_materialization_invalid",
+                "The managed projection manifest could not be compared safely.",
+            )
+        })?;
     if !acknowledged
         && managed_projections
             .iter()
@@ -1633,27 +1661,25 @@ fn plan_managed_lifecycle(
     let files = plan
         .files
         .into_iter()
-        .map(managed_project_file_write)
+        .map(managed_lifecycle_file_write)
         .collect::<Result<Vec<_>, _>>()?;
     let trees = plan
         .trees
         .into_iter()
-        .map(managed_project_plugin_write)
+        .map(managed_lifecycle_plugin_write)
         .collect::<Vec<_>>();
     let source = checkout
-        .as_ref()
         .map(|checkout| checkout.source().clone())
         .or_else(|| target_state.and_then(TargetResourceState::source).cloned());
     let installed_revision = checkout
-        .as_ref()
         .and_then(|checkout| checkout.revision().cloned())
         .or_else(|| target_state.and_then(|target| target.installed_revision().cloned()));
 
-    validate_managed_project_ownership(
+    validate_managed_ownership(
         kind,
         existing_state,
         target,
-        ManagedProjectOwnershipEvidence {
+        ManagedOwnershipEvidence {
             current_fingerprint: current_fingerprint.as_ref(),
             desired_fingerprint: fingerprint.as_ref(),
             desired_projections: &managed_projections,
@@ -1722,15 +1748,365 @@ fn plan_managed_lifecycle(
             })?,
         )
     };
-    Ok(PlannedManagedProjectLifecycle {
+    Ok(PlannedManagedLifecycle {
         operation,
-        entry: ManagedProjectLifecycleEntry {
+        entry: ManagedLifecycleEntry {
             files,
             trees,
             profile,
         },
         seed,
+        materialization,
     })
+}
+
+fn materialization_plan_from_projections(
+    target: &HarnessId,
+    projections: &[ManagedProjection],
+) -> Option<MaterializationPlan> {
+    let mut included = BTreeSet::new();
+    let mut omitted_optional = BTreeSet::new();
+    for projection in projections {
+        let (prefix, id, omitted) = match projection {
+            ManagedProjection::Skill { id, .. } => ("skill", id.as_str(), false),
+            ManagedProjection::Mcp { id, .. } => ("mcp", id.as_str(), false),
+            ManagedProjection::Omitted { id, .. } => ("", id.as_str(), true),
+        };
+        let component = if omitted {
+            ComponentId::new(id.to_owned()).ok()?
+        } else {
+            ComponentId::new(format!("{prefix}:{id}")).ok()?
+        };
+        if omitted {
+            omitted_optional.insert(component);
+        } else {
+            included.insert(component);
+        }
+    }
+    Some(MaterializationPlan {
+        target: target.clone(),
+        included,
+        omitted_optional,
+        blocked_required: BTreeSet::new(),
+    })
+}
+
+enum LifecycleRoute {
+    Native,
+    Managed(Option<Box<PlannedManagedLifecycle>>),
+}
+
+struct LifecycleRouteContext<'a> {
+    registry: &'a skilltap_harnesses::TargetRegistry,
+    documents: &'a StatusDocuments,
+    paths: &'a PlatformPaths,
+    target: &'a HarnessId,
+    kind: NativeLifecycleKind,
+    request: &'a NativeLifecycleSpec,
+    resource: &'a DesiredResource,
+    scope: &'a Scope,
+    environment: &'a BTreeMap<OsString, OsString>,
+    search_path: Option<OsString>,
+    process_limits: ProcessLimits,
+    json_limits: JsonLimits,
+    timestamp: Timestamp,
+    acknowledged: bool,
+    filesystem: &'a dyn ManagedLifecycleFileSystem,
+}
+
+/// Select one target-local lifecycle representation before building an
+/// execution operation. The result is target-neutral; concrete adapters keep
+/// their native parsing and the existing executors keep ownership/recovery.
+fn select_lifecycle_route(
+    context: LifecycleRouteContext<'_>,
+) -> Result<LifecycleRoute, ErrorDetail> {
+    let LifecycleRouteContext {
+        registry,
+        documents,
+        paths,
+        target,
+        kind,
+        request,
+        resource,
+        scope,
+        environment,
+        search_path,
+        process_limits,
+        json_limits,
+        timestamp,
+        acknowledged,
+        filesystem,
+    } = context;
+    let existing_state = documents
+        .state
+        .as_ref()
+        .and_then(|state| state.resources().get(resource.key()))
+        .and_then(|state| state.target(target));
+    if let Some(state) = existing_state {
+        return applied_lifecycle_representation(state)
+            .map(|representation| match representation {
+                LifecycleRepresentation::Native => LifecycleRoute::Native,
+                LifecycleRepresentation::Managed => LifecycleRoute::Managed(None),
+            })
+            .map_err(lifecycle_representation_error);
+    }
+
+    if kind == NativeLifecycleKind::PluginInstall {
+        let selector =
+            skilltap_core::marketplace::PluginSelector::parse(request.native_name.as_str())
+                .map_err(|_| {
+                    managed_project_error(
+                        "invalid_plugin_selector",
+                        "The selected plugin selector is invalid.",
+                    )
+                })?;
+        let marketplace_key = ResourceKey::new(
+            ResourceId::new(format!("marketplace:{}", selector.marketplace().as_str())).map_err(
+                |_| {
+                    managed_project_error(
+                        "marketplace_resource_invalid",
+                        "The selected marketplace identity is invalid.",
+                    )
+                },
+            )?,
+            scope.clone(),
+        );
+        if let Some(marketplace_state) = documents
+            .state
+            .as_ref()
+            .and_then(|state| state.resources().get(&marketplace_key))
+            .and_then(|state| state.target(target))
+        {
+            return applied_lifecycle_representation(marketplace_state)
+                .map(|representation| match representation {
+                    LifecycleRepresentation::Native => LifecycleRoute::Native,
+                    LifecycleRepresentation::Managed => LifecycleRoute::Managed(None),
+                })
+                .map_err(lifecycle_representation_error);
+        }
+        // A legacy/native installation can be requested before the marketplace
+        // has a persisted target binding. Preserve the existing capability
+        // route in that case; once a marketplace binding exists it is always
+        // authoritative above.
+    }
+
+    let adapter = registry.adapter(target).ok_or_else(|| {
+        managed_project_error(
+            "lifecycle_target_unregistered",
+            "The selected lifecycle target is not registered.",
+        )
+    })?;
+    let native_capability = lifecycle_capability_name(kind);
+    let native_profile = configured_native_profile(
+        registry,
+        &documents.config,
+        target,
+        NativeProfileRequest {
+            scope,
+            environment,
+            process_limits,
+            json_limits,
+            search_path: search_path.clone(),
+            capability_name: native_capability,
+        },
+    )
+    .ok()
+    .flatten();
+    let managed_profile = if adapter
+        .supports_managed_projection(skilltap_core::domain::CapabilityScope::from(scope))
+    {
+        configured_adapter_profile(
+            registry,
+            &documents.config,
+            target,
+            NativeProfileRequest {
+                scope,
+                environment,
+                process_limits,
+                json_limits,
+                search_path,
+                capability_name: "managed.projection",
+            },
+        )
+        .ok()
+        .flatten()
+        .filter(|profile| profile.capability == CapabilitySupport::Supported)
+    } else {
+        None
+    };
+
+    let mut managed_error = None;
+    let mut managed_plan = None;
+    let native_candidate = if kind == NativeLifecycleKind::MarketplaceAdd
+        && let Some(native_distribution) = adapter.native_distribution()
+    {
+        let source = resource
+            .source()
+            .cloned()
+            .or_else(|| {
+                existing_state
+                    .and_then(TargetResourceState::source)
+                    .cloned()
+            })
+            .ok_or_else(|| {
+                managed_project_error(
+                    "native_distribution_source_missing",
+                    "The native distribution assessment has no explicit source.",
+                )
+            })?;
+        let checkout = resolve_managed_source_checkout(paths, source)?;
+        let assessment = native_distribution
+            .assess(&NativeDistributionContext {
+                target,
+                scope,
+                checkout: &checkout,
+                requested_revision: resource
+                    .source()
+                    .and_then(|source| source.requested_revision()),
+                filesystem,
+                json_limits,
+            })
+            .map_err(|error| ErrorDetail::new(error.code(), error.summary()))?;
+        let candidate = assessment.map(|assessment| RepresentationCandidate {
+            representation: LifecycleRepresentation::Native,
+            plan: assessment.plan,
+        });
+        if let Some(profile) = managed_profile.clone() {
+            match plan_managed_lifecycle(
+                registry,
+                target,
+                kind,
+                request,
+                resource,
+                profile,
+                ManagedPlanContext {
+                    scope,
+                    documents,
+                    paths,
+                    timestamp,
+                    json_limits,
+                    acknowledged,
+                    filesystem,
+                    checkout: Some(&checkout),
+                },
+            ) {
+                Ok(planned) => {
+                    let plan = planned.materialization.clone();
+                    managed_plan = Some(planned);
+                    Some((
+                        candidate,
+                        Some(RepresentationCandidate {
+                            representation: LifecycleRepresentation::Managed,
+                            plan,
+                        }),
+                    ))
+                }
+                Err(error) => {
+                    managed_error = Some(error);
+                    Some((candidate, None))
+                }
+            }
+        } else {
+            Some((candidate, None))
+        }
+    } else {
+        None
+    };
+
+    let evidence = if let Some((native, managed)) = native_candidate {
+        RepresentationEvidence::Fresh { native, managed }
+    } else {
+        RepresentationEvidence::Fresh {
+            native: if !adapter
+                .supports_managed_projection(skilltap_core::domain::CapabilityScope::from(scope))
+                && adapter.native_lifecycle().is_some()
+            {
+                Some(RepresentationCandidate {
+                    representation: LifecycleRepresentation::Native,
+                    plan: empty_materialization_plan(target),
+                })
+            } else {
+                native_profile
+                    .filter(|profile| profile.capability == CapabilitySupport::Supported)
+                    .map(|_| RepresentationCandidate {
+                        representation: LifecycleRepresentation::Native,
+                        plan: empty_materialization_plan(target),
+                    })
+            },
+            managed: if adapter
+                .supports_managed_projection(skilltap_core::domain::CapabilityScope::from(scope))
+            {
+                Some(RepresentationCandidate {
+                    representation: LifecycleRepresentation::Managed,
+                    plan: empty_materialization_plan(target),
+                })
+            } else {
+                managed_profile.map(|_| RepresentationCandidate {
+                    representation: LifecycleRepresentation::Managed,
+                    plan: empty_materialization_plan(target),
+                })
+            },
+        }
+    };
+    match select_lifecycle_representation(evidence) {
+        Ok(LifecycleRepresentation::Native) => Ok(LifecycleRoute::Native),
+        Ok(LifecycleRepresentation::Managed) => {
+            if let Some(planned) = managed_plan {
+                Ok(LifecycleRoute::Managed(Some(Box::new(planned))))
+            } else if let Some(error) = managed_error {
+                Err(error)
+            } else {
+                Ok(LifecycleRoute::Managed(None))
+            }
+        }
+        Err(error) => Err(managed_error.unwrap_or_else(|| lifecycle_representation_error(error))),
+    }
+}
+
+fn lifecycle_capability_name(kind: NativeLifecycleKind) -> &'static str {
+    match kind {
+        NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
+        NativeLifecycleKind::MarketplaceRemove => "marketplace.remove",
+        NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
+        NativeLifecycleKind::PluginInstall => "plugin.install",
+        NativeLifecycleKind::PluginRemove => "plugin.remove",
+        NativeLifecycleKind::PluginUpdate => "plugin.update",
+    }
+}
+
+fn empty_materialization_plan(target: &HarnessId) -> MaterializationPlan {
+    MaterializationPlan {
+        target: target.clone(),
+        included: BTreeSet::new(),
+        omitted_optional: BTreeSet::new(),
+        blocked_required: BTreeSet::new(),
+    }
+}
+
+fn lifecycle_representation_error(error: LifecycleRepresentationError) -> ErrorDetail {
+    let (code, summary) = match error {
+        LifecycleRepresentationError::ContradictoryAppliedState => (
+            "lifecycle_representation_contradictory",
+            "Native and managed state evidence contradicts itself; no lifecycle route was selected.",
+        ),
+        LifecycleRepresentationError::MissingMarketplaceRepresentation => (
+            "marketplace_representation_missing",
+            "The plugin's target-local marketplace representation is missing; no lifecycle route was selected.",
+        ),
+        LifecycleRepresentationError::RequiredComponentsBlocked => (
+            "required_components_blocked",
+            "Every available lifecycle representation blocks a required component.",
+        ),
+        LifecycleRepresentationError::IncomparablePartialRepresentations => (
+            "partial_representations_incomparable",
+            "Native and managed representations preserve different partial component sets.",
+        ),
+        LifecycleRepresentationError::NoSupportedRepresentation => (
+            "lifecycle_representation_unavailable",
+            "No mutation-authorized native or managed lifecycle representation is available.",
+        ),
+    };
+    ErrorDetail::new(code, summary)
 }
 
 fn managed_lifecycle_kind(kind: NativeLifecycleKind) -> ManagedLifecycleKind {
@@ -1786,9 +2162,9 @@ fn resolve_managed_source_checkout(
     }
 }
 
-fn managed_project_file_write(
+fn managed_lifecycle_file_write(
     write: ManagedFileWrite,
-) -> Result<ManagedProjectFileWrite, ErrorDetail> {
+) -> Result<ManagedLifecycleFileWrite, ErrorDetail> {
     let path = AbsolutePath::new(format!(
         "{}/{}",
         write.root.as_str(),
@@ -1800,7 +2176,7 @@ fn managed_project_file_write(
             "A managed project file path is invalid.",
         )
     })?;
-    Ok(ManagedProjectFileWrite {
+    Ok(ManagedLifecycleFileWrite {
         path,
         root: write.root,
         destination: write.destination,
@@ -1809,8 +2185,8 @@ fn managed_project_file_write(
     })
 }
 
-fn managed_project_plugin_write(write: ManagedPluginWrite) -> ManagedProjectPluginWrite {
-    ManagedProjectPluginWrite {
+fn managed_lifecycle_plugin_write(write: ManagedPluginWrite) -> ManagedLifecyclePluginWrite {
+    ManagedLifecyclePluginWrite {
         root: write.root,
         destination: write.destination,
         desired_tree: write.desired_tree,
@@ -1819,17 +2195,17 @@ fn managed_project_plugin_write(write: ManagedPluginWrite) -> ManagedProjectPlug
     }
 }
 
-fn managed_project_tree_observation_limits() -> ExternalTreeLimits {
+fn managed_tree_observation_limits() -> ExternalTreeLimits {
     ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
         .expect("bounded project tree limits are valid")
 }
 
-type ObservedManagedProjectTree = (
+type ObservedManagedTree = (
     skilltap_core::runtime::DirectoryIdentity,
     BTreeMap<skilltap_core::domain::RelativeArtifactPath, ArtifactFile>,
 );
 
-struct ManagedProjectOwnershipEvidence<'a> {
+struct ManagedOwnershipEvidence<'a> {
     current_fingerprint: Option<&'a Fingerprint>,
     desired_fingerprint: Option<&'a Fingerprint>,
     desired_projections: &'a [ManagedProjection],
@@ -1837,13 +2213,13 @@ struct ManagedProjectOwnershipEvidence<'a> {
     operation_id: &'a OperationId,
 }
 
-fn validate_managed_project_ownership(
+fn validate_managed_ownership(
     kind: NativeLifecycleKind,
     state: Option<&ResourceState>,
     target: &HarnessId,
-    evidence: ManagedProjectOwnershipEvidence<'_>,
+    evidence: ManagedOwnershipEvidence<'_>,
 ) -> Result<(), ErrorDetail> {
-    let ManagedProjectOwnershipEvidence {
+    let ManagedOwnershipEvidence {
         current_fingerprint,
         desired_fingerprint,
         desired_projections,

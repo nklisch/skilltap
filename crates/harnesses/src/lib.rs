@@ -42,6 +42,11 @@ pub use managed_projection::{
 };
 mod materialization;
 pub use materialization::JsonMcpProjectionMapper;
+mod native_distribution;
+pub use native_distribution::{
+    NativeDistributionAssessment, NativeDistributionContext, NativeDistributionError,
+    NativeDistributionPort,
+};
 mod load_verification;
 pub use load_verification::EffectiveObservationVerifier;
 mod update_resolution;

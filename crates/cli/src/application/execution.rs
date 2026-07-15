@@ -223,7 +223,7 @@ pub(super) enum ProjectSkillLinkAction {
 }
 
 pub(super) struct ProjectSkillLinkPort<'a> {
-    pub(super) filesystem: &'a dyn ManagedProjectFileSystem,
+    pub(super) filesystem: &'a dyn ManagedLifecycleFileSystem,
     pub(super) entries: BTreeMap<OperationId, ProjectSkillLinkEntry>,
     pub(super) foreign_operations: BTreeSet<OperationId>,
 }
@@ -233,19 +233,19 @@ pub(super) struct ProjectSkillLifecyclePort<'a> {
     pub(super) links: ProjectSkillLinkPort<'a>,
 }
 
-pub(crate) trait ManagedProjectFileSystem:
+pub(crate) trait ManagedLifecycleFileSystem:
     FileSystem + DirectoryTreeFileSystem + skilltap_core::runtime::ConfinedFileSystem
 {
 }
 
 impl<T: FileSystem + DirectoryTreeFileSystem + skilltap_core::runtime::ConfinedFileSystem>
-    ManagedProjectFileSystem for T
+    ManagedLifecycleFileSystem for T
 {
 }
 
-pub(super) struct ManagedProjectLifecyclePort<'a> {
-    pub(super) filesystem: &'a dyn ManagedProjectFileSystem,
-    pub(super) entries: BTreeMap<OperationId, ManagedProjectLifecycleEntry>,
+pub(super) struct ManagedLifecyclePort<'a> {
+    pub(super) filesystem: &'a dyn ManagedLifecycleFileSystem,
+    pub(super) entries: BTreeMap<OperationId, ManagedLifecycleEntry>,
     pub(super) registry: &'a skilltap_harnesses::TargetRegistry,
     pub(super) config: &'a ConfigDocument,
     pub(super) environment: &'a BTreeMap<OsString, OsString>,
@@ -254,13 +254,13 @@ pub(super) struct ManagedProjectLifecyclePort<'a> {
     pub(super) json_limits: JsonLimits,
 }
 
-pub(super) struct ManagedProjectLifecycleEntry {
-    pub(super) files: Vec<ManagedProjectFileWrite>,
-    pub(super) trees: Vec<ManagedProjectPluginWrite>,
+pub(super) struct ManagedLifecycleEntry {
+    pub(super) files: Vec<ManagedLifecycleFileWrite>,
+    pub(super) trees: Vec<ManagedLifecyclePluginWrite>,
     pub(super) profile: ConfiguredAdapterProfile,
 }
 
-pub(super) struct ManagedProjectFileWrite {
+pub(super) struct ManagedLifecycleFileWrite {
     pub(super) path: AbsolutePath,
     pub(super) root: AbsolutePath,
     pub(super) destination: skilltap_core::domain::RelativeArtifactPath,
@@ -268,7 +268,7 @@ pub(super) struct ManagedProjectFileWrite {
     pub(super) desired: Option<Vec<u8>>,
 }
 
-pub(super) struct ManagedProjectPluginWrite {
+pub(super) struct ManagedLifecyclePluginWrite {
     pub(super) root: AbsolutePath,
     pub(super) destination: skilltap_core::domain::RelativeArtifactPath,
     pub(super) desired_tree: Option<ArtifactTree>,
@@ -276,15 +276,15 @@ pub(super) struct ManagedProjectPluginWrite {
     pub(super) expected_identity: Option<skilltap_core::runtime::DirectoryIdentity>,
 }
 
-fn observe_managed_project_tree_for_execution(
-    filesystem: &dyn ManagedProjectFileSystem,
+fn observe_managed_tree_for_execution(
+    filesystem: &dyn ManagedLifecycleFileSystem,
     root: &AbsolutePath,
     destination: &skilltap_core::domain::RelativeArtifactPath,
-) -> Result<Option<ObservedManagedProjectTree>, ()> {
+) -> Result<Option<ObservedManagedTree>, ()> {
     match filesystem.load_tree_bounded_no_follow(
         root,
         destination,
-        managed_project_tree_observation_limits(),
+        managed_tree_observation_limits(),
     ) {
         Ok(tree) => Ok(Some(tree)),
         Err(skilltap_core::runtime::RuntimeError::FileSystem { source, .. })
@@ -296,11 +296,11 @@ fn observe_managed_project_tree_for_execution(
     }
 }
 
-impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
+impl ExecutionPort for ManagedLifecyclePort<'_> {
     fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
         for (id, entry) in &self.entries {
             let operation = plan.get(id).ok_or_else(|| {
-                managed_project_apply_failure(
+                managed_lifecycle_apply_failure(
                     "A managed project lifecycle request no longer belongs to the plan.",
                 )
             })?;
@@ -316,7 +316,7 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                     &entry.profile,
                 )
             {
-                return Err(managed_project_apply_failure(
+                return Err(managed_lifecycle_apply_failure(
                     "The managed projection executable, version, or scoped compiled profile changed after planning.",
                 ));
             }
@@ -326,7 +326,7 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                     .iter()
                     .any(|surface| surface.path() == Some(&file.path))
                 {
-                    return Err(managed_project_apply_failure(
+                    return Err(managed_lifecycle_apply_failure(
                         "A managed project file no longer matches the planned surface.",
                     ));
                 }
@@ -334,24 +334,24 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                     .filesystem
                     .read_regular_bounded_no_follow(&file.root, &file.destination, 256 * 1024)
                     .map_err(|_| {
-                        managed_project_apply_failure(
+                        managed_lifecycle_apply_failure(
                             "A managed project file could not be re-read safely.",
                         )
                     })?;
                 if current != file.expected {
-                    return Err(managed_project_apply_failure(
+                    return Err(managed_lifecycle_apply_failure(
                         "A managed project file changed after planning.",
                     ));
                 }
             }
             for plugin in &entry.trees {
-                let current = observe_managed_project_tree_for_execution(
+                let current = observe_managed_tree_for_execution(
                     self.filesystem,
                     &plugin.root,
                     &plugin.destination,
                 )
                 .map_err(|()| {
-                    managed_project_apply_failure(
+                    managed_lifecycle_apply_failure(
                         "A managed project skill tree could not be observed within its safety limits.",
                     )
                 })?;
@@ -361,13 +361,13 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                         if plugin.expected_identity != Some(identity)
                             || artifact_tree_from_loaded(files).as_ref() != Some(expected)
                         {
-                            return Err(managed_project_apply_failure(
+                            return Err(managed_lifecycle_apply_failure(
                                 "The managed project plugin changed after planning.",
                             ));
                         }
                     }
                     _ => {
-                        return Err(managed_project_apply_failure(
+                        return Err(managed_lifecycle_apply_failure(
                             "The managed project plugin presence changed after planning.",
                         ));
                     }
@@ -382,7 +382,7 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
         operation: &skilltap_core::domain::Operation,
     ) -> Result<OperationOutcome, ExecutionError> {
         let entry = self.entries.get(operation.id()).ok_or_else(|| {
-            managed_project_apply_failure(
+            managed_lifecycle_apply_failure(
                 "The managed project lifecycle adapter did not receive the planned request.",
             )
         })?;
@@ -392,7 +392,7 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
         ) && entry.trees.is_empty()
             && entry.files.is_empty()
         {
-            return Err(managed_project_apply_failure(
+            return Err(managed_lifecycle_apply_failure(
                 "The managed project plugin operation has no plugin tree request.",
             ));
         }
@@ -405,18 +405,18 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
             return Ok(OperationOutcome::NoChange);
         }
 
-        let mut applied_trees: Vec<&ManagedProjectPluginWrite> = Vec::new();
+        let mut applied_trees: Vec<&ManagedLifecyclePluginWrite> = Vec::new();
         for plugin in &entry.trees {
-            if let Err(detail) = apply_managed_project_tree(self.filesystem, plugin) {
+            if let Err(detail) = apply_managed_tree(self.filesystem, plugin) {
                 let mut attempted = applied_trees.clone();
                 attempted.push(plugin);
-                let residuals = rollback_managed_project(self.filesystem, &[], &attempted);
-                return Err(managed_project_rollback_failure(detail, residuals));
+                let residuals = rollback_managed(self.filesystem, &[], &attempted);
+                return Err(managed_rollback_failure(detail, residuals));
             }
             applied_trees.push(plugin);
         }
 
-        let mut applied_files: Vec<&ManagedProjectFileWrite> = Vec::new();
+        let mut applied_files: Vec<&ManagedLifecycleFileWrite> = Vec::new();
         for file in &entry.files {
             if match &file.desired {
                 Some(bytes) => self
@@ -428,9 +428,8 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                     .remove_file_beneath_no_follow(&file.root, &file.destination)
                     .is_err(),
             } {
-                let residuals =
-                    rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
-                return Err(managed_project_rollback_failure(
+                let residuals = rollback_managed(self.filesystem, &applied_files, &applied_trees);
+                return Err(managed_rollback_failure(
                     "A managed project file could not be published.",
                     residuals,
                 ));
@@ -444,27 +443,22 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                 .ok()
                 != Some(file.desired.clone())
             {
-                let residuals =
-                    rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
-                return Err(managed_project_rollback_failure(
+                let residuals = rollback_managed(self.filesystem, &applied_files, &applied_trees);
+                return Err(managed_rollback_failure(
                     "Managed project file verification failed.",
                     residuals,
                 ));
             }
         }
         for tree in &entry.trees {
-            let observed = observe_managed_project_tree_for_execution(
-                self.filesystem,
-                &tree.root,
-                &tree.destination,
-            )
-            .ok()
-            .flatten()
-            .and_then(|(_, files)| artifact_tree_from_loaded(files));
+            let observed =
+                observe_managed_tree_for_execution(self.filesystem, &tree.root, &tree.destination)
+                    .ok()
+                    .flatten()
+                    .and_then(|(_, files)| artifact_tree_from_loaded(files));
             if observed != tree.desired_tree {
-                let residuals =
-                    rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
-                return Err(managed_project_rollback_failure(
+                let residuals = rollback_managed(self.filesystem, &applied_files, &applied_trees);
+                return Err(managed_rollback_failure(
                     "Managed project skill verification failed.",
                     residuals,
                 ));
@@ -474,9 +468,9 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
     }
 }
 
-fn apply_managed_project_tree(
-    filesystem: &dyn ManagedProjectFileSystem,
-    plugin: &ManagedProjectPluginWrite,
+fn apply_managed_tree(
+    filesystem: &dyn ManagedLifecycleFileSystem,
+    plugin: &ManagedLifecyclePluginWrite,
 ) -> Result<(), &'static str> {
     match (&plugin.expected_tree, &plugin.desired_tree) {
         (None, Some(tree)) => filesystem
@@ -516,10 +510,10 @@ fn apply_managed_project_tree(
     }
 }
 
-fn rollback_managed_project(
-    filesystem: &dyn ManagedProjectFileSystem,
-    files: &[&ManagedProjectFileWrite],
-    trees: &[&ManagedProjectPluginWrite],
+fn rollback_managed(
+    filesystem: &dyn ManagedLifecycleFileSystem,
+    files: &[&ManagedLifecycleFileWrite],
+    trees: &[&ManagedLifecyclePluginWrite],
 ) -> Vec<String> {
     let mut residuals = Vec::new();
     for file in files.iter().rev() {
@@ -539,23 +533,20 @@ fn rollback_managed_project(
         }
     }
     for tree in trees.iter().rev() {
-        let current = match observe_managed_project_tree_for_execution(
-            filesystem,
-            &tree.root,
-            &tree.destination,
-        ) {
-            Ok(current) => current,
-            Err(_) => {
-                residuals.push(managed_project_tree_path(tree));
-                continue;
-            }
-        };
+        let current =
+            match observe_managed_tree_for_execution(filesystem, &tree.root, &tree.destination) {
+                Ok(current) => current,
+                Err(_) => {
+                    residuals.push(managed_tree_path(tree));
+                    continue;
+                }
+            };
         if let Some((identity, _)) = current
             && filesystem
                 .remove_tree_no_follow(&tree.root, &tree.destination, identity)
                 .is_err()
         {
-            residuals.push(managed_project_tree_path(tree));
+            residuals.push(managed_tree_path(tree));
             continue;
         }
         if let Some(previous) = &tree.expected_tree {
@@ -563,12 +554,12 @@ fn rollback_managed_project(
                 filesystem.publish_tree_no_follow(&tree.root, &tree.destination, previous.files());
         }
         let observed =
-            observe_managed_project_tree_for_execution(filesystem, &tree.root, &tree.destination)
+            observe_managed_tree_for_execution(filesystem, &tree.root, &tree.destination)
                 .ok()
                 .flatten()
                 .and_then(|(_, files)| artifact_tree_from_loaded(files));
         if observed != tree.expected_tree {
-            residuals.push(managed_project_tree_path(tree));
+            residuals.push(managed_tree_path(tree));
         }
     }
     residuals.sort();
@@ -576,16 +567,13 @@ fn rollback_managed_project(
     residuals
 }
 
-fn managed_project_tree_path(tree: &ManagedProjectPluginWrite) -> String {
+fn managed_tree_path(tree: &ManagedLifecyclePluginWrite) -> String {
     format!("{}/{}", tree.root.as_str(), tree.destination.as_str())
 }
 
-fn managed_project_rollback_failure(
-    detail: &'static str,
-    residuals: Vec<String>,
-) -> ExecutionError {
+fn managed_rollback_failure(detail: &'static str, residuals: Vec<String>) -> ExecutionError {
     if residuals.is_empty() {
-        managed_project_apply_failure(format!("{detail} Rollback restored every prior surface."))
+        managed_lifecycle_apply_failure(format!("{detail} Rollback restored every prior surface."))
     } else {
         let total = residuals.len();
         let mut listed = Vec::new();
@@ -603,7 +591,7 @@ fn managed_project_rollback_failure(
         } else {
             format!("; {omitted} additional residual surfaces require fresh observation")
         };
-        managed_project_apply_failure(format!(
+        managed_lifecycle_apply_failure(format!(
             "{detail} Rollback left {total} residual surfaces: {}{suffix}.",
             listed.join(", ")
         ))
@@ -612,7 +600,7 @@ fn managed_project_rollback_failure(
 
 pub(super) struct HybridLifecyclePort<'a> {
     pub(super) native: NativeLifecyclePort,
-    pub(super) managed: ManagedProjectLifecyclePort<'a>,
+    pub(super) managed: ManagedLifecyclePort<'a>,
 }
 
 impl ExecutionPort for HybridLifecyclePort<'_> {
@@ -647,7 +635,7 @@ fn artifact_tree_from_loaded(
     .ok()
 }
 
-fn managed_project_apply_failure(detail: impl Into<String>) -> ExecutionError {
+fn managed_lifecycle_apply_failure(detail: impl Into<String>) -> ExecutionError {
     let detail = skilltap_core::domain::EvidenceDetail::new(detail.into()).unwrap_or_else(|_| {
         skilltap_core::domain::EvidenceDetail::new(
             "Managed project lifecycle failed and residual surfaces require fresh observation.",

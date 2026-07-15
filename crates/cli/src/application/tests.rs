@@ -718,7 +718,7 @@ fn fake_plugin_plan(
     let current_tree = match context.filesystem.load_tree_bounded_no_follow(
         &skill_root,
         &skill_destination,
-        managed_project_tree_observation_limits(),
+        managed_tree_observation_limits(),
     ) {
         Ok((identity, files)) => Some((
             identity,
@@ -756,7 +756,7 @@ fn fake_plugin_plan(
                 .load_tree_bounded_no_follow(
                     checkout.root(),
                     &source_destination,
-                    managed_project_tree_observation_limits(),
+                    managed_tree_observation_limits(),
                 )
                 .map_err(|_| {
                     skilltap_core::managed_projection::ManagedProjectionError::RequiredUnsupported
@@ -902,7 +902,7 @@ fn execute_managed_lifecycle(
     paths: &PlatformPaths,
     project: &Path,
     state_filesystem: &dyn FileSystem,
-    managed_filesystem: &dyn ManagedProjectFileSystem,
+    managed_filesystem: &dyn ManagedLifecycleFileSystem,
     kind: NativeLifecycleKind,
     source: Option<&str>,
     name: Option<&str>,
@@ -926,7 +926,7 @@ fn execute_managed_lifecycle(
         native_observation: NativeObservationMode::Disabled,
         registry: &registry,
         test_platform_paths: Some(paths.clone()),
-        test_managed_project_filesystem: Some(managed_filesystem),
+        test_managed_filesystem: Some(managed_filesystem),
     }
     .execute_native_lifecycle(
         "managed lifecycle test",
@@ -1017,7 +1017,7 @@ fn execute_fake_managed_lifecycle_with_filesystems(
     paths: &PlatformPaths,
     project: &Path,
     state_filesystem: &dyn FileSystem,
-    managed_filesystem: &dyn ManagedProjectFileSystem,
+    managed_filesystem: &dyn ManagedLifecycleFileSystem,
     request: ManagedLifecycleTestRequest<'_>,
 ) -> Outcome {
     execute_fake_managed_lifecycle_with_scope_and_filesystems(
@@ -1035,7 +1035,7 @@ fn execute_fake_managed_lifecycle_with_scope_and_filesystems(
     project: &Path,
     requested_scope: &ScopeArgs,
     state_filesystem: &dyn FileSystem,
-    managed_filesystem: &dyn ManagedProjectFileSystem,
+    managed_filesystem: &dyn ManagedLifecycleFileSystem,
     request: ManagedLifecycleTestRequest<'_>,
 ) -> Outcome {
     let ManagedLifecycleTestRequest {
@@ -1067,7 +1067,7 @@ fn execute_fake_managed_lifecycle_with_scope_and_filesystems(
         native_observation: NativeObservationMode::Disabled,
         registry: &registry,
         test_platform_paths: Some(paths.clone()),
-        test_managed_project_filesystem: Some(managed_filesystem),
+        test_managed_filesystem: Some(managed_filesystem),
     }
     .execute_native_lifecycle(
         "fake managed lifecycle test",
@@ -1857,7 +1857,7 @@ fn install_codex_fixture(
     paths: &PlatformPaths,
     project: &Path,
     source: &Path,
-    managed_filesystem: &dyn ManagedProjectFileSystem,
+    managed_filesystem: &dyn ManagedLifecycleFileSystem,
     state_filesystem: &dyn FileSystem,
     acknowledged: bool,
 ) -> Outcome {
@@ -1890,7 +1890,7 @@ fn install_codex_fixture(
         native_observation: NativeObservationMode::Disabled,
         registry: &registry,
         test_platform_paths: Some(paths.clone()),
-        test_managed_project_filesystem: Some(managed_filesystem),
+        test_managed_filesystem: Some(managed_filesystem),
     }
     .execute_native_lifecycle(
         "managed acceptance install",
@@ -2375,7 +2375,7 @@ fn execute_managed_lifecycle_with_acknowledgment(
     paths: &PlatformPaths,
     project: &Path,
     state_filesystem: &dyn FileSystem,
-    managed_filesystem: &dyn ManagedProjectFileSystem,
+    managed_filesystem: &dyn ManagedLifecycleFileSystem,
     request: ManagedLifecycleTestRequest<'_>,
 ) -> Outcome {
     let ManagedLifecycleTestRequest {
@@ -2403,7 +2403,7 @@ fn execute_managed_lifecycle_with_acknowledgment(
         native_observation: NativeObservationMode::Disabled,
         registry: &registry,
         test_platform_paths: Some(paths.clone()),
-        test_managed_project_filesystem: Some(managed_filesystem),
+        test_managed_filesystem: Some(managed_filesystem),
     }
     .execute_native_lifecycle(
         "managed lifecycle acceptance",
@@ -2634,7 +2634,7 @@ fn managed_project_tree_limits_preserve_planning_and_revalidation_failures() {
             fs::create_dir_all(&hostile).unwrap();
             fs::File::create(hostile.join("oversized"))
                 .unwrap()
-                .set_len(managed_project_tree_observation_limits().file_bytes() + 1)
+                .set_len(managed_tree_observation_limits().file_bytes() + 1)
                 .unwrap();
         }
 
@@ -2925,7 +2925,7 @@ fn execute(root: &std::path::Path, args: &StatusArgs, cwd: AbsolutePath) -> Outc
         native_observation: NativeObservationMode::Disabled,
         registry: &registry,
         test_platform_paths: None,
-        test_managed_project_filesystem: None,
+        test_managed_filesystem: None,
     }
     .execute(args)
 }
@@ -3358,7 +3358,7 @@ fn managed_pending_writer_and_recovery_use_exact_first_install_and_update_shapes
             assert!(target.managed_projections().is_empty());
         }
         assert!(
-            validate_managed_project_ownership(
+            validate_managed_ownership(
                 if action == OperationAction::PluginUpdate {
                     NativeLifecycleKind::PluginUpdate
                 } else {
@@ -3366,7 +3366,7 @@ fn managed_pending_writer_and_recovery_use_exact_first_install_and_update_shapes
                 },
                 document.resources().get(&key),
                 &target_id,
-                ManagedProjectOwnershipEvidence {
+                ManagedOwnershipEvidence {
                     current_fingerprint: Some(&desired_fingerprint),
                     desired_fingerprint: Some(&desired_fingerprint),
                     desired_projections: &desired_projections,

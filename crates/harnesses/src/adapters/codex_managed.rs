@@ -377,7 +377,7 @@ fn observe_managed_project_tree(
     match filesystem.load_tree_bounded_no_follow(
         root,
         destination,
-        managed_project_tree_observation_limits(),
+        managed_tree_observation_limits(),
     ) {
         Ok(tree) => Ok(Some(tree)),
         Err(skilltap_core::runtime::RuntimeError::FileSystem { source, .. })
@@ -391,7 +391,7 @@ fn observe_managed_project_tree(
     }
 }
 
-fn managed_project_tree_observation_limits() -> ExternalTreeLimits {
+fn managed_tree_observation_limits() -> ExternalTreeLimits {
     ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
         .expect("bounded project tree limits are valid")
 }
