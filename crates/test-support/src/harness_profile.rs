@@ -56,6 +56,8 @@ enum LayoutBase {
     Claude,
     Factory,
     Qwen,
+    Config,
+    Kiro,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -197,6 +199,90 @@ impl FakeHarnessProfile {
         }
     }
 
+    pub const fn gemini() -> Self {
+        Self {
+            id: "gemini",
+            version_response: VersionResponse::TextSuffix {
+                version: "0.50.0",
+                suffix: "",
+            },
+            lifecycle_dialect: LifecycleDialect::None,
+            managed_projection: Some(ManagedProjectionProfile::new(
+                "gemini",
+                &[],
+                Some(".gemini/settings.json"),
+                ".agents/skills",
+            )),
+            conditional_profile: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Home,
+                global_mcp_base: LayoutBase::Home,
+                global_skill: ".agents/skills/contract-skill",
+                global_mcp: ".gemini/settings.json",
+                project_skill: ".agents/skills/contract-skill",
+                project_mcp: ".gemini/settings.json",
+                mcp_initial: br#"{"mcpServers":{"contract":{"command":"contract-server"}}}"#,
+                mcp_reloaded: br#"{"mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
+            },
+        }
+    }
+
+    pub const fn opencode() -> Self {
+        Self {
+            id: "opencode",
+            version_response: VersionResponse::TextSuffix {
+                version: "1.18.1",
+                suffix: "",
+            },
+            lifecycle_dialect: LifecycleDialect::None,
+            managed_projection: Some(ManagedProjectionProfile::new(
+                "opencode",
+                &[],
+                Some("opencode/opencode.json"),
+                ".agents/skills",
+            )),
+            conditional_profile: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Home,
+                global_mcp_base: LayoutBase::Config,
+                global_skill: ".agents/skills/contract-skill",
+                global_mcp: "opencode/opencode.json",
+                project_skill: ".agents/skills/contract-skill",
+                project_mcp: "opencode.json",
+                mcp_initial: br#"{"mcp":{"contract":{"command":"contract-server"}}}"#,
+                mcp_reloaded: br#"{"mcp":{"contract":{"command":"contract-server-v2"}}}"#,
+            },
+        }
+    }
+
+    pub const fn kiro() -> Self {
+        Self {
+            id: "kiro",
+            version_response: VersionResponse::TextPrefix {
+                prefix: "kiro-cli ",
+                version: "2.12.2",
+            },
+            lifecycle_dialect: LifecycleDialect::None,
+            managed_projection: Some(ManagedProjectionProfile::new(
+                "kiro",
+                &[],
+                Some("settings/mcp.json"),
+                "skills",
+            )),
+            conditional_profile: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Kiro,
+                global_mcp_base: LayoutBase::Kiro,
+                global_skill: "skills/contract-skill",
+                global_mcp: "settings/mcp.json",
+                project_skill: ".kiro/skills/contract-skill",
+                project_mcp: ".kiro/settings/mcp.json",
+                mcp_initial: br#"{"mcpServers":{"contract":{"command":"contract-server"}}}"#,
+                mcp_reloaded: br#"{"mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
+            },
+        }
+    }
+
     pub const fn claude() -> Self {
         Self {
             id: "claude",
@@ -270,16 +356,20 @@ impl FakeHarnessProfile {
         fs::create_dir_all(&project)?;
         let skill_base = match self.layout.global_skill_base {
             LayoutBase::Home => machine.home(),
+            LayoutBase::Config => machine.configuration_home(),
             LayoutBase::Codex => machine.codex_home(),
             LayoutBase::Claude => machine.claude_home(),
             LayoutBase::Factory => machine.factory_home(),
+            LayoutBase::Kiro => machine.kiro_home(),
             LayoutBase::Qwen => machine.qwen_home(),
         };
         let mcp_base = match self.layout.global_mcp_base {
             LayoutBase::Home => machine.home(),
+            LayoutBase::Config => machine.configuration_home(),
             LayoutBase::Codex => machine.codex_home(),
             LayoutBase::Claude => machine.claude_home(),
             LayoutBase::Factory => machine.factory_home(),
+            LayoutBase::Kiro => machine.kiro_home(),
             LayoutBase::Qwen => machine.qwen_home(),
         };
         Ok(AcceptanceLayout {
@@ -545,12 +635,15 @@ mod tests {
     }
 
     #[test]
-    fn codex_claude_and_droid_pass_the_reusable_acceptance_matrix() {
+    fn file_managed_profiles_pass_the_reusable_acceptance_matrix() {
         for profile in [
             FakeHarnessProfile::codex(),
             FakeHarnessProfile::claude(),
             FakeHarnessProfile::droid(),
             FakeHarnessProfile::qwen(),
+            FakeHarnessProfile::gemini(),
+            FakeHarnessProfile::opencode(),
+            FakeHarnessProfile::kiro(),
         ] {
             let machine = IsolatedMachine::new("skilltap-acceptance-matrix").unwrap();
             let report = acceptance_matrix(&profile, &machine).unwrap();
@@ -579,6 +672,18 @@ mod tests {
                 .map(ManagedProjectionProfile::id),
             Some("qwen")
         );
+        for profile in [
+            FakeHarnessProfile::gemini(),
+            FakeHarnessProfile::opencode(),
+            FakeHarnessProfile::kiro(),
+        ] {
+            assert_eq!(
+                profile
+                    .managed_projection()
+                    .map(ManagedProjectionProfile::id),
+                Some(profile.id())
+            );
+        }
         assert!(FakeHarnessProfile::claude().managed_projection().is_none());
     }
 

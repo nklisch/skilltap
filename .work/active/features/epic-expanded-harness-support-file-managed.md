@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-file-managed
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -589,6 +589,47 @@ feature owner, implementing Gemini first, then OpenCode, then Kiro to preserve
 cohesive context. The final acceptance checkpoint waits for all three. Cycle
 checks with `.work/bin/work-view --blocking <story-id>` returned no existing
 edges for every story before these dependencies were written.
+
+## Implementation amendment: Kiro declaration-managed completion
+
+The original design's Kiro unit was deliberately provisional because the
+attestation proved the documented declaration files but did not prove a safe
+non-interactive effective probe. The relaxed completion consumes that evidence
+without weakening the declaration boundary:
+
+- `KiroAdapter` is now exported and registered at exact profile `kiro-2-12-2`
+  with registry-owned default executable `kiro-cli`. Existing target ordering is
+  preserved; Kiro follows OpenCode without reshaping unrelated families.
+- Kiro's exact global and project capabilities include only the documented
+  observe, complete-skill, and MCP declaration surfaces. Native lifecycle,
+  Powers, authentication, trust, and effective-load capabilities remain absent.
+  The profile is `Unverified` for managed projection and component skill/MCP
+  declaration evidence in both scopes; adjacent and unknown versions remain
+  observe-only.
+- The adapter explicitly supplies a
+  `ManagedDeclarationContract` covering exactly `ManagedDocument` and
+  `CompleteSkillTree`. Kiro writes use the existing confined managed
+  transaction, ownership/fingerprint revalidation, rollback, and repeat
+  no-op behavior. Foreground `--yes` acknowledges the effective-unverified
+  consequence; the daemon never acknowledges or constructs the declaration
+  write.
+- The provisional Kiro effective probe was removed. No `kiro-cli mcp list`,
+  login, trust, interactive `/mcp`, cache, or Power path is invoked or written;
+  status remains attention-required with declared ownership separate from
+  effective-unverified state.
+- The existing foreground managed route now admits exact `Unverified` profiles
+  to plan their partial operation. The shared executor still blocks without
+  the exact foreground acknowledgment and rejects unsupported/conflicted/
+  drifted/invalid operations. Native lifecycle routes remain Supported-only.
+- Compiled isolated acceptance covers both scopes, exact JSON declarations,
+  project links, no-ack blocking, effective-unverified status, daemon target
+  no-write behavior, idempotent repeats, unknown/adjacent versions, and
+  absence of login/native MCP/cache/Power activity. Gemini/OpenCode fixture and
+  managed acceptance profiles run as regressions through the shared matrices.
+
+The Kiro and integrated acceptance stories are done. This feature is now at
+review; the parent `epic-expanded-harness-support` is intentionally not
+reviewed by this implementation checkpoint.
 
 ## Simplification
 

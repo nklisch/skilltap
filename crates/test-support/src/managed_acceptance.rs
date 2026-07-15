@@ -128,6 +128,28 @@ impl ManagedProjectionProfile {
         )
     }
 
+    pub const fn gemini() -> Self {
+        Self::new(
+            "gemini",
+            &[],
+            Some(".gemini/settings.json"),
+            ".agents/skills",
+        )
+    }
+
+    pub const fn opencode() -> Self {
+        Self::new(
+            "opencode",
+            &[],
+            Some("opencode/opencode.json"),
+            ".agents/skills",
+        )
+    }
+
+    pub const fn kiro() -> Self {
+        Self::new("kiro", &[], Some("settings/mcp.json"), "skills")
+    }
+
     /// Construct a dependency-neutral profile for a test adapter or a future
     /// concrete adapter acceptance suite.
     pub const fn new(

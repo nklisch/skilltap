@@ -1205,8 +1205,11 @@ fn managed_projection_profiles_pass_the_shared_acceptance_matrix_repeatedly() {
         .expect("Codex opts into managed fallback acceptance");
     assert!(FakeHarnessProfile::claude().managed_projection().is_none());
 
+    let gemini = ManagedProjectionProfile::gemini();
+    let opencode = ManagedProjectionProfile::opencode();
+    let kiro = ManagedProjectionProfile::kiro();
     for run in 0..2 {
-        for profile in [codex, &FAKE_MANAGED_PROFILE] {
+        for profile in [codex, &FAKE_MANAGED_PROFILE, &gemini, &opencode, &kiro] {
             let report = managed_acceptance_matrix(profile, exercise_managed_acceptance)
                 .unwrap_or_else(|error| panic!("matrix run {run} failed: {error}"));
             assert_eq!(report.profile_id(), profile.id());
@@ -1222,7 +1225,9 @@ fn exercise_managed_acceptance(
 ) -> ManagedAcceptanceEvidence {
     match profile.id() {
         "codex" => exercise_codex_managed_acceptance(scenario),
-        "fake-managed" => exercise_fake_managed_acceptance(scenario),
+        "fake-managed" | "gemini" | "opencode" | "kiro" => {
+            exercise_fake_managed_acceptance(scenario)
+        }
         other => panic!("no managed acceptance runner registered for {other}"),
     }
 }
