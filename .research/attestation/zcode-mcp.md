@@ -1,21 +1,35 @@
 ---
 source_handle: zcode-mcp
-fetched: 2026-07-12
-source_url: https://zcode.z.ai/en/docs/mcp-services
+fetched: 2026-07-15
+source_url: https://zcode.z.ai/cn/docs/mcp-services
+corroborating_url: https://zcode.z.ai/en/docs/mcp-services
 provenance: source-direct
 ---
 
 # ZCode MCP
 
 ZCode supports user and workspace MCP scope, stdio/HTTP/SSE transports, JSON
-import, and per-server enablement. It can import Claude, Codex, OpenCode, and
-generic `.agents` definitions into a `.zcode` configuration at the selected
-scope. The English page names the storage family but not the exact native file
-path, which leaves a direct-write adapter boundary to verify empirically.
+import, direct configuration-file editing, and per-server enablement. The
+current official Chinese page names the native user file as
+`~/.zcode/cli/config.json` and the native workspace file as
+`<project-root>/.zcode/config.json`; both use `mcp.servers`. It also documents
+compatible `.agents` fallback files at `~/.agents/mcp.json` and
+`<project-root>/.agents/mcp.json`, using `mcpServers`.
+
+Within one scope, any MCP service in the native `.zcode` file causes the whole
+`.agents/mcp.json` file to be skipped rather than merged. Workspace and user
+scopes are both loaded when a workspace is open, with workspace read first.
+`"enable": false` disables a server; an absent field means enabled. Settings
+writes always target the native `.zcode` file and do not change the `.agents`
+source. The English localization still names only the `.zcode` configuration
+family and does not include these exact path and precedence details.
 
 ## Key passages
 
-- “Create An MCP Server” offers User and Workspace scope.
-- The form and full configuration modes support stdio, HTTP, SSE, headers, and environment.
-- “Import From An External Agent” documents source files and target scope.
-- Imported servers remain editable, enableable, disableable, and removable.
+- “配置文件与默认读取路径” names both native files, both `.agents` fallback
+  files, and their schema keys, and explicitly permits direct manual editing.
+- “读取规则与优先级” documents workspace/user loading and native `.zcode`
+  precedence over `.agents` within one scope without merging.
+- Enablement is represented by `"enable": false`; omission means enabled.
+- Settings-created or edited servers are written to the selected scope's
+  native `.zcode` file, leaving `.agents` files unchanged.
