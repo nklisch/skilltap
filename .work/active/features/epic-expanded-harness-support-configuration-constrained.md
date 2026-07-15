@@ -185,7 +185,7 @@ side-effect-free effective probe is unavailable.
 - **Canonical skill destination:** all three adapters choose `.agents/skills`
   at global and project scope because the attested clients load that portable
   root directly. `SkillProjectionPort` therefore feeds the review-ready project
-  service and yields no redundant project link. Native `.kimi-code/skills`,
+  service and yields no redundant project link. Native `.kimi/skills`,
   `.vibe/skills`, and `.kilo/skills` roots remain observed for precedence and
   unmanaged-conflict evidence; skilltap does not copy a second managed tree
   there.
@@ -279,10 +279,9 @@ drift surfaces and bypasses the completed project-link contract.
 
 **Files**:
 
-- `crates/harnesses/src/adapters/configuration_constrained/contracts.rs` (new)
-- `crates/harnesses/tests/fixtures/configuration_constrained/{kimi,vibe,kilo}/`
-  (new bounded version/config/probe fixtures)
-- focused tests under `crates/harnesses/src/adapters/configuration_constrained/`
+- `crates/harnesses/src/adapters/configuration_constrained/{common,source}.rs`
+- focused target codec tests in `crates/harnesses/src/adapters/{kimi,vibe,kilo}.rs`
+- compiled acceptance fixtures in `crates/cli/tests/compiled_binary.rs`
 
 **Story**: `epic-expanded-harness-support-configuration-constrained-contract-lock`
 
@@ -291,7 +290,6 @@ pub(super) struct VerifiedManagedTargetContract {
     pub verified_version: &'static str,
     pub profile_id: &'static str,
     pub version_arguments: &'static [&'static str],
-    pub effective_arguments: &'static [&'static str],
     pub document_contract: NativeDocumentContract,
 }
 
@@ -315,8 +313,9 @@ pub(super) enum KiloProjectPrecedence {
 - Fixtures contain bounded non-secret documents/output only and state their
   source URL/version in test comments. Authentication values use inert
   references.
-- A contract is usable only when the probe is non-interactive, bounded, and
-  distinguishes the states listed in the Evidence blocker.
+- The relaxed contract is usable when declaration ownership, source bounds,
+  lossless codecs, and explicit unsupported/effective-unverified outcomes are
+  bounded. No effective probe is required or registered for this family.
 
 **Acceptance criteria**:
 
@@ -325,9 +324,9 @@ pub(super) enum KiloProjectPrecedence {
       a verified profile.
 - [ ] Exact scoped document fixtures pin field names, transport spellings,
       precedence, and unknown-field/comment behavior.
-- [ ] Effective probe fixtures distinguish loaded, reload-required,
-      trust-required, authentication-required, and failed states without raw
-      output crossing the adapter boundary.
+- [x] No production process/auth/UI probe is registered; effective load,
+      reload, trust, authentication, and failure remain unverified/pending
+      rather than crossing the declaration boundary.
 - [ ] Failure to lock one target leaves that target explicitly blocked and does
       not weaken or delay independently locked siblings.
 
@@ -378,26 +377,11 @@ pub struct ManagedActivationRequest<'a> {
     pub expected: &'a [ManagedProjection],
 }
 
-pub trait ManagedActivationProbe: Sync {
-    fn arguments(&self, request: &ManagedActivationRequest<'_>) -> Vec<OsString>;
-    fn working_directory(&self, scope: &Scope) -> Option<AbsolutePath>;
-    fn decode(
-        &self,
-        request: &ManagedActivationRequest<'_>,
-        stdout: &[u8],
-        stderr: &[u8],
-        status: ExitStatus,
-        limits: JsonLimits,
-    ) -> Result<ManagedActivationObservation, ManagedActivationError>;
-}
-
 pub trait ManagedProjectionPort: Sync {
-    fn supports_scope(&self, scope: &Scope) -> bool;
     fn plan(
         &self,
         context: &ManagedProjectionContext<'_>,
     ) -> Result<ManagedProjectionPlan, ManagedProjectionError>;
-    fn activation_probe(&self) -> Option<&dyn ManagedActivationProbe>;
 }
 
 pub struct ManagedProjectionContext<'a> {
@@ -414,18 +398,17 @@ pub struct ManagedProjectionContext<'a> {
   misleading CLI execution types to `ManagedProjectionExecutionPort`,
   `ManagedProjectionExecutionEntry`, `ManagedProjectionFileWrite`, and
   `ManagedProjectionTreeWrite` while retaining revalidation/rollback behavior.
-- Remove `HarnessAdapter::managed_project_lifecycle()`. Routing uses
-  `adapter.managed_projection().filter(|port| port.supports_scope(scope))`.
-  Codex returns true only for project scope; new ports return true for both.
+- Remove `HarnessAdapter::managed_project_lifecycle()`. Routing uses one
+  explicit `Scope` and the existing managed projection port; Codex retains its
+  native-lifecycle precedence while new ports serve both scopes.
 - Add `configured_adapter_profile`, independent of `native_lifecycle()`, which
   resolves/detects once and checks a named capability. Managed mutation checks
   `managed.projection`; standalone skill mutation checks `component.skill`.
-- Run activation as a bounded read-only postcondition after declared bytes are
-  applied and journaled. Effective attention does not rewrite or discard
-  correct declared state. Status invokes the same decoder and merges its
-  registered findings into `HarnessObservation`.
-- `AdapterObservationPaths` gains `findings: Vec<ObservationFinding>`; status
-  appends profile-unverified evidence rather than replacing adapter findings.
+- Declaration-managed targets do not register an activation probe. Status
+  reports declared ownership and effective-unverified/pending evidence without
+  rewriting correct declared state.
+- `AdapterObservationPaths` retains target-authored roots/labels; status never
+  invents native findings from file presence.
 
 **Acceptance criteria**:
 
@@ -437,8 +420,9 @@ pub struct ManagedProjectionContext<'a> {
       cannot widen an unverified compiled profile.
 - [ ] Project skill install/link and managed projection both block before write
       when the adapter's required compiled capability is unverified.
-- [ ] Reload/trust/auth findings produce attention-required effective health
-      without being labeled drift; immediate repeats do not rewrite files.
+- [x] Reload/trust/auth are not inferred from declaration bytes; the target
+      remains effective-unverified/pending without being labeled drift, and
+      immediate repeats do not rewrite files.
 - [ ] Every write still binds to an operation, revalidates under the lock, rolls
       back only captured identities, and reports residuals if restoration fails.
 
@@ -557,33 +541,32 @@ impl KimiMcpDocument {
 
 **Implementation notes**:
 
-- Add `EnvironmentVariable::KimiCodeHome` and
-  `PlatformPaths::kimi_code_home()` with validated absolute override and
-  `~/.kimi-code` fallback; include it in explicit native process environments.
-- Register id `kimi`, display `Kimi Code`, managed distribution, no native
-  lifecycle. Profile values/probe decoder come only from Unit 1.
-- `SkillProjectionPort` returns `~/.agents/skills` globally and
+- Add `EnvironmentVariable::KimiShareDir` and
+  `PlatformPaths::kimi_share_dir()` with validated absolute override and
+  `~/.kimi` fallback.
+- Register id `kimi`, display `Kimi Code CLI`, managed distribution, no native
+  lifecycle. The exact `1.48.0` profile grants global MCP `Unverified` and
+  project MCP `Unsupported`.
+- `SkillProjectionPort` returns `.agents/skills` globally and
   `<project>/.agents/skills` for project scope; compatibility consumes strict
   Agent Skills validation.
-- Observe both portable and Kimi-native skill roots plus scoped `mcp.json`.
-  Project names shadow global names; duplicate evidence is typed.
+- Observe both portable and Kimi-native skill roots. Global MCP is only
+  `<kimi-share-dir>/mcp.json`; project MCP is rejected before any project MCP
+  read or write.
 - The private JSON codec mutates only `mcpServers.<managed-id>`, preserves
-  unrelated top-level/server fields, and encodes Kimi's exact stdio/HTTP/SSE,
-  timeout, enablement, and tool-filter shapes.
-- The activation probe always starts a fresh session in project cwd when
-  project-scoped, then verifies expected identities; stale-session evidence is
-  `reload.required`, never success inferred from bytes.
+  unrelated top-level/server fields, and maps only Kimi's exact stdio/HTTP/SSE
+  forms. OAuth, streamable HTTP, and literal credentials fail closed.
+- No Kimi MCP command, UI, browser, auth flow, or fresh-session probe runs.
 
 **Acceptance criteria**:
 
-- [ ] Known version supports both scopes; unknown version is observe-only.
-- [ ] KIMI home override/default, both skill roots, both MCP files, and project
-      precedence are observed without host-state access.
-- [ ] Managed install/update/remove preserves unknown JSON and unmanaged
-      servers; same-name project override is effective after a fresh session.
-- [ ] Stdio, HTTP, and SSE map faithfully; unsupported optional components are
-      acknowledged omissions and required unsupported components block.
-- [ ] Every mutation immediately repeats with no file/tree/state change.
+- [x] Known/unknown version authority, both skill scopes, global MCP, and
+      project MCP `Unsupported` are compiled and tested.
+- [x] Managed install/update/remove preserves unknown JSON and unmanaged
+      servers without a project MCP path.
+- [x] Stdio, HTTP, and SSE map faithfully; OAuth, streamable HTTP, and literal
+      credentials are rejected; optional/required policy is preserved.
+- [x] Every mutation immediately repeats with no file/tree/state change.
 
 ---
 
@@ -626,24 +609,21 @@ impl VibeConfigDocument {
 - Edit only named `[[mcp_servers]]` entries in user/project `config.toml`.
   Preserve comments, ordering, unrelated tables, enable/disable filters, and
   unknown keys. Fingerprint managed entries, not the whole user document.
-- Map only the fixture-locked stdio/HTTP/streamable-HTTP forms. OAuth is never
-  downgraded to static headers: optional OAuth servers are omitted with a
-  target-specific consequence; required OAuth servers block even with `--yes`.
-- Project probe runs in the project cwd. An untrusted directory yields
-  `trust.required`; the correct declared document remains owned and is not
-  mislabeled drift or repeatedly rewritten.
+- Map only stdio, HTTP, and streamable-HTTP. OAuth and SSE are explicitly
+  unsupported; optional/required consequences use the normal partial/block
+  policy.
+- Project trust, reload, and effective load remain unverified. No `/mcp`, TUI,
+  LLM, browser, trust-approval, or effective-state probe runs.
 
 **Acceptance criteria**:
 
-- [ ] Known version supports global/project scopes; unknown version is
-      observe-only.
-- [ ] User/project config precedence and trusted/untrusted outcomes match the
-      locked contract.
-- [ ] Lossless TOML edits preserve comments, unknown fields, unrelated server
-      tables, skill filters, and byte-stable no-op repeats.
-- [ ] Supported transports map exactly; OAuth and unsupported transport
-      consequences follow optional/required policy.
-- [ ] Removal deletes only owned named tables and leaves unmanaged native state
+- [x] Known/unknown version authority and global/project declaration scopes
+      match the locked contract; trust remains unverified.
+- [x] Lossless TOML edits preserve comments, unknown fields, unrelated server
+      tables, filters, and byte-stable no-op repeats.
+- [x] Supported transports map exactly; OAuth and SSE follow optional/required
+      unsupported policy.
+- [x] Removal deletes only owned named tables and leaves unmanaged native state
       intact.
 
 ---
@@ -693,28 +673,26 @@ impl KiloDocumentResolver {
 - Register id `kilo`, display `Kilo Code`, managed distribution, no native
   lifecycle. Global native root is `<config-home>/kilo`.
 - Use `.agents/skills` at both scopes while observing `.kilo/skills` roots.
-- Resolve the one effective project JSONC file using Unit 1's locked
-  precedence. If a higher-precedence unmanaged document shadows an owned lower
-  document, block and preserve both; never merge/write both.
+- Resolve the one valid global/project JSON/JSONC document. Invalid unknown
+  schema keys and conflicting locations block; an unmanaged higher-precedence
+  document is never merged or overwritten.
 - The JSONC codec is token/span preserving. It patches only the exact managed
   MCP object members and retains comments, trailing commas, quote style where
   unchanged, key order, and unknown fields. A serde JSON round-trip is not an
   acceptable implementation.
-- Activation decoding maps Kilo's loaded, failed, and authentication-required
-  runtime states to typed health. Authentication material remains native and
-  outside skilltap state.
+- Effective load and authentication remain unverified. No Kilo debug config,
+  MCP list/auth command, cache, database, `.kilo`, or `.gitignore` is created
+  by observation.
 
 **Acceptance criteria**:
 
-- [ ] Known version supports both scopes; unknown version is observe-only.
-- [ ] Global path, both project candidates, exact precedence, and shadowing
-      conflicts match the locked contract.
-- [ ] JSONC install/update/remove preserves all unrelated bytes and comments;
-      managed fingerprints ignore unrelated formatting changes but detect owned
-      entry drift.
-- [ ] Supported local/remote transports map exactly; auth-required and failed
-      effective state remain attention-required rather than false drift.
-- [ ] Immediate repeats are byte-, inode-, plan-, and target-state no-ops.
+- [x] Known/unknown version authority, global/project paths, precedence, and
+      shadow conflicts match the locked contract.
+- [x] JSONC install/update/remove preserves unrelated bytes/comments; managed
+      fingerprints ignore unrelated formatting and detect owned-entry drift.
+- [x] Supported local/remote transports map exactly; OAuth, non-HTTP transport,
+      unknown schema, and invalid-document outcomes fail closed.
+- [x] Immediate repeats are byte-, plan-, and target-state no-ops.
 
 ---
 
@@ -836,11 +814,10 @@ coupled to the behavior unit that proves its replacement.
 
 ## Risks
 
-- **Blocking evidence gap:** exact versions, deterministic effective probes, and
-  full wire examples are not in the current substrate. Unit 1 is a hard gate.
-  If a deterministic probe is unavailable, the affected target cannot honestly
-  meet the admission contract and remains blocked rather than shipping
-  file-presence-only support.
+- **Relaxed evidence boundary:** exact versions, declaration paths, codec
+  preservation, and negative probe sentinels are locked. Deterministic runtime
+  probes are intentionally absent; declaration-managed status remains
+  effective-unverified rather than being promoted to healthy.
 - **Lossless Kilo mutation:** JSONC editing can easily destroy comments or patch
   the wrong object. The fallback is to keep Kilo observe-only; falling back to
   `serde_json`, writing both project files, or a UI/cache mutation is not
