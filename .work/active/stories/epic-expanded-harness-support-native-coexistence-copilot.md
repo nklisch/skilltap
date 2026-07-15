@@ -110,6 +110,54 @@ pub enum CopilotPolicyHealth {
 - Mixed native/managed target state, partial failure, recovery, and immediate
   repeat preserve exact identities and ownership.
 
+## Current official revalidation (2026-07-15)
+
+**Source transport.** The delegated tool surface did not expose the requested
+Z.ai/fetch tools. I did not invoke, install, or run Copilot; instead, I fetched
+the official GitHub Docs API, GitHub release API, npm metadata, and the release
+checksum URL directly as bounded source reads, then compared them with the
+existing isolated `1.0.70` preflight evidence. No operator HOME, repository,
+Copilot state, authentication, browser, interactive command, editor/UI, or
+native binary was accessed.
+
+**Current official documentation.** The current plugin reference remains:
+<https://docs.github.com/en/enterprise-cloud@latest/copilot/reference/copilot-cli-reference/cli-plugin-reference>
+(fetched 2026-07-15). Its command table still names install, uninstall, list,
+update, enable, disable, and marketplace add/list/browse/remove, but it defines
+no plugin lifecycle scope selector and no structured plugin or marketplace list
+schema. The current MCP reference remains:
+<https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers>
+(fetched 2026-07-15); it documents `copilot mcp list|get --json`, all-source
+effective listing, and user `~/.copilot/mcp-config.json`, so structured MCP
+effective observation is the only required gap that is closed by documentation.
+
+**Current release metadata.** `GET
+https://api.github.com/repos/github/copilot-cli/releases/latest` still returns
+stable `v1.0.70` (`published_at: 2026-07-10T01:28:35Z`). The official release
+list's newest entries are `v1.0.71-2`, `v1.0.71-1`, and `v1.0.71-0`, all
+explicitly prerelease. `GET https://registry.npmjs.org/@github%2fcopilot/latest`
+also returns `1.0.70`. The official `1.0.70` checksum file still attests the
+Linux x64 tarball as
+`4edee3cd005254960789329181968b209b17cab47f43ee13c9e071b1f7e33095`, matching
+the existing preflight record.
+
+**Exact preflight remains controlling.** The isolated `1.0.70` preflight
+recorded exact version output, but plugin and marketplace lifecycle were
+**global-only**, both list surfaces were **human-only** (`--json` rejected),
+and the binary omitted both `plugin enable` and `plugin disable` despite the
+reference table. It did expose structured `mcp list|get --json`. The newer
+prereleases have no exact isolated preflight and cannot safely grant authority;
+no version therefore closes every required gap.
+
+## Blocker and disposition
+
+The complete Copilot contract remains blocked by the missing project scope,
+structured plugin list, and enable/disable authority in the only exact safely
+attested stable version. Do not narrow acceptance, infer a profile from the
+reference table, or treat an unvalidated prerelease as authority. This story
+therefore remains `stage: implementing`, `copilot` remains unregistered, and no
+Copilot production modules, profile constants, or tests were added.
+
 ## Ordering
 
 Depends only on the coexistence contract. It may follow Qwen for sequential
