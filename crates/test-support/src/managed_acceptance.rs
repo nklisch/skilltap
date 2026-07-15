@@ -213,7 +213,7 @@ impl ManagedProjectionProfile {
                 ".agents/plugins/marketplace.json",
                 ".claude-plugin/marketplace.json",
             ],
-            Some(".junie/mcp/mcp.json"),
+            Some("mcp/mcp.json"),
             ".junie/skills",
         )
     }

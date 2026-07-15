@@ -191,6 +191,29 @@ surfaces may be declaration-managed; missing project roots, editor-storage
 locations, executable identity, or preservation contracts remain unsupported
 rather than blocking unrelated target capabilities.
 
+## Junie Declaration Contract
+
+Junie is version-pinned by both marketing and build identity. Complete skills
+load from project then user `.junie/skills` roots. MCP declarations use
+`mcpServers` in project and user `.junie/mcp/mcp.json`. The current CLI exposes
+no finite non-interactive effective MCP observer, and same-name user/project MCP
+precedence is not attested. Junie therefore manages both surfaces only as
+acknowledged declarations; ambiguous cross-scope names block, `/mcp` is never
+invoked, and status remains effective-unverified.
+
+## Amp Declaration Contract
+
+Amp is version-pinned by release identity and timestamp. It consumes complete
+skills from its documented ordered roots and scoped MCP declarations from the
+selected JSON or JSONC settings file under `amp.mcpServers`; competing JSON and
+JSONC files are conflicts. The nearest project settings file wins over user
+settings, while enterprise and higher-precedence declarations remain unmanaged.
+Doctor, login, OAuth, trust approval, and authentication-required paths are
+interactive or non-terminating, so skilltap performs no effective probe and
+manages attested skill/MCP surfaces only as acknowledged declarations.
+Skill-local MCP placement and process-cwd semantics are preserved rather than
+rewritten.
+
 ## Kiro CLI Contract
 
 ### Detection and authority

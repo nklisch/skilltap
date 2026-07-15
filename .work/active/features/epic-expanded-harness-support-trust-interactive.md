@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-trust-interactive
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -33,6 +33,17 @@ The adapters consume the shared managed lifecycle, preserve unrelated native
 configuration, and keep native extensions or skill-local MCP representations
 only when they are the faithful form. Each target ships with isolated native
 validation, trust-state cases, and the common adapter acceptance evidence.
+
+## Review result
+
+The required standard independent pass approved the family with no material
+findings. Junie and Amp are exact-version declaration-managed adapters that
+invoke only version detection in compiled acceptance; no doctor, `/mcp`, OAuth,
+login, browser, trust approval, or cache path is reachable. Junie's acceptance
+profile now records its MCP destination relative to the Junie root, and the
+rolling harness contract contains concise Junie/Amp sections for future
+maintainers. The realized inline contract fixtures supersede the earlier
+planned fixture-directory layout without changing evidence coverage.
 
 ## Epic context
 
