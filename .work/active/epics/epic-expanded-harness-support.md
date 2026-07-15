@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support
 kind: epic
-stage: review
+stage: done
 tags: []
 parent: null
 depends_on: [epic-cross-harness-materialization, epic-harness-observation-adoption, epic-reconciliation-execution]
@@ -236,3 +236,25 @@ features to the next design pass.
 - Rejected: none.
 - Skipped/degraded: different-model review was unavailable, so both passes are
   labeled same-harness fresh-context rather than cross-model.
+
+## Aggregate review adjudication (2026-07-15)
+
+**Verdict**: Done. The two receiver-confirmed blocker findings from the
+completed aggregate review are resolved; no second review pass was run.
+
+- **Native lifecycle identity binding — resolved.** Configured native profiles
+  now retain the exact detected `ExecutableIdentity`. Foreground and daemon
+  plans carry it through `NativeLifecycleBinding` into the lifecycle entry;
+  lock-time precondition, apply, and postcondition observations revalidate and
+  execute that exact path. PATH replacement and absolute-binary replacement
+  regressions prove the replacement receives no native call.
+- **Project skill remote-source preflight — resolved.** Project-only skill
+  operations now establish a project destination plus action/component
+  authority before source parsing or checkout. Declaration-managed routes are
+  admitted only with foreground `--yes`; file-only, observe-only, unsupported,
+  and missing-route targets stop at their target boundary. The compiled Git
+  regression proves clone/fetch is not invoked and config, managed sources,
+  inventory, state, project, and home trees remain byte-identical.
+- **Verification**: `cargo test --workspace --all-targets --all-features
+  --no-fail-fast` (750 passed), strict all-feature Clippy, `cargo fmt --all
+  -- --check`, and `git diff --check` all passed.

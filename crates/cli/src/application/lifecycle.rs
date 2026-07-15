@@ -936,9 +936,8 @@ impl StatusApplication<'_> {
                 );
             }
         };
-        let before = observe_native_resource(
-            profile.configured.clone(),
-            std::env::var_os("PATH"),
+        let before = observe_native_resource_bound(
+            &profile.executable_identity,
             native_environment,
             &dispatch,
             process_limits,
@@ -992,8 +991,7 @@ impl StatusApplication<'_> {
         builder.seeds.insert(resource.key().clone(), seed);
         builder.native_bindings.push(NativeLifecycleBinding {
             operation_id: operation_id.clone(),
-            configured: profile.configured,
-            search_path: std::env::var_os("PATH"),
+            executable: profile.executable_identity,
             limits: process_limits,
             dispatch,
             before: Some(before),
@@ -1262,7 +1260,7 @@ impl StatusApplication<'_> {
             NativeLifecycleKind::MarketplaceRemove | NativeLifecycleKind::PluginRemove
         );
         let mut operations = Vec::new();
-        let mut requests = Vec::new();
+        let mut native_bindings = Vec::new();
         let mut managed_entries = BTreeMap::new();
         let mut seeds = BTreeMap::new();
         let mut target_projection_keys = BTreeSet::new();
@@ -1737,9 +1735,8 @@ impl StatusApplication<'_> {
                     );
                     let requires_fresh_precondition = journal_has_attempt || removal;
                     let fresh_presence = if requires_fresh_precondition {
-                        observe_native_resource(
-                            profile.configured.clone(),
-                            search_path.clone(),
+                        observe_native_resource_bound(
+                            &profile.executable_identity,
                             &native_environment,
                             &native_dispatch,
                             process_limits,
@@ -1788,13 +1785,13 @@ impl StatusApplication<'_> {
                                         }
                                     };
                                     operations.push(operation);
-                                    requests.push((
+                                    native_bindings.push(NativeLifecycleBinding {
                                         operation_id,
-                                        profile.configured,
-                                        search_path.clone(),
-                                        process_limits,
-                                        native_dispatch,
-                                    ));
+                                        executable: profile.executable_identity,
+                                        limits: process_limits,
+                                        dispatch: native_dispatch,
+                                        before: None,
+                                    });
                                 } else {
                                     outcome = outcome.with_operation(
                                         crate::OperationOutcome::new(
@@ -1868,13 +1865,13 @@ impl StatusApplication<'_> {
                         }
                     };
                     operations.push(operation);
-                    requests.push((
+                    native_bindings.push(NativeLifecycleBinding {
                         operation_id,
-                        profile.configured,
-                        search_path.clone(),
-                        process_limits,
-                        native_dispatch,
-                    ));
+                        executable: profile.executable_identity,
+                        limits: process_limits,
+                        dispatch: native_dispatch,
+                        before: None,
+                    });
                 }
                 if native_route_selected && !native_ids.is_empty() {
                     let observed_at = match timestamp {
@@ -2046,11 +2043,9 @@ impl StatusApplication<'_> {
             }
         };
         let foreign_operations = managed_entries.keys().cloned().collect::<Vec<_>>();
-        let native_port = NativeLifecyclePort::new_per_operation_with_environment(
-            requests,
-            native_environment.clone(),
-        )
-        .with_foreign_operations(foreign_operations);
+        let native_port =
+            NativeLifecyclePort::new_with_environment(native_bindings, native_environment.clone())
+                .with_foreign_operations(foreign_operations);
         let port = HybridLifecyclePort {
             native: native_port,
             managed: ManagedLifecyclePort {
@@ -2459,6 +2454,68 @@ impl StatusApplication<'_> {
             conditional_process_limits = Some(process_limits);
             conditional_json_limits = Some(json_limits);
         }
+        let project_profile_targets = if project_only {
+            let Some(project) = scope.resolved.iter().find_map(|scope| match scope {
+                Scope::Project(project) => Some(project.clone()),
+                Scope::Global => None,
+            }) else {
+                return outcome;
+            };
+            let project_paths = match self.lifecycle_platform_paths() {
+                Ok(paths) => paths,
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_error(ErrorDetail::new(
+                        "platform_paths_unavailable",
+                        "The skilltap configuration paths could not be resolved for project skill preflight.",
+                    ));
+                }
+            };
+            let project_process_limits =
+                ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+                    .expect("bounded project skill preflight process limits are valid");
+            let project_json_limits = JsonLimits::new(256 * 1024, 64)
+                .expect("bounded project skill preflight JSON limits are valid");
+            let search_path = std::env::var_os("PATH");
+            let project_environment = match project_paths.native_process_environment(search_path) {
+                Ok(environment) => environment,
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_error(ErrorDetail::new(
+                        "native_environment_unavailable",
+                        "The bounded native process environment could not be resolved for project skill preflight.",
+                    ));
+                }
+            };
+            let capability_name = if command == "skill update" || command == "sync" {
+                "skill.update"
+            } else {
+                "skill.install"
+            };
+            let (profile_targets, next_outcome) =
+                super::project_skills::preflight_project_skill_route(
+                    self,
+                    &documents.config,
+                    &targets,
+                    &project,
+                    acknowledged,
+                    &project_paths,
+                    &project_environment,
+                    project_process_limits,
+                    project_json_limits,
+                    capability_name,
+                    outcome,
+                );
+            outcome = next_outcome;
+            let Some(profile_targets) = profile_targets else {
+                return outcome
+                    .with_summary("operations", 0_u64)
+                    .with_summary("changed", false);
+            };
+            Some(profile_targets)
+        } else {
+            None
+        };
         let locator = match SourceLocator::new(request.source) {
             Ok(locator) => locator,
             Err(_) => {
@@ -2702,6 +2759,7 @@ impl StatusApplication<'_> {
                 source,
                 update_intent,
                 git_commit,
+                project_profile_targets.expect("project skill preflight established targets"),
                 paths,
                 outcome,
             );

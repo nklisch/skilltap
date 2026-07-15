@@ -241,11 +241,32 @@ pub fn observe_native_resource(
     process_limits: ProcessLimits,
     json_limits: skilltap_core::runtime::JsonLimits,
 ) -> Result<NativeResourceObservation, NativeLifecycleError> {
-    let request = dispatch.request();
     let executable = SystemExecutableResolver
         .resolve(&ExecutableResolutionRequest::new(configured, search_path))?;
+    observe_native_resource_bound(
+        &executable,
+        environment,
+        dispatch,
+        process_limits,
+        json_limits,
+    )
+}
+
+/// Observe native state through the exact executable identity selected during
+/// planning. Revalidation happens before the observation process is spawned so
+/// a replacement produces no native call and cannot become authority through
+/// a fresh PATH lookup.
+pub fn observe_native_resource_bound(
+    executable: &ExecutableIdentity,
+    environment: &BTreeMap<OsString, OsString>,
+    dispatch: &NativeLifecycleDispatch,
+    process_limits: ProcessLimits,
+    json_limits: skilltap_core::runtime::JsonLimits,
+) -> Result<NativeResourceObservation, NativeLifecycleError> {
+    SystemExecutableResolver.revalidate(executable)?;
+    let request = dispatch.request();
     let output = SystemNativeProcessRunner.run(&NativeProcessRequest::new(
-        executable,
+        executable.clone(),
         dispatch.lifecycle.observation_arguments(request)?,
         environment.clone(),
         match &request.scope {
@@ -510,16 +531,16 @@ pub struct NativeLifecyclePort {
 #[derive(Clone)]
 pub struct NativeLifecycleBinding {
     pub operation_id: OperationId,
-    pub configured: ConfiguredBinary,
-    pub search_path: Option<OsString>,
+    /// The exact executable identity authorized during profile detection.
+    /// Neither PATH nor the configured binary is authority after this point.
+    pub executable: ExecutableIdentity,
     pub limits: ProcessLimits,
     pub dispatch: NativeLifecycleDispatch,
     pub before: Option<NativeResourceObservation>,
 }
 
 struct NativeLifecycleEntry {
-    configured: ConfiguredBinary,
-    search_path: Option<OsString>,
+    executable: ExecutableIdentity,
     limits: ProcessLimits,
     json_limits: skilltap_core::runtime::JsonLimits,
     dispatch: NativeLifecycleDispatch,
@@ -527,76 +548,9 @@ struct NativeLifecycleEntry {
 }
 
 impl NativeLifecyclePort {
-    pub fn new(
-        configured: ConfiguredBinary,
-        search_path: Option<OsString>,
-        limits: ProcessLimits,
-        requests: impl IntoIterator<Item = (OperationId, NativeLifecycleDispatch)>,
-    ) -> Self {
-        Self::new_per_operation(requests.into_iter().map(|(id, dispatch)| {
-            (
-                id,
-                configured.clone(),
-                search_path.clone(),
-                limits,
-                dispatch,
-            )
-        }))
-    }
-
-    pub fn new_per_operation(
-        entries: impl IntoIterator<
-            Item = (
-                OperationId,
-                ConfiguredBinary,
-                Option<OsString>,
-                ProcessLimits,
-                NativeLifecycleDispatch,
-            ),
-        >,
-    ) -> Self {
-        Self {
-            entries: entries
-                .into_iter()
-                .map(|(id, configured, search_path, limits, dispatch)| {
-                    (
-                        id,
-                        NativeLifecycleEntry {
-                            configured,
-                            search_path,
-                            limits,
-                            json_limits: skilltap_core::runtime::JsonLimits::new(256 * 1024, 64)
-                                .expect("static lifecycle JSON limits are valid"),
-                            dispatch,
-                            before: None,
-                        },
-                    )
-                })
-                .collect(),
-            environment: BTreeMap::new(),
-            foreign_operations: BTreeSet::new(),
-        }
-    }
-
-    pub fn new_per_operation_with_environment(
-        entries: impl IntoIterator<
-            Item = (
-                OperationId,
-                ConfiguredBinary,
-                Option<OsString>,
-                ProcessLimits,
-                NativeLifecycleDispatch,
-            ),
-        >,
-        environment: BTreeMap<OsString, OsString>,
-    ) -> Self {
-        let mut port = Self::new_per_operation(entries);
-        port.environment = environment;
-        port
-    }
-
-    /// Build a port from bindings that carry the daemon's fresh pre-observation.
-    pub fn new_bound_with_environment(
+    /// Build a port from exact executable bindings for foreground and daemon
+    /// plans. The caller must have resolved each identity before planning.
+    pub fn new_with_environment(
         bindings: impl IntoIterator<Item = NativeLifecycleBinding>,
         environment: BTreeMap<OsString, OsString>,
     ) -> Self {
@@ -608,8 +562,7 @@ impl NativeLifecyclePort {
                     (
                         id,
                         NativeLifecycleEntry {
-                            configured: binding.configured,
-                            search_path: binding.search_path,
+                            executable: binding.executable,
                             limits: binding.limits,
                             json_limits: skilltap_core::runtime::JsonLimits::new(256 * 1024, 64)
                                 .expect("static lifecycle JSON limits are valid"),
@@ -622,6 +575,16 @@ impl NativeLifecyclePort {
             environment,
             foreign_operations: BTreeSet::new(),
         }
+    }
+
+    /// Build a port from bindings that carry the daemon's fresh pre-observation.
+    /// This name remains explicit at the call site while foreground callers use
+    /// the same exact-identity constructor.
+    pub fn new_bound_with_environment(
+        bindings: impl IntoIterator<Item = NativeLifecycleBinding>,
+        environment: BTreeMap<OsString, OsString>,
+    ) -> Self {
+        Self::new_with_environment(bindings, environment)
     }
 
     /// Declare operation ids executed by a sibling adapter in one mixed plan.
@@ -676,9 +639,8 @@ impl ExecutionPort for NativeLifecyclePort {
                 ));
             }
             if let Some(before) = &entry.before {
-                let observation = observe_native_resource(
-                    entry.configured.clone(),
-                    entry.search_path.clone(),
+                let observation = observe_native_resource_bound(
+                    &entry.executable,
                     &self.environment,
                     &entry.dispatch,
                     entry.limits,
@@ -698,9 +660,8 @@ impl ExecutionPort for NativeLifecyclePort {
                 }
             }
             if operation.class() == skilltap_core::domain::OperationClass::NoOp {
-                let observation = observe_native_resource(
-                    entry.configured.clone(),
-                    entry.search_path.clone(),
+                let observation = observe_native_resource_bound(
+                    &entry.executable,
                     &self.environment,
                     &entry.dispatch,
                     entry.limits,
@@ -750,18 +711,16 @@ impl ExecutionPort for NativeLifecyclePort {
                 .expect("static evidence detail is valid"),
             ));
         };
-        let output = run_native_lifecycle(
-            entry.configured.clone(),
-            entry.search_path.clone(),
+        let output = run_native_lifecycle_bound(
+            &entry.executable,
             &self.environment,
             &entry.dispatch,
             entry.limits,
         )
         .map_err(|_| native_apply_failure("The native lifecycle command could not be run."))?;
         if output.status().success() {
-            let observation = observe_native_resource(
-                entry.configured.clone(),
-                entry.search_path.clone(),
+            let observation = observe_native_resource_bound(
+                &entry.executable,
                 &self.environment,
                 &entry.dispatch,
                 entry.limits,
@@ -867,8 +826,11 @@ fn action_matches(
 
 #[cfg(test)]
 mod tests {
+    use std::{fs, os::unix::fs::PermissionsExt, path::Path};
+
     use super::*;
     use skilltap_core::domain::AbsolutePath;
+    use skilltap_test_support::TempRoot;
 
     fn dispatch(
         adapter: &'static dyn crate::HarnessAdapter,
@@ -954,6 +916,94 @@ mod tests {
         assert_eq!(
             native_arguments(&codex(NativeLifecycleAction::PluginUpdate, Scope::Global)),
             Err(NativeLifecycleError::UnsupportedAction)
+        );
+    }
+
+    #[cfg(unix)]
+    fn write_marker_script(path: &Path, marker: &Path) {
+        let marker = marker.to_string_lossy().replace('\'', "'\\''");
+        fs::write(path, format!("#!/bin/sh\nprintf called > '{marker}'\n")).unwrap();
+        let mut permissions = fs::metadata(path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn lifecycle_limits() -> ProcessLimits {
+        ProcessLimits::new(5_000, 64 * 1024, 64 * 1024, 128 * 1024).unwrap()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bound_lifecycle_rejects_path_replacement_without_a_native_call() {
+        let root = TempRoot::new("native-lifecycle-path-replacement").unwrap();
+        let executable_path = root.join("harness");
+        let replacement_path = root.join("replacement");
+        let marker = root.join("called");
+        write_marker_script(&executable_path, &marker);
+        let identity = SystemExecutableResolver
+            .resolve(&ExecutableResolutionRequest::new(
+                ConfiguredBinary::path_lookup(NativeId::new("harness").unwrap()).unwrap(),
+                Some(root.as_os_str().to_owned()),
+            ))
+            .unwrap();
+        write_marker_script(&replacement_path, &marker);
+        fs::rename(&replacement_path, &executable_path).unwrap();
+
+        let result = run_native_lifecycle_bound(
+            &identity,
+            &BTreeMap::new(),
+            &claude(NativeLifecycleAction::PluginUpdate, Scope::Global),
+            lifecycle_limits(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(NativeLifecycleError::Runtime(
+                ObservationRuntimeError::ExecutableChanged
+            ))
+        ));
+        assert!(
+            !marker.exists(),
+            "replacement was invoked as native authority"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bound_lifecycle_rejects_absolute_binary_replacement_without_a_native_call() {
+        let root = TempRoot::new("native-lifecycle-absolute-replacement").unwrap();
+        let executable_path = root.join("harness");
+        let replacement_path = root.join("replacement");
+        let marker = root.join("called");
+        write_marker_script(&executable_path, &marker);
+        let identity = SystemExecutableResolver
+            .resolve(&ExecutableResolutionRequest::new(
+                ConfiguredBinary::absolute(
+                    AbsolutePath::new(executable_path.display().to_string()).unwrap(),
+                ),
+                None,
+            ))
+            .unwrap();
+        write_marker_script(&replacement_path, &marker);
+        fs::rename(&replacement_path, &executable_path).unwrap();
+
+        let result = run_native_lifecycle_bound(
+            &identity,
+            &BTreeMap::new(),
+            &claude(NativeLifecycleAction::PluginUpdate, Scope::Global),
+            lifecycle_limits(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(NativeLifecycleError::Runtime(
+                ObservationRuntimeError::ExecutableChanged
+            ))
+        ));
+        assert!(
+            !marker.exists(),
+            "replacement was invoked as native authority"
         );
     }
 

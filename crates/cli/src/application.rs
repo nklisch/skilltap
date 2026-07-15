@@ -75,7 +75,7 @@ use skilltap_harnesses::{
     NativeLifecycleBinding, NativeLifecycleDispatch, NativeLifecyclePort, NativeLifecycleRequest,
     NativeObservationFailure, NativeResourceObservation, ObservedNativeRevisionResolver,
     detect_configured_installation, native_arguments, normalize_observations,
-    observe_native_resource,
+    observe_native_resource, observe_native_resource_bound,
 };
 
 pub(super) struct DetectionDiagnostic {
@@ -1275,8 +1275,10 @@ struct ConfiguredAdapterProfile {
 struct ConfiguredNativeProfile {
     target: HarnessId,
     lifecycle: &'static dyn skilltap_harnesses::NativeLifecycleVector,
-    configured: ConfiguredBinary,
+    /// Logical executable name retained for operation rendering.
     executable: NativeId,
+    /// Exact file identity selected during configured-profile detection.
+    executable_identity: ExecutableIdentity,
     capability: CapabilitySupport,
 }
 
@@ -1384,8 +1386,8 @@ fn configured_native_profile(
     Ok(Some(ConfiguredNativeProfile {
         target: runtime.target,
         lifecycle,
-        configured: runtime.configured,
         executable,
+        executable_identity: runtime.executable,
         capability: runtime.capability,
     }))
 }

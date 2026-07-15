@@ -69,7 +69,8 @@ pub use lifecycle::{
     LifecyclePostconditionError, NativeLifecycleAction, NativeLifecycleBinding,
     NativeLifecycleDispatch, NativeLifecycleError, NativeLifecyclePort, NativeLifecycleRequest,
     NativeObservationFailure, NativeResourceObservation, native_arguments, observe_native_resource,
-    run_native_lifecycle, run_native_lifecycle_bound, verify_lifecycle_postcondition,
+    observe_native_resource_bound, run_native_lifecycle, run_native_lifecycle_bound,
+    verify_lifecycle_postcondition,
 };
 pub mod registry;
 pub use registry::{

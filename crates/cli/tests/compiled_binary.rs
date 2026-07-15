@@ -1004,6 +1004,80 @@ fn pi_status_separates_core_companions_and_compound_profile_without_adoption_res
     assert!(!adoption_value.to_string().contains("hsingjui"));
 }
 
+#[cfg(unix)]
+#[test]
+fn project_skill_remote_source_preflights_target_before_git_checkout() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let machine = machine();
+    let (_pi, roots) = conditional_pi(&machine, ConditionalFixtureCase::Exact);
+    let network_fixture = machine.working_directory().join("network-fixture");
+    fs::create_dir_all(&network_fixture).unwrap();
+    let marker = network_fixture.join("git-invoked");
+    let git = network_fixture.join("git");
+    fs::write(
+        &git,
+        format!(
+            "#!/bin/sh\nif [ \"${{1-}}\" = -C ] && [ \"${{3-}}\" = rev-parse ]; then\n  exec /usr/bin/git \"$@\"\nfi\nprintf invoked > '{}'\nexit 1\n",
+            marker.display()
+        ),
+    )
+    .unwrap();
+    let mut permissions = fs::metadata(&git).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&git, permissions).unwrap();
+
+    let project = roots.project().to_path_buf();
+    let project_text = project.to_str().unwrap();
+    let before = (
+        snapshot_native_tree(&config_root(&machine)),
+        snapshot_native_tree(machine.home()),
+        snapshot_native_tree(&project),
+    );
+    let output = machine
+        .run_with_path(
+            &binary(),
+            &[
+                "skill",
+                "install",
+                "https://example.invalid/remote.git",
+                "--project",
+                project_text,
+                "--target",
+                "pi",
+                "--json",
+            ],
+            &network_fixture,
+        )
+        .unwrap();
+    assert_code(&output, 2);
+    let value = json(&output);
+    assert!(
+        value["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| { error["code"] == "conditional_profile_mutation_unauthorized" }),
+        "missing project target-boundary error: {value}"
+    );
+    assert!(
+        !marker.exists(),
+        "remote source preflight invoked the network fixture"
+    );
+    assert!(!config_root(&machine).join("managed/sources").exists());
+    assert!(!config_root(&machine).join("inventory.toml").exists());
+    assert!(!config_root(&machine).join("state.json").exists());
+    assert_eq!(
+        (
+            snapshot_native_tree(&config_root(&machine)),
+            snapshot_native_tree(machine.home()),
+            snapshot_native_tree(&project),
+        ),
+        before,
+        "observe-only project preflight wrote state or native bytes"
+    );
+}
+
 #[test]
 fn pi_skill_and_plugin_mutations_block_before_inventory_or_native_projection() {
     let machine = machine();
