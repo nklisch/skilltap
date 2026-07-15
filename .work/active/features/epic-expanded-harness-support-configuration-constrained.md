@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-configuration-constrained
 kind: feature
-stage: done
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
