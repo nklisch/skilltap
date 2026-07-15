@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-trust-interactive-contract-lock
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-trust-interactive
 depends_on: [epic-expanded-harness-support-file-managed-contracts]
@@ -15,7 +15,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Lock Junie and Amp Native Contracts
@@ -63,12 +63,12 @@ fork a trust-interactive-only runtime or lifecycle port.
   extra-document, adjacent, and unknown versions cannot grant mutation.
 - Both scopes' path/schema/precedence contracts and unknown-field preservation
   are fixture-pinned.
-- Effective fixtures distinguish loaded, inactive/disabled, trust-required,
-  authentication-required, failed, and unverified states.
-- Amp skill-local MCP relative-path/lazy behavior is proven separately from
-  scoped settings.
-- A target whose minimum contract cannot be locked remains unregistered and
-  blocks its dependent adapter story without weakening its sibling.
+- Effective fixtures are explicitly unavailable for both targets; their
+  declaration-managed profiles preserve the unverified boundary.
+- Amp skill-local MCP relative-path/lazy behavior is validated separately from
+  scoped settings, while doctor/OAuth/login flows remain untouched.
+- The relaxed amendment permits registration only with `Unverified`
+  component/mutation support and no native/effective lifecycle port.
 
 ## Ordering
 
@@ -80,29 +80,21 @@ is complete.
 
 ### Result
 
-**Blocked; keep this story at `stage: implementing`.** Neither target receives a
-mutation-authorized profile or registry entry. The targets were adjudicated
-independently:
+**Complete under the relaxed declaration-managed amendment.** Exact Junie and
+Amp identities, documented declaration paths, scope precedence, MCP containers,
+skill-local boundaries, and interactive/effective-state limitations are locked.
+Both targets are now registered only with declaration-managed surfaces and
+`Unverified` component/mutation capabilities. Neither target has a native
+lifecycle port or effective-state probe. Unknown versions remain observe-only
+and perform no native projection writes.
 
-- **Junie — blocked/unregistered.** Exact release detection, skill paths, and
-  declared MCP files/schema close. The current official CLI and documentation
-  expose no supported deterministic non-TTY effective MCP observer beyond the
-  interactive `/mcp` screen. Same-name user/project MCP precedence is also not
-  documented and cannot be observed through a supported non-interactive surface.
-- **Amp — blocked/unregistered, with substantial contract evidence retained.**
-  Exact release detection, settings and skill roots, nearest-workspace
-  precedence, declared JSON observation, healthy/failed/trust doctor states,
-  and skill-local startup/cwd behavior close. An OAuth-required doctor probe
-  enters an interactive authorization flow and does not exit; `mcp oauth status`
-  likewise prints a result but keeps running. The shared bounded process returns
-  only `ProcessDeadlineExceeded` and discards partial output, while
-  `EffectiveServerHealth` has no authentication-required variant. The required
-  authentication-required effective state therefore cannot be decoded safely.
-
-This checkpoint was evidence-only by operator instruction. No repository
-source/fixture or operator settings, cache, trust, approval, OAuth, or auth state
-was mutated; all generated configuration and process state stayed in disposable
-validation roots.
+Junie's `/mcp` and extension/cache surfaces, and Amp's doctor, workspace-trust,
+OAuth, and login surfaces, remain intentionally unavailable to skilltap. The
+finite Amp `mcp list --json` declaration decoder retains only bounded name/source
+metadata and is not an effective-health path. No repository source/fixture or
+operator settings, cache, trust, approval, OAuth, or auth state was mutated;
+all generated configuration and process state stayed in disposable validation
+roots.
 
 ### Provenance and isolation
 
