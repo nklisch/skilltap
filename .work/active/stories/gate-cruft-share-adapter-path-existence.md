@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-share-adapter-path-existence
 kind: story
-stage: drafting
+stage: implementing
 tags: [cleanup]
 parent: null
 depends_on: []

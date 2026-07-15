@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-remove-common-target-name-plumbing
 kind: story
-stage: drafting
+stage: implementing
 tags: [cleanup]
 parent: null
 depends_on: []

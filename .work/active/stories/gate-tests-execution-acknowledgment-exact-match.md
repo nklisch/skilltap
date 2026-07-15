@@ -1,7 +1,7 @@
 ---
 id: gate-tests-execution-acknowledgment-exact-match
 kind: story
-stage: drafting
+stage: implementing
 tags: [testing]
 parent: null
 depends_on: []

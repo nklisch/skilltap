@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-unify-file-managed-skill-planning
 kind: story
-stage: drafting
+stage: implementing
 tags: [cleanup]
 parent: null
 depends_on: []

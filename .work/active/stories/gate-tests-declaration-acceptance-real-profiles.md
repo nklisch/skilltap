@@ -1,7 +1,7 @@
 ---
 id: gate-tests-declaration-acceptance-real-profiles
 kind: story
-stage: drafting
+stage: implementing
 tags: [testing]
 parent: null
 depends_on: []
