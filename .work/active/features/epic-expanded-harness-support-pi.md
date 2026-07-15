@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-pi
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-pi-hook-research]
@@ -31,6 +31,18 @@ mutation. Missing, incompatible, unknown, inert, or unverified companions keep
 Pi observe-only with actionable health output. The feature covers global and
 project scope, project-skill projection metadata, update and drift behavior,
 isolated validation, and the common adapter acceptance evidence.
+
+## Implementation result
+
+Pi is registered as a managed, verified-observe-only compound target for the
+attested `0.80.6 / 2.11.0 / 0.0.2` tuple. Core, MCP companion, hook companion,
+and aggregate profile observations remain typed, independent, ephemeral, and
+non-adoptable. One conditional resolver drives status and authorization;
+read-only planning reports attention while every actual Pi native/filesystem
+write is denied before dispatch. Canonical project skills remain unduplicated,
+other authorized targets can proceed, and Codex/Claude remain the only
+first-party bootstrap targets. Isolated acceptance passed 670 workspace tests,
+strict Clippy, formatting, and diff checks without accessing operator Pi state.
 
 ## Epic context
 
