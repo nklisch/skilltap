@@ -140,6 +140,14 @@ fn native_config_with_opencode(codex: &Path, claude: &Path, opencode: &Path) -> 
     )
 }
 
+fn native_config_with_kiro(kiro: &Path) -> String {
+    format!(
+        "{}\n[harnesses.kiro]\nenabled = true\nbinary = {}\n",
+        native_config(kiro, kiro),
+        toml_string(kiro),
+    )
+}
+
 fn native_config_with_pi_and_siblings(codex: &Path, claude: &Path, pi: &Path) -> String {
     format!(
         "{}\n[harnesses.pi]\nenabled = true\nbinary = {}\n",
@@ -215,6 +223,33 @@ fn write_opencode_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
             .expect("make OpenCode version fixture executable");
     }
     executable
+}
+
+fn write_kiro_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
+    let executable = machine.working_directory().join("kiro-cli");
+    let log = machine.working_directory().join("kiro-cli.invocations");
+    let log = log.to_str().expect("Kiro invocation log is UTF-8");
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\nif [ \"$#\" -ne 1 ] || [ \"$1\" != \"--version\" ]; then exit 91; fi\nprintf 'kiro-cli %s\\n' {}\n",
+        shell_quote(Path::new(log)),
+        shell_quote(Path::new(version)),
+    );
+    fs::write(&executable, script).expect("write Kiro version fixture");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(&executable)
+            .expect("read Kiro version fixture")
+            .permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&executable, permissions)
+            .expect("make Kiro version fixture executable");
+    }
+    executable
+}
+
+fn shell_quote(path: &Path) -> String {
+    format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
 }
 
 fn write_gemini_marketplace(machine: &IsolatedMachine) -> PathBuf {
@@ -2476,6 +2511,240 @@ fn gemini_exact_profile_manages_global_and_project_plugins_but_unknown_versions_
             after, before,
             "unknown Gemini {version} wrote a target surface"
         );
+        assert!(!config_root(&machine).join("state.json").exists());
+    }
+}
+
+#[test]
+fn kiro_declaration_managed_plugin_requires_acknowledgment_and_stays_unverified() {
+    let machine = machine();
+    let kiro = write_kiro_harness(&machine, "2.12.2");
+    let config = native_config_with_kiro(&kiro)
+        .replace(
+            "[harnesses.codex]\nenabled = true",
+            "[harnesses.codex]\nenabled = false",
+        )
+        .replace(
+            "[harnesses.claude]\nenabled = true",
+            "[harnesses.claude]\nenabled = false",
+        );
+    write_owned(&machine, "config.toml", &config);
+    let source = write_gemini_marketplace(&machine);
+    let project = machine.working_directory().join("kiro-project");
+    fs::create_dir_all(&project).unwrap();
+
+    for scope in [None, Some(project.as_path())] {
+        let mut add = vec![
+            "marketplace",
+            "add",
+            source.to_str().unwrap(),
+            "--name",
+            "team",
+        ];
+        if let Some(project) = scope {
+            add.extend(["--project", project.to_str().unwrap()]);
+        }
+        add.extend(["--target", "kiro", "--json"]);
+        let output = run(&machine, &add);
+        assert_code(&output, 0);
+        assert_eq!(json(&output)["result"], "completed");
+    }
+
+    let target_roots = [machine.kiro_home().to_path_buf(), project.clone()];
+    let before_blocked = target_roots
+        .iter()
+        .map(|root| snapshot_native_tree(root))
+        .collect::<Vec<_>>();
+    for scope in [None, Some(project.as_path())] {
+        let mut install = vec!["plugin", "install", "demo@team"];
+        if let Some(project) = scope {
+            install.extend(["--project", project.to_str().unwrap()]);
+        }
+        install.extend(["--target", "kiro", "--json"]);
+        let output = run(&machine, &install);
+        assert_code(&output, 2);
+        let value = json(&output);
+        assert_eq!(value["result"], "attention_required");
+        assert_eq!(value["summary"]["changed"], false);
+    }
+    assert_eq!(
+        target_roots
+            .iter()
+            .map(|root| snapshot_native_tree(root))
+            .collect::<Vec<_>>(),
+        before_blocked,
+        "unacknowledged Kiro declarations wrote a target surface"
+    );
+
+    let before_daemon = target_roots
+        .iter()
+        .map(|root| snapshot_native_tree(root))
+        .collect::<Vec<_>>();
+    let daemon = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&daemon, 2);
+    assert_eq!(json(&daemon)["result"], "attention_required");
+    assert_eq!(
+        target_roots
+            .iter()
+            .map(|root| snapshot_native_tree(root))
+            .collect::<Vec<_>>(),
+        before_daemon,
+        "the daemon acknowledged a Kiro declaration"
+    );
+
+    for scope in [None, Some(project.as_path())] {
+        let mut install = vec!["plugin", "install", "demo@team", "--yes"];
+        if let Some(project) = scope {
+            install.extend(["--project", project.to_str().unwrap()]);
+        }
+        install.extend(["--target", "kiro", "--json"]);
+        let output = run(&machine, &install);
+        assert_code(&output, 0);
+        let value = json(&output);
+        assert_eq!(value["result"], "completed");
+        assert_eq!(value["summary"]["changed"], true);
+    }
+
+    let global_skill = machine.kiro_home().join("skills/demo/SKILL.md");
+    let project_skill = project.join(".kiro/skills/demo/SKILL.md");
+    assert!(global_skill.is_file());
+    assert!(project_skill.is_file());
+    let global_settings: Value =
+        serde_json::from_slice(&fs::read(machine.kiro_home().join("settings/mcp.json")).unwrap())
+            .unwrap();
+    let project_settings: Value =
+        serde_json::from_slice(&fs::read(project.join(".kiro/settings/mcp.json")).unwrap())
+            .unwrap();
+    for settings in [&global_settings, &project_settings] {
+        assert_eq!(settings["mcpServers"]["demo-docs"]["command"], "demo-mcp");
+        assert_eq!(settings["mcpServers"]["demo-docs"]["args"][0], "serve");
+    }
+
+    let before_repeat = target_roots
+        .iter()
+        .map(|root| snapshot_native_tree(root))
+        .collect::<Vec<_>>();
+    for scope in [None, Some(project.as_path())] {
+        let mut repeat = vec!["plugin", "install", "demo@team", "--yes"];
+        if let Some(project) = scope {
+            repeat.extend(["--project", project.to_str().unwrap()]);
+        }
+        repeat.extend(["--target", "kiro", "--json"]);
+        let output = run(&machine, &repeat);
+        assert_code(&output, 0);
+        assert_eq!(json(&output)["summary"]["changed"], false);
+    }
+    assert_eq!(
+        target_roots
+            .iter()
+            .map(|root| snapshot_native_tree(root))
+            .collect::<Vec<_>>(),
+        before_repeat,
+        "repeating an acknowledged Kiro declaration rewrote a target surface"
+    );
+
+    let standalone = machine.home().join("kiro-project-skill");
+    fs::create_dir_all(standalone.join("references")).unwrap();
+    fs::write(
+        standalone.join("SKILL.md"),
+        "---\nname: kiro-project-skill\ndescription: Kiro link fixture\n---\nbody\n",
+    )
+    .unwrap();
+    fs::write(standalone.join("references/example.md"), "reference\n").unwrap();
+    let project_text = project.to_str().unwrap();
+    let install_skill = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            standalone.to_str().unwrap(),
+            "--project",
+            project_text,
+            "--target",
+            "kiro",
+            "--json",
+        ],
+    );
+    assert_code(&install_skill, 0);
+    let link = project.join(".kiro/skills/kiro-project-skill");
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        fs::read_link(&link).unwrap(),
+        PathBuf::from("../../.agents/skills/kiro-project-skill")
+    );
+
+    let status = run(
+        &machine,
+        &["status", "--all-scopes", "--target", "kiro", "--json"],
+    );
+    assert_code(&status, 2);
+    let status_value = json(&status);
+    assert!(status_value.to_string().contains("effective_unverified"));
+
+    let invocation_log = machine.working_directory().join("kiro-cli.invocations");
+    let invocations = fs::read_to_string(invocation_log).unwrap();
+    assert!(invocations.lines().all(|line| line == "--version"));
+    assert!(!invocations.contains("mcp"));
+    assert!(!machine.kiro_home().join("cache").exists());
+    assert!(!machine.kiro_home().join("powers").exists());
+}
+
+#[test]
+fn kiro_unknown_adjacent_profiles_never_write_even_with_acknowledgment() {
+    for version in ["2.12.1", "2.12.3", "3.0.0"] {
+        let machine = machine();
+        let kiro = write_kiro_harness(&machine, version);
+        let config = native_config_with_kiro(&kiro)
+            .replace(
+                "[harnesses.codex]\nenabled = true",
+                "[harnesses.codex]\nenabled = false",
+            )
+            .replace(
+                "[harnesses.claude]\nenabled = true",
+                "[harnesses.claude]\nenabled = false",
+            );
+        write_owned(&machine, "config.toml", &config);
+        let source = write_gemini_marketplace(&machine);
+        let project = machine.working_directory().join("kiro-unknown-project");
+        fs::create_dir_all(&project).unwrap();
+        let add = run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                source.to_str().unwrap(),
+                "--name",
+                "team",
+                "--target",
+                "kiro",
+                "--json",
+            ],
+        );
+        assert_code(&add, 2);
+        let before = [machine.kiro_home().to_path_buf(), project.clone()]
+            .iter()
+            .map(|root| snapshot_native_tree(root))
+            .collect::<Vec<_>>();
+        for scope in [None, Some(project.as_path())] {
+            let mut install = vec!["plugin", "install", "demo@team", "--yes"];
+            if let Some(project) = scope {
+                install.extend(["--project", project.to_str().unwrap()]);
+            }
+            install.extend(["--target", "kiro", "--json"]);
+            let output = run(&machine, &install);
+            assert_code(&output, 2);
+            assert_eq!(json(&output)["summary"]["changed"], false);
+        }
+        let after = [machine.kiro_home().to_path_buf(), project]
+            .iter()
+            .map(|root| snapshot_native_tree(root))
+            .collect::<Vec<_>>();
+        assert_eq!(after, before, "Kiro {version} mutated a target surface");
         assert!(!config_root(&machine).join("state.json").exists());
     }
 }

@@ -6,9 +6,7 @@ mod factory_managed;
 mod file_managed;
 mod gemini;
 mod gemini_managed;
-#[cfg(test)]
 mod kiro;
-#[cfg(test)]
 mod kiro_managed;
 mod opencode;
 mod opencode_managed;
@@ -28,6 +26,8 @@ pub use factory::{
 pub use factory_managed::FactoryManagedProjection;
 pub use gemini::{GeminiAdapter, GeminiEffectiveStateProbe, GeminiSkillProjection};
 pub use gemini_managed::GeminiManagedProjection;
+pub use kiro::{KiroAdapter, KiroSkillProjection};
+pub use kiro_managed::KiroManagedProjection;
 pub use opencode::{OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeSkillProjection};
 pub use opencode_managed::OpenCodeManagedProjection;
 pub use pi::{PiAdapter, PiSkillProjection};
@@ -187,6 +187,7 @@ mod tests {
         let opencode = registry
             .adapter(&HarnessId::new("opencode").unwrap())
             .unwrap();
+        let kiro = registry.adapter(&HarnessId::new("kiro").unwrap()).unwrap();
         let qwen = registry.adapter(&HarnessId::new("qwen").unwrap()).unwrap();
 
         let pi = registry.adapter(&HarnessId::new("pi").unwrap()).unwrap();
@@ -223,6 +224,15 @@ mod tests {
         assert!(opencode.skill_projection().is_some());
         assert!(opencode.managed_projection().is_some());
         assert!(opencode.effective_state_probe().is_some());
+        assert_eq!(kiro.identity(), KiroAdapter::static_ref().identity());
+        assert!(kiro.native_lifecycle().is_none());
+        assert!(kiro.skill_projection().is_some());
+        assert!(kiro.managed_projection().is_some());
+        assert!(kiro.effective_state_probe().is_none());
+        assert!(
+            kiro.managed_declaration_contract(CapabilityScope::Global)
+                .is_some()
+        );
         assert_eq!(qwen.identity(), QwenAdapter::static_ref().identity());
         assert!(qwen.native_lifecycle().is_some());
         assert!(qwen.native_distribution().is_some());

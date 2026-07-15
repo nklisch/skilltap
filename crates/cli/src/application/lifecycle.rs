@@ -1508,7 +1508,11 @@ impl StatusApplication<'_> {
                             );
                             let managed_profile = match managed_profile {
                                 Ok(Some(profile))
-                                    if profile.capability == CapabilitySupport::Supported =>
+                                    if matches!(
+                                        profile.capability,
+                                        CapabilitySupport::Supported
+                                            | CapabilitySupport::Unverified
+                                    ) =>
                                 {
                                     profile
                                 }

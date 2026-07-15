@@ -1,21 +1,19 @@
-use std::ffi::OsString;
+use std::{ffi::OsString, sync::LazyLock};
 
 use skilltap_core::{
     domain::{
-        AbsolutePath, CapabilityProfileSelection, CapabilityScope, HarnessId, NativeVersion, Scope,
+        AbsolutePath, CapabilityId, CapabilityProfileSelection, CapabilitySet, CapabilitySupport,
+        HarnessId, NativeVersion, Scope, ScopedCapabilitySets,
     },
+    mutation_authority::{ManagedDeclarationContract, ManagedSurfaceKind},
     runtime::{
-        ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, JsonLimits,
-        ObservationRuntimeError, PlatformPaths, SystemExternalTreeObserver,
+        ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, ObservationRuntimeError,
+        PlatformPaths, SystemExternalTreeObserver,
     },
 };
 
 use crate::{
     adapter_helpers,
-    effective_state::{
-        EffectiveMcpStatus, EffectiveProbeError, EffectiveProbeSpec, EffectiveStateProbePort,
-        ReloadSemantics, decode_json_status,
-    },
     managed_projection::ManagedProjectionPort,
     registry::{
         AdapterObservationPaths, DistributionSurface, HarnessAdapter, ObservationPathError,
@@ -30,20 +28,43 @@ const PROFILE_ID: &str = "kiro-2-12-2";
 
 pub struct KiroAdapter;
 pub struct KiroSkillProjection;
-pub struct KiroEffectiveStateProbe;
 
-// The adapter remains private while the official effective-load contract is
-// blocked; this singleton is ready for the guarded registry export.
-#[allow(dead_code)]
 static ADAPTER: KiroAdapter = KiroAdapter;
 static SKILLS: KiroSkillProjection = KiroSkillProjection;
-static PROBE: KiroEffectiveStateProbe = KiroEffectiveStateProbe;
+static DECLARATION_CONTRACT: LazyLock<ManagedDeclarationContract> = LazyLock::new(|| {
+    ManagedDeclarationContract::new([
+        ManagedSurfaceKind::ManagedDocument,
+        ManagedSurfaceKind::CompleteSkillTree,
+    ])
+    .expect("Kiro declaration contract is non-empty")
+});
 
 impl KiroAdapter {
-    #[allow(dead_code)]
     pub fn static_ref() -> &'static dyn HarnessAdapter {
         &ADAPTER
     }
+}
+
+fn declaration_capabilities() -> ScopedCapabilitySets {
+    let capability = |id: &str, support| {
+        (
+            CapabilityId::new(id).expect("Kiro compiled capability is valid"),
+            support,
+        )
+    };
+    let capabilities = CapabilitySet::new([
+        capability("harness.observe", CapabilitySupport::Supported),
+        capability("managed.projection", CapabilitySupport::Unverified),
+        capability("component.skill", CapabilitySupport::Unverified),
+        capability("component.mcp", CapabilitySupport::Unverified),
+        // Standalone Agent Skills use the shared canonical skill lifecycle.
+        // Kiro's documented native root is still an attested projection path;
+        // managed plugin declarations above remain acknowledgment-gated.
+        capability("skill.install", CapabilitySupport::Supported),
+        capability("skill.update", CapabilitySupport::Supported),
+        capability("skill.remove", CapabilitySupport::Supported),
+    ]);
+    ScopedCapabilitySets::new(capabilities.clone(), capabilities)
 }
 
 impl HarnessAdapter for KiroAdapter {
@@ -77,7 +98,7 @@ impl HarnessAdapter for KiroAdapter {
             version,
             VERIFIED_VERSION,
             PROFILE_ID,
-            adapter_helpers::compiled_capabilities(true, true, true),
+            declaration_capabilities(),
         )
     }
 
@@ -123,12 +144,10 @@ impl HarnessAdapter for KiroAdapter {
         } else {
             Vec::new()
         };
-        if canonical.is_empty() && surface_labels.is_empty() {
-            return Err(ObservationPathError::Runtime(
-                ObservationRuntimeError::TreeRootUnavailable,
-            ));
-        }
-
+        // Kiro's managed roots are optional until the first declaration is
+        // written. An empty documented surface is a valid observation; it
+        // must not force marketplace source registration to fail after its
+        // control-plane operation has completed.
         Ok(AdapterObservationPaths {
             canonical,
             project_entry_count: matches!(scope, Scope::Project(_)).then_some(project_entry_count),
@@ -144,8 +163,11 @@ impl HarnessAdapter for KiroAdapter {
         Some(KiroManagedProjection::static_ref())
     }
 
-    fn effective_state_probe(&self) -> Option<&dyn EffectiveStateProbePort> {
-        Some(&PROBE)
+    fn managed_declaration_contract(
+        &self,
+        _scope: skilltap_core::domain::CapabilityScope,
+    ) -> Option<&'static ManagedDeclarationContract> {
+        Some(&DECLARATION_CONTRACT)
     }
 
     fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {
@@ -162,39 +184,6 @@ impl SkillProjectionPort for KiroSkillProjection {
     }
 }
 
-impl EffectiveStateProbePort for KiroEffectiveStateProbe {
-    fn mcp_status_spec(&self, scope: &Scope) -> EffectiveProbeSpec {
-        let (scope_name, working_directory) = match scope {
-            Scope::Global => ("global", None),
-            Scope::Project(project) => ("workspace", Some(project.clone())),
-        };
-        EffectiveProbeSpec {
-            arguments: vec![
-                OsString::from("mcp"),
-                OsString::from("list"),
-                OsString::from(scope_name),
-            ],
-            working_directory,
-        }
-    }
-
-    fn decode_mcp_status(
-        &self,
-        stdout: &[u8],
-        limits: JsonLimits,
-    ) -> Result<EffectiveMcpStatus, EffectiveProbeError> {
-        // Kiro 2.12.2's public contract does not document a machine-readable
-        // `mcp list` payload. Keep the shared typed decoder as a fail-closed
-        // fixture seam until an authenticated official output grammar is
-        // available; malformed/plain output never becomes healthy state.
-        decode_json_status(stdout, limits)
-    }
-
-    fn reload_semantics(&self) -> ReloadSemantics {
-        ReloadSemantics::HotReload
-    }
-}
-
 fn path_exists(path: &AbsolutePath) -> bool {
     std::fs::symlink_metadata(path.as_str()).is_ok()
 }
@@ -202,11 +191,9 @@ fn path_exists(path: &AbsolutePath) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use skilltap_core::domain::{CapabilityId, CapabilitySupport};
+    use std::collections::BTreeSet;
 
-    fn limits() -> JsonLimits {
-        JsonLimits::new(16 * 1024, 32).expect("test limits are valid")
-    }
+    use skilltap_core::domain::{CapabilityScope, CapabilitySupport};
 
     #[test]
     fn exact_version_profile_is_authorized_and_adjacent_versions_are_unknown() {
@@ -227,12 +214,54 @@ mod tests {
                 .as_str(),
             PROFILE_ID
         );
-        assert!(
+        let known = adapter.select_profile(&NativeVersion::new("2.12.2").unwrap());
+        assert!(known.mutation_capabilities().is_some());
+        let global = known
+            .mutation_capabilities()
+            .unwrap()
+            .for_scope_kind(CapabilityScope::Global);
+        let project = known
+            .mutation_capabilities()
+            .unwrap()
+            .for_scope_kind(CapabilityScope::Project);
+        for capabilities in [global, project] {
+            assert_eq!(
+                capabilities.support(
+                    &skilltap_core::domain::CapabilityId::new("managed.projection").unwrap()
+                ),
+                Some(CapabilitySupport::Unverified)
+            );
+            assert_eq!(
+                capabilities
+                    .support(&skilltap_core::domain::CapabilityId::new("component.skill").unwrap()),
+                Some(CapabilitySupport::Unverified)
+            );
+            assert_eq!(
+                capabilities
+                    .support(&skilltap_core::domain::CapabilityId::new("component.mcp").unwrap()),
+                Some(CapabilitySupport::Unverified)
+            );
+            assert!(capabilities.iter().all(|(id, _)| !matches!(
+                id.as_str(),
+                "plugin.install"
+                    | "plugin.remove"
+                    | "plugin.update"
+                    | "marketplace.register"
+                    | "marketplace.remove"
+                    | "marketplace.update"
+            )));
+        }
+        assert_eq!(
             adapter
-                .select_profile(&NativeVersion::new("2.12.2").unwrap())
-                .mutation_capabilities()
-                .is_some()
+                .managed_declaration_contract(CapabilityScope::Global)
+                .unwrap()
+                .surfaces(),
+            &BTreeSet::from([
+                ManagedSurfaceKind::ManagedDocument,
+                ManagedSurfaceKind::CompleteSkillTree,
+            ])
         );
+        assert!(adapter.effective_state_probe().is_none());
         for version in ["2.12.1", "2.12.3", "3.0.0", "99.0.0"] {
             let profile = adapter.select_profile(&NativeVersion::new(version).unwrap());
             assert!(profile.profile_id().is_none(), "{version} must be unknown");
@@ -280,37 +309,5 @@ mod tests {
             spec.target.as_path(),
             std::path::Path::new("../../.agents/skills/demo")
         );
-    }
-
-    #[test]
-    fn probe_uses_explicit_scope_and_project_working_directory() {
-        let project = AbsolutePath::new("/tmp/kiro-project").unwrap();
-        let global = PROBE.mcp_status_spec(&Scope::Global);
-        assert_eq!(
-            global.arguments,
-            ["mcp", "list", "global"].map(OsString::from)
-        );
-        assert_eq!(global.working_directory, None);
-        let workspace = PROBE.mcp_status_spec(&Scope::Project(project.clone()));
-        assert_eq!(
-            workspace.arguments,
-            ["mcp", "list", "workspace"].map(OsString::from)
-        );
-        assert_eq!(workspace.working_directory, Some(project));
-    }
-
-    #[test]
-    fn provisional_json_probe_is_bounded_and_fail_closed() {
-        let status = PROBE
-            .decode_mcp_status(
-                br#"{"servers":{"docs":{"status":"connected"}},"trusted":true}"#,
-                limits(),
-            )
-            .unwrap();
-        assert_eq!(status.servers.len(), 1);
-        assert!(matches!(
-            PROBE.decode_mcp_status(b"kiro-cli mcp list output", limits()),
-            Err(EffectiveProbeError::InvalidPayload | EffectiveProbeError::Runtime(_))
-        ));
     }
 }
