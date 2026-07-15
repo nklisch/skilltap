@@ -21,6 +21,7 @@ pub enum EnvironmentVariable {
     CodexHome,
     ClaudeConfigDir,
     KiroHome,
+    PiPackageDir,
     Path,
 }
 
@@ -33,6 +34,7 @@ impl EnvironmentVariable {
             Self::CodexHome => "CODEX_HOME",
             Self::ClaudeConfigDir => "CLAUDE_CONFIG_DIR",
             Self::KiroHome => "KIRO_HOME",
+            Self::PiPackageDir => "PI_PACKAGE_DIR",
             Self::Path => "PATH",
         }
     }
@@ -58,6 +60,8 @@ pub enum PathRole {
     CodexHome,
     ClaudeHome,
     KiroHome,
+    PiHome,
+    PiPackageDir,
 }
 
 impl fmt::Display for PathRole {
@@ -75,6 +79,8 @@ impl fmt::Display for PathRole {
             Self::CodexHome => "Codex home",
             Self::ClaudeHome => "Claude home",
             Self::KiroHome => "Kiro home",
+            Self::PiHome => "Pi home",
+            Self::PiPackageDir => "Pi package directory",
         })
     }
 }

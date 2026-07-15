@@ -312,7 +312,8 @@ impl Environment for FixtureEnvironment {
             EnvironmentVariable::XdgCacheHome => Some(self.cache.clone()),
             EnvironmentVariable::CodexHome
             | EnvironmentVariable::ClaudeConfigDir
-            | EnvironmentVariable::KiroHome => None,
+            | EnvironmentVariable::KiroHome
+            | EnvironmentVariable::PiPackageDir => None,
             EnvironmentVariable::Path => std::env::var_os("PATH"),
         }
     }

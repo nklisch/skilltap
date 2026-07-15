@@ -10,6 +10,9 @@ mod kiro;
 mod kiro_managed;
 mod opencode;
 mod opencode_managed;
+mod pi;
+mod pi_profile;
+mod pi_settings;
 
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
@@ -18,6 +21,8 @@ pub use gemini::{GeminiAdapter, GeminiEffectiveStateProbe, GeminiSkillProjection
 pub use gemini_managed::GeminiManagedProjection;
 pub use opencode::{OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeSkillProjection};
 pub use opencode_managed::OpenCodeManagedProjection;
+pub use pi::{PiAdapter, PiSkillProjection};
+pub use pi_profile::PiConditionalProfile;
 
 #[cfg(test)]
 mod tests {
@@ -161,6 +166,7 @@ mod tests {
             .adapter(&HarnessId::new("opencode").unwrap())
             .unwrap();
 
+        assert!(registry.adapter(&HarnessId::new("pi").unwrap()).is_none());
         assert_eq!(codex.identity(), CodexAdapter::static_ref().identity());
         assert_eq!(claude.identity(), ClaudeAdapter::static_ref().identity());
         assert_eq!(gemini.identity(), GeminiAdapter::static_ref().identity());

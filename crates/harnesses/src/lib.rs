@@ -23,7 +23,7 @@ pub use adapters::{
     CodexInstructionBridge, CodexLifecycle, CodexManagedProjection, CodexSkillProjection,
     GeminiAdapter, GeminiEffectiveStateProbe, GeminiManagedProjection, GeminiSkillProjection,
     OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeManagedProjection,
-    OpenCodeSkillProjection,
+    OpenCodeSkillProjection, PiAdapter, PiConditionalProfile, PiSkillProjection,
 };
 
 mod plugin_graph;

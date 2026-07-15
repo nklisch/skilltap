@@ -53,6 +53,8 @@ pub struct PlatformPaths {
     codex_home: AbsolutePath,
     claude_home: AbsolutePath,
     kiro_home: AbsolutePath,
+    pi_home: AbsolutePath,
+    pi_package_dir: AbsolutePath,
 }
 
 impl PlatformPaths {
@@ -77,6 +79,10 @@ impl PlatformPaths {
                 .map_or_else(|| join(&home, ".claude", PathRole::ClaudeHome), Ok)?;
         let kiro_home = optional_environment_path(environment, EnvironmentVariable::KiroHome)?
             .map_or_else(|| join(&home, ".kiro", PathRole::KiroHome), Ok)?;
+        let pi_home = join(&home, ".pi/agent", PathRole::PiHome)?;
+        let pi_package_dir =
+            optional_environment_path(environment, EnvironmentVariable::PiPackageDir)?
+                .map_or_else(|| join(&pi_home, "npm", PathRole::PiPackageDir), Ok)?;
 
         Ok(Self {
             platform,
@@ -85,6 +91,8 @@ impl PlatformPaths {
             codex_home,
             claude_home,
             kiro_home,
+            pi_home,
+            pi_package_dir,
             home,
             config_home,
             cache_home,
@@ -127,6 +135,14 @@ impl PlatformPaths {
         &self.kiro_home
     }
 
+    pub const fn pi_home(&self) -> &AbsolutePath {
+        &self.pi_home
+    }
+
+    pub const fn pi_package_dir(&self) -> &AbsolutePath {
+        &self.pi_package_dir
+    }
+
     pub fn native_process_environment(
         &self,
         search_path: Option<OsString>,
@@ -160,6 +176,10 @@ impl PlatformPaths {
             (
                 OsString::from(EnvironmentVariable::KiroHome.as_str()),
                 OsString::from(self.kiro_home.as_str()),
+            ),
+            (
+                OsString::from(EnvironmentVariable::PiPackageDir.as_str()),
+                OsString::from(self.pi_package_dir.as_str()),
             ),
             (
                 OsString::from(EnvironmentVariable::Path.as_str()),
@@ -249,6 +269,11 @@ mod tests {
         assert_eq!(paths.codex_home().as_str(), "/home/nathan/.codex");
         assert_eq!(paths.claude_home().as_str(), "/opt/claude/nathan");
         assert_eq!(paths.kiro_home().as_str(), "/home/nathan/.kiro");
+        assert_eq!(paths.pi_home().as_str(), "/home/nathan/.pi/agent");
+        assert_eq!(
+            paths.pi_package_dir().as_str(),
+            "/home/nathan/.pi/agent/npm"
+        );
     }
 
     #[test]
@@ -285,6 +310,20 @@ mod tests {
         );
         assert_eq!(paths.global_agents().as_str(), "/home/nathan/AGENTS.md");
         assert_eq!(paths.kiro_home().as_str(), "/opt/kiro/nathan");
+    }
+
+    #[test]
+    fn pi_package_directory_override_is_independent_of_pi_home() {
+        let paths = PlatformPaths::resolve_for(
+            SupportedPlatform::Linux,
+            &TestEnvironment::default()
+                .with(EnvironmentVariable::Home, "/home/nathan")
+                .with(EnvironmentVariable::PiPackageDir, "/opt/pi/packages"),
+        )
+        .unwrap();
+
+        assert_eq!(paths.pi_home().as_str(), "/home/nathan/.pi/agent");
+        assert_eq!(paths.pi_package_dir().as_str(), "/opt/pi/packages");
     }
 
     #[test]
@@ -339,14 +378,15 @@ mod tests {
                 .with(EnvironmentVariable::XdgCacheHome, "/var/cache/nathan")
                 .with(EnvironmentVariable::CodexHome, "/opt/codex/nathan")
                 .with(EnvironmentVariable::ClaudeConfigDir, "/opt/claude/nathan")
-                .with(EnvironmentVariable::KiroHome, "/opt/kiro/nathan"),
+                .with(EnvironmentVariable::KiroHome, "/opt/kiro/nathan")
+                .with(EnvironmentVariable::PiPackageDir, "/opt/pi/packages"),
         )
         .unwrap();
 
         let environment = paths
             .native_process_environment(Some(OsString::from("/usr/local/bin:/usr/bin")))
             .unwrap();
-        assert_eq!(environment.len(), 7);
+        assert_eq!(environment.len(), 8);
         assert_eq!(environment[OsStr::new("HOME")], "/home/nathan");
         assert_eq!(
             environment[OsStr::new("XDG_CONFIG_HOME")],
@@ -362,6 +402,10 @@ mod tests {
             "/opt/claude/nathan"
         );
         assert_eq!(environment[OsStr::new("KIRO_HOME")], "/opt/kiro/nathan");
+        assert_eq!(
+            environment[OsStr::new("PI_PACKAGE_DIR")],
+            "/opt/pi/packages"
+        );
         assert_eq!(environment[OsStr::new("PATH")], "/usr/local/bin:/usr/bin");
         assert!(matches!(
             paths.native_process_environment(None),
@@ -394,6 +438,8 @@ mod tests {
             (EnvironmentVariable::CodexHome, "/opt/codex/../other"),
             (EnvironmentVariable::ClaudeConfigDir, "relative/claude"),
             (EnvironmentVariable::ClaudeConfigDir, "/opt/claude/../other"),
+            (EnvironmentVariable::PiPackageDir, "relative/pi-packages"),
+            (EnvironmentVariable::PiPackageDir, "/opt/pi/../packages"),
         ] {
             let environment = TestEnvironment::default()
                 .with(EnvironmentVariable::Home, "/home/nathan")

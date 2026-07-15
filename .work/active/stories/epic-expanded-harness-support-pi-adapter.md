@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-pi-adapter
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-pi
 depends_on: [epic-expanded-harness-support-pi-profile]
