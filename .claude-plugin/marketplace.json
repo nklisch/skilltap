@@ -9,7 +9,7 @@
       "source": "./plugin",
       "description": "A personal control plane for managing Codex and Claude Code environments.",
       "category": "productivity",
-      "version": "3.0.3",
+      "version": "3.1.0",
       "policy": {
         "installation": "AVAILABLE",
         "authentication": "ON_INSTALL"
