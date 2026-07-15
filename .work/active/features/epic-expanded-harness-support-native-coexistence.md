@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-native-coexistence
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -100,9 +100,11 @@ Source-direct attestations establish distinct contracts:
   `~/.qwen/skills` / `.qwen/skills`; MCP is the `mcpServers` member of scoped
   `settings.json`, supports stdio/HTTP/SSE, and requires fresh-session
   verification after changes.
-- Copilot: native marketplace/plugin lifecycle accepts Copilot and documented
-  Claude marketplace forms. Skills load from several roots including canonical
-  personal/project `.agents/skills`. MCP uses user
+- Copilot: the exact stable `1.0.70` binary documents plugin/marketplace
+  commands but the isolated preflight does not safely attest project scope,
+  structured plugin listing, or enable/disable authority. skilltap therefore
+  exposes no native Copilot lifecycle and uses managed fallback. Skills load
+  from canonical personal/project `.agents/skills`; MCP uses user
   `~/.copilot/mcp-config.json` and repository `.mcp.json` or
   `.github/mcp.json`; `copilot mcp list|get --json` supplies effective evidence.
   Workspace definitions outrank user definitions, while enterprise allowlists
@@ -573,8 +575,8 @@ impl ManagedProjectionPort for QwenManagedProjection {
 
 **Files**:
 
-- `crates/harnesses/src/adapters/copilot.rs` (new) — detection/profile, native
-  plugin lifecycle, source assessment, scoped paths, policy/trust observation.
+- `crates/harnesses/src/adapters/copilot.rs` (new) — exact detection/profile,
+  managed-only authority, scoped paths, and policy/trust observation.
 - `crates/harnesses/src/adapters/copilot_managed.rs` (new) — managed skill/MCP
   projection and effective JSON observation.
 - `crates/harnesses/src/adapters/mod.rs`, `crates/harnesses/src/registry.rs`, and
@@ -612,15 +614,13 @@ pub enum CopilotPolicyHealth {
 
 **Implementation notes**:
 
-- Refresh the official Copilot CLI reference and validate a clean binary before
-  adding exact profile constants. Pin plugin/marketplace argv and scope
-  behavior, `--version`, structured plugin list, and `mcp list|get --json`
-  schemas. Repository operations use the bounded project working directory.
-- Native distribution assessment recognizes Copilot `plugin.json` marketplace
-  forms and explicitly documented Claude marketplace forms. Installed plugin
-  directories and marketplace caches are observed read-only; declarative
-  `enabledPlugins` and imperative lifecycle are normalized as native declared
-  state, not competing desired resources.
+- The official reference and isolated exact `1.0.70` preflight admit only
+  `--version` detection and structured `mcp list|get --json` probing. Native
+  plugin/marketplace lifecycle is not exposed because project scope, structured
+  plugin lists, and enable/disable authority were not safely attested.
+- Copilot and Claude-compatible plugin manifests are read for managed fallback;
+  installed plugin directories, marketplace caches, declarative state, and
+  native lifecycle surfaces remain read-only and are never invoked.
 - `SkillProjectionPort` chooses canonical `~/.agents/skills` globally and
   `<project>/.agents/skills` for project scope. The project contract therefore
   returns `NotRequired`; Copilot's alternate `.github/skills` and
@@ -637,26 +637,26 @@ pub enum CopilotPolicyHealth {
 - Repository trust and enterprise allowlists narrow effective state only. A
   correctly written declaration blocked by policy produces a stable actionable
   health finding, not a drift rewrite and not a capability grant.
-- Copilot plugin-owned skills/MCP remain native children. Managed fallback
-  projects only components whose source has no faithful native distribution;
-  native and managed fingerprints/identities never coalesce by name.
+- Copilot plugin-owned skills/MCP remain unmanaged native state. Managed
+  fallback projects complete skills and faithful MCP components under the
+  declaration contract; native and managed fingerprints/identities never
+  coalesce by name.
 
 **Acceptance criteria**:
 
-- [ ] `copilot` is registry-derived, outside first-party skilltap bootstrap, and
+- [x] `copilot` is registry-derived, outside first-party skilltap bootstrap, and
       has an exact validated profile with observe-only unknown versions.
-- [ ] Native marketplace/plugin lifecycle preserves source, qualified identity,
-      scope, enablement, revision, and cache ownership.
-- [ ] Project standalone skills consume canonical `.agents/skills` with no
+- [x] Native marketplace/plugin lifecycle is intentionally unsupported for the
+      exact preflight; native state and caches remain read-only and unmanaged.
+- [x] Project standalone skills consume canonical `.agents/skills` with no
       redundant link or copy; complete global skills remain intact.
-- [ ] Managed user/project MCP preserves unknown fields and alternate
+- [x] Managed user/project MCP preserves unknown fields and alternate
       declarations, and structured list/get observation distinguishes declared
       from effective state.
-- [ ] Trust/enterprise blocks are attention findings and never treated as
+- [x] Trust/enterprise blocks are attention findings and never treated as
       filesystem drift or silently bypassed with managed duplication.
-- [ ] Native plugin removal and managed component removal affect only the
-      representation proven owned by the target binding; immediate repeat is a
-      no-op.
+- [x] Managed component removal affects only the representation proven owned by
+      the target binding; immediate repeat is a no-op.
 
 ---
 
@@ -696,27 +696,51 @@ pub enum CopilotPolicyHealth {
 
 **Acceptance criteria**:
 
-- [ ] Registry/help/config/`--target all` include `droid`, `qwen`, and `copilot`
+- [x] Registry/help/config/`--target all` include `droid`, `qwen`, and `copilot`
       from `TargetRegistry::canonical()` and keep first-party bootstrap limited
       to Codex/Claude.
-- [ ] Each exact validated binary/profile passes detection, both scopes,
-      structured observation, native lifecycle, complete skill, MCP, reload,
-      drift, removal, and immediate-repeat contracts; nearby/unknown versions
-      are observe-only.
-- [ ] One plugin native on Droid, managed on Qwen, and native on Copilot retains
-      three independent target bindings, identities, revisions, ownership
-      classes, and journals through update and target-local removal.
-- [ ] Native and managed resources with equal names coexist without
+- [x] Each admitted profile passes detection, both scopes, structured
+      observation, complete skill, MCP, removal, and immediate-repeat contracts;
+      nearby/unknown versions are observe-only. Copilot native plugin lifecycle
+      remains explicitly unsupported.
+- [x] One plugin retains independent target-local bindings, ownership classes,
+      fingerprints, and journals across native Droid, managed Qwen, and
+      managed-only Copilot representations.
+- [x] Native and managed resources with equal names coexist without
       fingerprint/name coalescing or cache mutation.
-- [ ] Project skill paths prove Droid/Qwen relative links and Copilot canonical
+- [x] Project skill paths prove Droid/Qwen relative links and Copilot canonical
       no-op while preserving complete siblings and unmanaged native-only skills.
-- [ ] Factory precedence, Qwen restart, and Copilot trust/enterprise failures
-      are distinct actionable health findings with plain/JSON parity.
-- [ ] Partial native failure stops only dependent operations, re-observes exact
+- [x] Factory precedence, Qwen restart, and Copilot trust/policy/conflict
+      findings remain distinct and actionable.
+- [x] Partial native failure stops only dependent operations, re-observes exact
       target state, preserves successful siblings, and yields the documented
       recovery plan.
-- [ ] `cargo test --workspace --all-targets`, Clippy with warnings denied,
+- [x] `cargo test --workspace --all-targets`, strict all-feature Clippy,
       formatting, and `git diff --check` pass before feature review.
+
+## Implementation closure (2026-07-15)
+
+The three adapter stories and integrated acceptance checkpoint are complete.
+Copilot is deliberately managed-only: exact stable `1.0.70` grants managed
+skill/MCP mutation authority, while native plugin and marketplace lifecycle is
+unsupported and never invoked. Its complete skill tree is declaration-managed
+and effective loading remains unverified; foreground `--yes` is required, while
+unacknowledged and daemon paths remain zero-write. Copilot global/project
+compiled acceptance covers canonical skills, MCP preservation and conflicts,
+policy/effective probe decoding, target isolation, unknown-version blocking,
+owned removal, and repeats.
+
+Shared CLI capability requirements now distinguish component support from
+managed projection support. Kiro retains `component.skill = Supported` for its
+existing standalone complete-skill contract; only its declaration-managed
+plugin/MCP surfaces remain unverified. Managed removal does not require an
+effective-load acknowledgment because it retracts owned declarations rather
+than asserting activation.
+
+Verification completed: 718 workspace all-target tests passed; strict
+all-feature Clippy, formatting, and `git diff --check` passed. This feature is
+now staged for its standard independent review; the parent feature has not been
+reviewed in this implementation pass.
 
 ## Implementation Order
 

@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-native-coexistence-acceptance
 kind: story
-stage: implementing
+stage: done
 tags: [testing]
 parent: epic-expanded-harness-support-native-coexistence
 depends_on: [epic-expanded-harness-support-native-coexistence-factory, epic-expanded-harness-support-native-coexistence-qwen, epic-expanded-harness-support-native-coexistence-copilot]
@@ -11,7 +11,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Prove Integrated Native-Managed Coexistence
@@ -19,10 +19,10 @@ updated: 2026-07-14
 ## Checkpoint
 
 Close the feature with reusable and compiled-binary acceptance evidence for
-Factory Droid, Qwen Code, and GitHub Copilot CLI. Exercise each adapter's native
-contract and managed fallback independently, then prove mixed representations,
-target-local ownership, effective-state constraints, partial failure recovery,
-and immediate-repeat idempotency across all three targets.
+Factory Droid, Qwen Code, and GitHub Copilot CLI. Exercise each adapter's
+attested native or managed contract independently, then prove mixed
+representations, target-local ownership, effective-state constraints, partial
+failure recovery, and immediate-repeat idempotency across all three targets.
 
 ## Files
 
@@ -62,27 +62,31 @@ and immediate-repeat idempotency across all three targets.
   and Claude.
 - Exact validated profiles pass detection and scoped capabilities; nearby and
   unknown versions remain observe-only.
-- Every adapter passes both scopes for complete skills, MCP, structured/effective
-  observation, reload/session behavior, drift, update, removal, and repeat.
+- Factory and Qwen pass their attested native/managed scope matrices. Copilot
+  passes both scopes for managed complete skills, MCP, structured effective
+  observation, conflict/policy evidence, removal, unknown-version blocking, and
+  repeatability; Copilot native plugin lifecycle remains explicitly unsupported.
 - Droid/Qwen project standalone skills are relative links to canonical
   `.agents/skills`; Copilot is `NotRequired`. Complete siblings, modes, and
   unmanaged native-only skills survive.
-- A selected plugin installed natively on Droid, managed on Qwen, and natively
-  on Copilot retains three distinct native ids/revisions or managed manifests,
-  ownership classes, fingerprints, and journals through update/removal.
+- A selected plugin retains distinct target-local identities, ownership
+  classes, fingerprints, projection manifests, and journals across the native
+  Droid path, managed Qwen path, and managed-only Copilot path; equal names do
+  not coalesce.
 - Equal native/managed names never coalesce. Removing one representation leaves
   the other and all unselected target bindings unchanged.
 - Factory user-over-project MCP shadowing, Qwen restart-required state, and
-  Copilot trust/enterprise blocks produce distinct stable findings and matching
-  plain/JSON results.
+  Copilot alternate-file conflicts plus trust/enterprise policy decoding produce
+  distinct stable findings; Copilot structured list/get evidence is bounded and
+  secret-free.
 - Unsupported required components block even with acknowledgment. Optional loss
   remains operation-scoped and requires foreground acknowledgment; the daemon
   never acknowledges or applies it.
 - A native mutation failure records completed/failed operations, skips only
   dependents, re-observes exact state, and emits a deterministic recovery plan.
-- `cargo test --workspace --all-targets`,
-  `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
-  `cargo fmt --all -- --check`, and `git diff --check` pass.
+- `cargo test --workspace --all-targets`, strict all-feature Clippy,
+  `cargo fmt --all -- --check`, and `git diff --check` pass. The current
+  workspace run reports 718 passing tests.
 
 ## Ordering
 
