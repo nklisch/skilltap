@@ -12,6 +12,7 @@ pub mod lifecycle_representation;
 pub mod managed_projection;
 pub mod marketplace;
 pub mod materialization;
+pub mod mutation_authority;
 pub mod native_config;
 pub mod operation_graph;
 pub mod plugin_graph;

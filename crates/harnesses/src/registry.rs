@@ -162,9 +162,17 @@ pub trait HarnessAdapter: Sync {
         None
     }
 
-    /// Whether the adapter's managed projection is mutation-authorized for the
-    /// concrete scope. Adapters must opt in explicitly so an available
-    /// projection port cannot accidentally grant mutation authority.
+    /// Explicitly attested managed declaration surfaces for this concrete
+    /// scope. Port availability alone never grants unverified authority.
+    fn managed_declaration_contract(
+        &self,
+        _scope: CapabilityScope,
+    ) -> Option<&'static skilltap_core::mutation_authority::ManagedDeclarationContract> {
+        None
+    }
+
+    /// Retained during the authority migration. New callers must use the
+    /// exact compiled profile and `managed_declaration_contract` instead.
     fn supports_managed_projection(&self, _scope: CapabilityScope) -> bool {
         false
     }

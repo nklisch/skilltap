@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-declaration-managed-authority-contract
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-declaration-managed
 depends_on: []
@@ -59,3 +59,21 @@ stories consume.
 
 This story is the foundation. Planner acknowledgment, execution/status, and
 profile migration depend on its exact semantics.
+
+## Implementation notes
+
+- Added `CapabilityProfileSelection::mutation_support`, which returns no
+  mutation evidence for unknown/observe-only profiles or omitted capabilities.
+- Added the pure `mutation_authority` module with exact channel rules,
+  per-scope capability requirements, managed surface coverage, and explicit
+  declaration-contract opt-in.
+- Exposed the compatibility component-kind registry as the shared capability
+  mapping and added the adapter contract hook while retaining the old route
+  gate for the subsequent migration checkpoint.
+- Verification: `cargo fmt --all && cargo test -p skilltap-core -p
+  skilltap-harnesses` (514 passed).
+
+## Completion
+
+Implemented and verified. The next checkpoint may consume the authority result;
+no mutation route was widened in this checkpoint.

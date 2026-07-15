@@ -310,7 +310,11 @@ fn lost_component_result(
     )
 }
 
-fn capability_for(kind: &ComponentKind) -> Option<CapabilityId> {
+/// Map a normalized component kind to its one declared capability id.
+///
+/// This registry is shared by compatibility and mutation-authority planning;
+/// callers must not duplicate the mapping in adapters or the CLI.
+pub fn capability_for(kind: &ComponentKind) -> Option<CapabilityId> {
     let name = match kind {
         ComponentKind::Skill => "skill",
         ComponentKind::McpServer => "mcp_server",

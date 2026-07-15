@@ -320,6 +320,21 @@ impl CapabilityProfileSelection {
         }
     }
 
+    /// Returns the exact scoped capability from a mutation-authorized profile.
+    ///
+    /// `None` is intentional: an unknown/observe-only profile and an absent
+    /// capability are both unable to authorize mutation. Observation callers
+    /// should use [`Self::observation_capabilities`] when they need to retain
+    /// diagnostic evidence for those profiles.
+    pub fn mutation_support(
+        &self,
+        scope: &Scope,
+        capability: &CapabilityId,
+    ) -> Option<CapabilitySupport> {
+        self.mutation_capabilities()
+            .and_then(|capabilities| capabilities.for_scope(scope).support(capability))
+    }
+
     pub fn narrow(&self, narrowing: &ScopedCapabilitySets) -> Result<Self, ProfileContractError> {
         let capabilities = self.observation_capabilities().narrow(narrowing)?;
         Ok(match self {
