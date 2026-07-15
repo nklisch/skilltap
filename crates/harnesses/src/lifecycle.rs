@@ -246,7 +246,7 @@ pub fn observe_native_resource(
         .resolve(&ExecutableResolutionRequest::new(configured, search_path))?;
     let output = SystemNativeProcessRunner.run(&NativeProcessRequest::new(
         executable,
-        native_list_arguments(request),
+        dispatch.lifecycle.observation_arguments(request)?,
         environment.clone(),
         match &request.scope {
             Scope::Global => None,
@@ -259,15 +259,9 @@ pub fn observe_native_resource(
             NativeObservationFailure::CommandFailed,
         ));
     }
-    let decoded = match StrictJson.decode(output.stdout(), json_limits) {
-        Ok(decoded) => decoded,
-        Err(_) => {
-            return Ok(NativeResourceObservation::Indeterminate(
-                NativeObservationFailure::InvalidJson,
-            ));
-        }
-    };
-    Ok(resource_observation(decoded.value(), dispatch))
+    Ok(dispatch
+        .lifecycle
+        .decode_observation(output.stdout(), dispatch, json_limits))
 }
 
 pub fn verify_lifecycle_postcondition(
@@ -304,7 +298,7 @@ pub fn verify_lifecycle_postcondition(
     }
 }
 
-fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
+pub(crate) fn native_observation_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
     let mut args = vec![OsString::from("plugin")];
     match request.action {
         NativeLifecycleAction::MarketplaceAdd
@@ -323,6 +317,20 @@ fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
         }
     }
     args
+}
+
+pub(crate) fn decode_native_observation(
+    stdout: &[u8],
+    dispatch: &NativeLifecycleDispatch,
+    limits: skilltap_core::runtime::JsonLimits,
+) -> NativeResourceObservation {
+    let decoded = match StrictJson.decode(stdout, limits) {
+        Ok(decoded) => decoded,
+        Err(_) => {
+            return NativeResourceObservation::Indeterminate(NativeObservationFailure::InvalidJson);
+        }
+    };
+    resource_observation(decoded.value(), dispatch)
 }
 
 fn resource_observation(
@@ -917,13 +925,13 @@ mod tests {
             ["plugin", "marketplace", "update", "formatter@team"].map(OsString::from)
         );
         assert_eq!(
-            native_list_arguments(
+            native_observation_arguments(
                 claude(NativeLifecycleAction::MarketplaceUpdate, project).request()
             ),
             ["plugin", "marketplace", "list", "--json"].map(OsString::from)
         );
         assert_eq!(
-            native_list_arguments(
+            native_observation_arguments(
                 claude(NativeLifecycleAction::PluginInstall, Scope::Global).request()
             ),
             ["plugin", "list", "--json"].map(OsString::from)

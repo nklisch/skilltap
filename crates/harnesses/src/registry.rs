@@ -11,9 +11,14 @@ use skilltap_core::{
 
 use crate::{
     CanonicalObservation, DetectionError,
-    adapters::{ClaudeAdapter, CodexAdapter, GeminiAdapter, OpenCodeAdapter, PiAdapter},
+    adapters::{
+        ClaudeAdapter, CodexAdapter, FactoryAdapter, GeminiAdapter, OpenCodeAdapter, PiAdapter,
+    },
     conditional_profile::ConditionalProfilePort,
-    lifecycle::{NativeLifecycleError, NativeLifecycleRequest},
+    lifecycle::{
+        NativeLifecycleDispatch, NativeLifecycleError, NativeLifecycleRequest,
+        NativeResourceObservation,
+    },
     managed_projection::ManagedProjectionPort,
     native_distribution::NativeDistributionPort,
 };
@@ -185,6 +190,28 @@ pub trait NativeLifecycleVector: Sync {
     /// Returns the native scope evidence required in list output. `None`
     /// means this lifecycle has no independently encoded scope dimension.
     fn observation_scope(&self, scope: &Scope) -> Option<CapabilityScope>;
+
+    /// Return the exact read-only list command for a postcondition. Native
+    /// targets with human-only output override this rather than pretending a
+    /// structured schema exists.
+    fn observation_arguments(
+        &self,
+        request: &NativeLifecycleRequest,
+    ) -> Result<Vec<OsString>, NativeLifecycleError> {
+        Ok(crate::lifecycle::native_observation_arguments(request))
+    }
+
+    /// Decode one bounded postcondition response. The default is the existing
+    /// strict JSON grammar; target adapters may supply a version-pinned human
+    /// parser without weakening the shared lifecycle executor.
+    fn decode_observation(
+        &self,
+        stdout: &[u8],
+        dispatch: &NativeLifecycleDispatch,
+        limits: JsonLimits,
+    ) -> NativeResourceObservation {
+        crate::lifecycle::decode_native_observation(stdout, dispatch, limits)
+    }
 }
 
 /// Harness-native instruction bridge location for one scope.
@@ -250,6 +277,7 @@ impl TargetRegistry {
         Self::new([
             CodexAdapter::static_ref(),
             ClaudeAdapter::static_ref(),
+            FactoryAdapter::static_ref(),
             GeminiAdapter::static_ref(),
             OpenCodeAdapter::static_ref(),
             PiAdapter::static_ref(),
@@ -411,9 +439,9 @@ mod tests {
 
         assert_eq!(
             registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
-            ["codex", "claude", "gemini", "opencode", "pi"]
+            ["codex", "claude", "droid", "gemini", "opencode", "pi"]
         );
-        assert_eq!(registry.iter().count(), 5);
+        assert_eq!(registry.iter().count(), 6);
         assert_eq!(registry.first_party_targets().count(), 2);
         assert!(
             registry

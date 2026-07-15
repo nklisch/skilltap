@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-native-coexistence-factory
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-native-coexistence
 depends_on: [epic-expanded-harness-support-native-coexistence-contract]
@@ -116,3 +116,33 @@ impl HarnessAdapter for FactoryAdapter {
 
 Depends only on the coexistence contract. It can become ready alongside Qwen
 and Copilot, but remains a checkpoint inside one cohesive feature delivery.
+
+## Implementation
+
+- Added the registered `droid` adapter with exact Factory Droid `0.171.0`
+  detection/profile authority, `.factory` observation, scoped skill roots,
+  native lifecycle vectors, and native distribution assessment.
+- Added the Factory managed projection for complete skill directories and
+  scoped `.factory/mcp.json` documents. It preserves unrelated document fields
+  and servers, reference-valued environment/header fields, executable intent,
+  and target-local ownership/drift evidence.
+- Added Factory’s exact human-only plugin-list parser. The adapter rejects the
+  preflight-disallowed JSON shape and keeps marketplace operations unscoped
+  while plugin operations carry `--scope user|project`.
+- Added Factory-native and Claude-compatible source admission, with requested
+  revisions explicitly excluded from native assessment so pinning routes to
+  managed projection or blocks.
+- Extended the shared lifecycle observation hook for target-owned human
+  output, and added isolated droid lifecycle, both-scope skill/MCP, and
+  registry/detection fixtures. Unknown adjacent versions remain observe-only
+  and detection is verified zero-write.
+
+## Verification
+
+- `cargo test --workspace --all-targets`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo fmt --all -- --check`
+- `git diff --check`
+
+The protected `.work/bin/work-view` change and untracked `.pi/` directory were
+left outside the Factory change set.

@@ -39,6 +39,7 @@ impl VersionResponse {
 pub enum LifecycleDialect {
     Codex,
     Claude,
+    Factory,
     None,
 }
 
@@ -52,6 +53,7 @@ enum LayoutBase {
     Home,
     Codex,
     Claude,
+    Factory,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -125,6 +127,38 @@ impl FakeHarnessProfile {
                 project_mcp: ".mcp.json",
                 mcp_initial: b"{}",
                 mcp_reloaded: b"{}",
+            },
+        }
+    }
+
+    pub const fn droid() -> Self {
+        Self::droid_with_version("0.171.0")
+    }
+
+    pub const fn droid_with_version(version: &'static str) -> Self {
+        Self {
+            id: "droid",
+            version_response: VersionResponse::TextSuffix {
+                version,
+                suffix: "",
+            },
+            lifecycle_dialect: LifecycleDialect::Factory,
+            managed_projection: Some(ManagedProjectionProfile::new(
+                "droid",
+                &[],
+                Some(".factory/mcp.json"),
+                ".factory/skills",
+            )),
+            conditional_profile: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Factory,
+                global_mcp_base: LayoutBase::Factory,
+                global_skill: "skills/contract-skill",
+                global_mcp: "mcp.json",
+                project_skill: ".factory/skills/contract-skill",
+                project_mcp: ".factory/mcp.json",
+                mcp_initial: br#"{"mcpServers":{"contract":{"command":"contract-server"}}}"#,
+                mcp_reloaded: br#"{"mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
             },
         }
     }
@@ -204,11 +238,13 @@ impl FakeHarnessProfile {
             LayoutBase::Home => machine.home(),
             LayoutBase::Codex => machine.codex_home(),
             LayoutBase::Claude => machine.claude_home(),
+            LayoutBase::Factory => machine.factory_home(),
         };
         let mcp_base = match self.layout.global_mcp_base {
             LayoutBase::Home => machine.home(),
             LayoutBase::Codex => machine.codex_home(),
             LayoutBase::Claude => machine.claude_home(),
+            LayoutBase::Factory => machine.factory_home(),
         };
         Ok(AcceptanceLayout {
             global: ScopeLayout {
@@ -473,8 +509,12 @@ mod tests {
     }
 
     #[test]
-    fn codex_and_claude_pass_the_reusable_acceptance_matrix() {
-        for profile in [FakeHarnessProfile::codex(), FakeHarnessProfile::claude()] {
+    fn codex_claude_and_droid_pass_the_reusable_acceptance_matrix() {
+        for profile in [
+            FakeHarnessProfile::codex(),
+            FakeHarnessProfile::claude(),
+            FakeHarnessProfile::droid(),
+        ] {
             let machine = IsolatedMachine::new("skilltap-acceptance-matrix").unwrap();
             let report = acceptance_matrix(&profile, &machine).unwrap();
             assert_eq!(report.profile_id(), profile.id());
@@ -490,7 +530,52 @@ mod tests {
                 .map(ManagedProjectionProfile::id),
             Some("codex")
         );
+        assert_eq!(
+            FakeHarnessProfile::droid()
+                .managed_projection()
+                .map(ManagedProjectionProfile::id),
+            Some("droid")
+        );
         assert!(FakeHarnessProfile::claude().managed_projection().is_none());
+    }
+
+    #[test]
+    fn droid_fixture_preserves_exact_scoped_human_lifecycle_output() {
+        let root = TempRoot::new("skilltap-droid-lifecycle-fixture").unwrap();
+        let native = FakeHarnessProfile::droid()
+            .build(root.path(), FakeNativeMode::VersionKnown)
+            .unwrap();
+        let empty = native
+            .command()
+            .args(["plugin", "list", "--scope", "user"])
+            .output()
+            .unwrap();
+        assert_eq!(empty.stdout, b"No plugins installed in user scope.\n");
+        assert!(
+            native
+                .command()
+                .args(["plugin", "install", "demo@market", "--scope", "user"])
+                .status()
+                .unwrap()
+                .success()
+        );
+        let listed = native
+            .command()
+            .args(["plugin", "list", "--scope", "user"])
+            .output()
+            .unwrap();
+        assert_eq!(
+            listed.stdout,
+            b"Installed plugins:\nActive:\n  demo@market  [user]  e8801fa\n"
+        );
+        assert!(
+            native
+                .command()
+                .args(["plugin", "uninstall", "demo@market", "--scope", "user"])
+                .status()
+                .unwrap()
+                .success()
+        );
     }
 
     #[test]

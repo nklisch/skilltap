@@ -116,7 +116,7 @@ impl PluginGraphReader for NativePluginGraphReader<'_> {
     }
 }
 
-fn declarations_from_snapshot(
+pub(crate) fn declarations_from_snapshot(
     entries: &[skilltap_core::runtime::ExternalTreeEntry],
     json_limits: JsonLimits,
 ) -> Result<Vec<ComponentDeclaration>, PluginGraphReadError> {
@@ -175,7 +175,11 @@ fn append_mcp_declarations(
     for entry in entries.iter().filter(|entry| {
         matches!(
             entry.path().as_str(),
-            "mcp.json" | ".mcp.json" | ".claude-plugin/mcp.json" | ".codex-plugin/mcp.json"
+            "mcp.json"
+                | ".mcp.json"
+                | ".factory-plugin/mcp.json"
+                | ".claude-plugin/mcp.json"
+                | ".codex-plugin/mcp.json"
         )
     }) {
         let bytes = entry

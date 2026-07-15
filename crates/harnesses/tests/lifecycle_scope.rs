@@ -1,14 +1,15 @@
 #![cfg(unix)]
 
-use std::{collections::BTreeMap, fs, os::unix::fs::PermissionsExt};
+use std::{collections::BTreeMap, ffi::OsString, fs, os::unix::fs::PermissionsExt};
 
 use skilltap_core::{
     domain::{AbsolutePath, ConfiguredBinary, NativeId, Scope},
     runtime::{JsonLimits, ProcessLimits},
 };
 use skilltap_harnesses::{
-    ClaudeAdapter, NativeLifecycleAction, NativeLifecycleDispatch, NativeLifecycleRequest,
-    NativeObservationFailure, NativeResourceObservation, observe_native_resource,
+    ClaudeAdapter, FactoryAdapter, NativeLifecycleAction, NativeLifecycleDispatch,
+    NativeLifecycleRequest, NativeObservationFailure, NativeResourceObservation,
+    decode_factory_plugin_list, observe_native_resource,
 };
 use skilltap_test_support::TempRoot;
 
@@ -44,6 +45,49 @@ fn request(scope: Scope) -> NativeLifecycleDispatch {
             source: None,
         },
     )
+}
+
+#[test]
+fn factory_native_lifecycle_and_human_postcondition_are_scope_exact() {
+    let adapter = FactoryAdapter::static_ref();
+    let project = Scope::Project(AbsolutePath::new("/tmp/factory-project").unwrap());
+    let request = NativeLifecycleRequest {
+        action: NativeLifecycleAction::PluginInstall,
+        scope: project.clone(),
+        name: NativeId::new("demo@market").unwrap(),
+        source: None,
+    };
+    let dispatch = NativeLifecycleDispatch::new(
+        adapter.identity().id,
+        adapter.native_lifecycle().unwrap(),
+        request,
+    );
+    assert_eq!(
+        skilltap_harnesses::native_arguments(&dispatch).unwrap(),
+        ["plugin", "install", "demo@market", "--scope", "project"].map(OsString::from)
+    );
+    assert_eq!(
+        adapter
+            .native_lifecycle()
+            .unwrap()
+            .observation_arguments(dispatch.request())
+            .unwrap(),
+        ["plugin", "list", "--scope", "project"].map(OsString::from)
+    );
+    assert_eq!(
+        decode_factory_plugin_list(
+            b"Installed plugins:\nActive:\n  demo@market  [project]  e8801fa\n",
+            "demo@market",
+            "project",
+            JsonLimits::new(4096, 16).unwrap(),
+        ),
+        NativeResourceObservation::Present {
+            scope: Some(skilltap_core::domain::CapabilityScope::Project),
+            revision: Some(skilltap_core::domain::ResolvedRevision::Native(
+                NativeId::new("e8801fa").unwrap(),
+            )),
+        }
+    );
 }
 
 #[test]

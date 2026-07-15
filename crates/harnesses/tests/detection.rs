@@ -12,8 +12,8 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    ClaudeAdapter, CodexAdapter, CodexConfigError, DetectionError, HarnessAdapter, PiAdapter,
-    ProbeError, TargetRegistry,
+    ClaudeAdapter, CodexAdapter, CodexConfigError, DetectionError, FactoryAdapter, HarnessAdapter,
+    PiAdapter, ProbeError, TargetRegistry,
     detect_configured_installation as detect_configured_installation_with_environment,
     detect_installation as detect_installation_with_environment, observe_codex_canonical_resources,
     observe_codex_config, probe_profile, unreachable_installation,
@@ -193,6 +193,12 @@ fn known_and_unknown_versions_are_reachable_without_profile_guessing() {
 fn exact_real_versions_are_reachable_and_select_exact_profiles() {
     for (harness, profile, binary, expected) in [
         (
+            FactoryAdapter::static_ref(),
+            FakeHarnessProfile::droid(),
+            "droid",
+            "0.171.0",
+        ),
+        (
             CodexAdapter::static_ref(),
             FakeHarnessProfile::codex(),
             "codex",
@@ -226,6 +232,37 @@ fn exact_real_versions_are_reachable_and_select_exact_profiles() {
                 .is_some()
         );
     }
+}
+
+#[test]
+fn factory_adjacent_version_is_observe_only_and_detection_is_zero_write() {
+    let profile = FakeHarnessProfile::droid_with_version("0.171.1");
+    let (root, fixture) = install_profile(&profile, "droid");
+    let before = fs::read_dir(root.path()).unwrap().count();
+    let (process_limits, json_limits) = limits();
+    let installation = detect_installation(
+        FactoryAdapter::static_ref(),
+        root.path().as_os_str().to_os_string(),
+        process_limits,
+        json_limits,
+    )
+    .unwrap();
+    let after = fs::read_dir(root.path()).unwrap().count();
+    let HarnessReachability::Reachable { native_version, .. } = installation.reachability() else {
+        panic!("Factory fixture must remain reachable");
+    };
+    assert_eq!(native_version.as_str(), "0.171.1");
+    assert!(
+        FactoryAdapter::static_ref()
+            .select_profile(native_version)
+            .mutation_capabilities()
+            .is_none()
+    );
+    assert_eq!(before, after);
+    assert_eq!(
+        fixture.captured_invocation().unwrap().arguments(),
+        &[b"--version".to_vec()]
+    );
 }
 
 #[test]
@@ -452,7 +489,7 @@ fn blocked_candidate_reports_match_registry_absence_and_first_party_bootstrap_sc
     let registry = TargetRegistry::canonical();
     assert_eq!(
         registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
-        ["codex", "claude", "gemini", "opencode", "pi"]
+        ["codex", "claude", "droid", "gemini", "opencode", "pi"]
     );
     assert_eq!(
         registry

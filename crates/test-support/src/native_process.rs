@@ -470,6 +470,50 @@ fn render_script(
     if lifecycle_dialect != LifecycleDialect::None
         || (version_response.is_none() && matches!(mode, FakeNativeMode::VersionKnown))
     {
+        if lifecycle_dialect == LifecycleDialect::Factory {
+            script.push_str(&format!(
+                r#"lifecycle={lifecycle}
+if [ "${{1-}} ${{2-}}" = "plugin list" ] && [ "${{3-}}" = "--scope" ]; then
+  scope=${{4-}}
+  if [ "$scope" != "user" ] && [ "$scope" != "project" ]; then exit 2; fi
+  found=0
+  for path in "$lifecycle"/plugin-${{scope}}-*; do
+    [ -f "$path" ] || continue
+    found=1
+  done
+  if [ "$found" = 0 ]; then
+    printf 'No plugins installed in %s scope.\n' "$scope"
+    exit 0
+  fi
+  printf 'Installed plugins:\nActive:\n'
+  for path in "$lifecycle"/plugin-${{scope}}-*; do
+    [ -f "$path" ] || continue
+    name=${{path##*/}}
+    name=${{name#plugin-${{scope}}-}}
+    case "$name" in revision-*|available-revision-*|fail-*|indeterminate-*|pending-*) continue ;; esac
+    revision=e8801fa
+    if [ -f "$lifecycle/plugin-revision-${{scope}}-$name" ]; then read revision < "$lifecycle/plugin-revision-${{scope}}-$name"; fi
+    printf '  %s  [%s]  %s\n' "$name" "$scope" "$revision"
+  done
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "plugin install" ] || [ "${{1-}} ${{2-}}" = "plugin uninstall" ]; then
+  scope=${{5-}}
+  name=${{3-}}
+  if [ "${{2-}}" = "install" ]; then : > "$lifecycle/plugin-${{scope}}-$name"; else /bin/rm -f "$lifecycle/plugin-${{scope}}-$name"; fi
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "plugin update" ]; then
+  scope=${{5-}}
+  name=${{3-}}
+  if [ -f "$lifecycle/fail-plugin-update-$name" ]; then exit 23; fi
+  if [ -f "$lifecycle/plugin-available-revision-$name" ]; then cp "$lifecycle/plugin-available-revision-$name" "$lifecycle/plugin-revision-${{scope}}-$name"; fi
+  exit 0
+fi
+"#,
+                lifecycle = shell_quote(&captures.join("lifecycle")),
+            ));
+        }
         script.push_str(&format!(
             r#"lifecycle={lifecycle}
 if [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace list" ]; then

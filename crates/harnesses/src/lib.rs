@@ -21,9 +21,11 @@ pub mod conditional_profile;
 pub use adapters::{
     ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection, CodexAdapter,
     CodexInstructionBridge, CodexLifecycle, CodexManagedProjection, CodexSkillProjection,
-    GeminiAdapter, GeminiEffectiveStateProbe, GeminiManagedProjection, GeminiSkillProjection,
-    OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeManagedProjection,
+    FactoryAdapter, FactoryLifecycle, FactoryManagedProjection, FactoryNativeDistribution,
+    FactorySkillProjection, GeminiAdapter, GeminiEffectiveStateProbe, GeminiManagedProjection,
+    GeminiSkillProjection, OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeManagedProjection,
     OpenCodeSkillProjection, PiAdapter, PiConditionalProfile, PiSkillProjection,
+    decode_factory_plugin_list,
 };
 
 mod plugin_graph;

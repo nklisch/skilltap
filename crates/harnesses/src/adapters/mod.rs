@@ -1,6 +1,8 @@
 mod claude;
 mod codex;
 mod codex_managed;
+mod factory;
+mod factory_managed;
 mod file_managed;
 mod gemini;
 mod gemini_managed;
@@ -17,6 +19,11 @@ mod pi_settings;
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
 pub use codex_managed::CodexManagedProjection;
+pub use factory::{
+    FactoryAdapter, FactoryLifecycle, FactoryNativeDistribution, FactorySkillProjection,
+    decode_factory_plugin_list,
+};
+pub use factory_managed::FactoryManagedProjection;
 pub use gemini::{GeminiAdapter, GeminiEffectiveStateProbe, GeminiSkillProjection};
 pub use gemini_managed::GeminiManagedProjection;
 pub use opencode::{OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeSkillProjection};
@@ -159,6 +166,7 @@ mod tests {
         let claude = registry
             .adapter(&HarnessId::new("claude").unwrap())
             .unwrap();
+        let droid = registry.adapter(&HarnessId::new("droid").unwrap()).unwrap();
         let gemini = registry
             .adapter(&HarnessId::new("gemini").unwrap())
             .unwrap();
@@ -174,6 +182,11 @@ mod tests {
         assert_eq!(codex.identity(), CodexAdapter::static_ref().identity());
         assert_eq!(claude.identity(), ClaudeAdapter::static_ref().identity());
         assert_eq!(gemini.identity(), GeminiAdapter::static_ref().identity());
+        assert_eq!(droid.identity(), FactoryAdapter::static_ref().identity());
+        assert!(droid.native_lifecycle().is_some());
+        assert!(droid.skill_projection().is_some());
+        assert!(droid.native_distribution().is_some());
+        assert!(droid.managed_projection().is_some());
         assert!(codex.native_lifecycle().is_some());
         assert!(codex.instruction_bridge().is_some());
         assert!(codex.skill_projection().is_some());
@@ -195,6 +208,31 @@ mod tests {
         assert!(opencode.skill_projection().is_some());
         assert!(opencode.managed_projection().is_some());
         assert!(opencode.effective_state_probe().is_some());
+    }
+
+    #[test]
+    fn factory_profile_keeps_marketplace_project_scope_unsupported() {
+        let profile =
+            FactoryAdapter::static_ref().select_profile(&NativeVersion::new("0.171.0").unwrap());
+        let capabilities = profile.mutation_capabilities().unwrap();
+        assert_support(
+            capabilities,
+            CapabilityScope::Project,
+            "plugin.install",
+            CapabilitySupport::Supported,
+        );
+        for capability in [
+            "marketplace.register",
+            "marketplace.remove",
+            "marketplace.update",
+        ] {
+            assert_support(
+                capabilities,
+                CapabilityScope::Project,
+                capability,
+                CapabilitySupport::Unsupported,
+            );
+        }
     }
 
     fn support(value: bool) -> CapabilitySupport {
