@@ -24,14 +24,15 @@ updated: 2026-07-15
 ## Gate runs
 
 - **Security** — 0 critical/high/medium findings. Two low-severity hardening findings were routed to the unbound backlog: bounded Git-root subprocess execution and confinement of remaining top-level filesystem writes.
-- **Tests** — 2 high- and 2 medium-priority release findings, all fixed: exact declaration-managed daemon/acknowledgment coverage, native post-apply journal recovery, and exact acknowledgment validation.
+- **Tests** — 2 high- and 2 medium-priority gate findings, all fixed: exact declaration-managed daemon/acknowledgment coverage, native post-apply journal recovery, and exact acknowledgment validation. Initial GitHub publication additionally exposed ambient Codex/Claude dependencies in clean-runner fixtures; those tests now use retained isolated exact-profile fakes.
 - **Cruft** — 4 medium-confidence release findings, all fixed: shared managed skill planning, path observation, projection helpers, and removal of dead target-name plumbing. Two public-API removal decisions remain unbound backlog proposals.
 - **Docs** — 2 high-confidence release findings, both fixed: the self-hosted skill now reflects the expanded registry, and the changelog carries `v3.1.0`.
 - **Patterns** — codified `drift-checked-managed-projection-plan` and regenerated its index/digest. Two broader consistency refactors remain unbound for subsequent work.
 
 ## Verification
 
-- `cargo test --workspace --all-targets` passes, including the release package, declaration-managed matrix, native recovery, and compiled-binary suites.
+- `cargo test --locked --workspace --all-targets` passes, including the release package, declaration-managed matrix, native recovery, and compiled-binary suites.
+- The managed-projection matrix and all 79 compiled-binary tests pass with `PATH=/usr/bin:/bin`, proving no developer-installed Codex or Claude binary is required.
 - `cargo clippy --workspace --all-targets -- -D warnings` is clean.
 - `cargo fmt --all -- --check` and `git diff --check` are clean.
 - `cargo test -p skilltap --test plugin_package` passes all 4 package-channel tests.
@@ -43,9 +44,9 @@ updated: 2026-07-15
 
 - **Date shipped:** 2026-07-15
 - **Mapping:** tag-based (`v3.1.0`)
-- **Items shipped:** 80
-- **Gate findings:** 10 release-bound remediations completed; 6 non-blocking hardening, public-API decision, and broader consistency proposals remain unbound.
-- **Publishing:** local annotated source tag only; no remote push or hosting release was performed.
+- **Items shipped:** 81
+- **Gate findings:** 11 release-bound remediations completed; 6 non-blocking hardening, public-API decision, and broader consistency proposals remain unbound.
+- **Publishing:** GitHub release workflow with four attested platform binaries, checksums, generated notes, website deployment, and Homebrew formula handoff.
 
 ## Shipped items
 
@@ -133,3 +134,4 @@ The full bodies live in Git history under the configured `delete-refs` retention
 | `gate-tests-declaration-daemon-skip-matrix` | Byte-verify declaration-managed daemon skips across every target | story | — | `556b16a9` |
 | `gate-tests-execution-acknowledgment-exact-match` | Cover exact execution-acknowledgment validation | story | — | `556b16a9` |
 | `gate-tests-native-journal-after-apply-recovery` | Cover native journal-after-apply inventory recovery | story | — | `556b16a9` |
+| `story-fix-clean-runner-harness-fixtures` | Isolate verified harness identities in clean-runner tests | story | — | `c168b685` |
