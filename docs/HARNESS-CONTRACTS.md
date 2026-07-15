@@ -170,6 +170,47 @@ surfaces may be declaration-managed; missing project roots, editor-storage
 locations, executable identity, or preservation contracts remain unsupported
 rather than blocking unrelated target capabilities.
 
+## Kiro CLI Contract
+
+### Detection and authority
+
+Kiro CLI is registered only for the exact compiled profile `2.12.2`, whose
+version command is `kiro-cli --version` and whose default executable is
+`kiro-cli`. Adjacent and unknown versions remain observe-only. Kiro has no
+native marketplace or plugin lifecycle in skilltap, and its Powers, IDE state,
+authentication, trust approval, and runtime caches are outside the adapter
+contract.
+
+The exact profile exposes documented global and project skill/MCP declaration
+surfaces. Managed plugin projection is `Unverified` in both scopes and is
+authorized only by the adapter's explicit declaration contract covering
+`ManagedDocument` and `CompleteSkillTree`. Foreground `--yes` is required for
+writes; the daemon never acknowledges or applies them. Standalone complete
+skills use the documented load roots through the shared skill lifecycle.
+
+### Native paths
+
+Global Kiro state is rooted at `${KIRO_HOME:-$HOME/.kiro}`. Global complete
+skills use `<kiro-home>/skills`; project skills use `<project>/.kiro/skills`,
+with workspace precedence. Global MCP declarations use
+`<kiro-home>/settings/mcp.json`; project declarations use
+`<project>/.kiro/settings/mcp.json`.
+
+The adapter edits only the `mcpServers` member, preserving unrelated document
+fields, disabled state, tool filters, references, and unowned servers. It uses
+root-confined ownership, conflict, drift, rollback, and repeat-idempotence
+checks. Power files, steering/hooks, IDE packages, login state, trust state,
+and cache paths are never translated or written.
+
+### Effective state
+
+Kiro CLI `2.12.2` does not provide a source-attested stable non-interactive
+effective-load grammar. Its `mcp list` command requires login in the isolated
+attestation, while `/mcp` is interactive. The Kiro adapter therefore invokes no
+MCP status or reload command and reports managed resources as declared/owned
+with effective state unverified and attention required. File hot reload is a
+native behavior, not a proof that skilltap invokes or observes effective load.
+
 Pi is a conditional compound target. A mutable Pi profile requires the Pi
 runtime plus compatible user-installed MCP and Claude Code hook-compatibility
 extensions. The adapter observes the core runtime and each companion extension
