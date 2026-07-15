@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-declaration-managed-planner-acknowledgment
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-declaration-managed
 depends_on: [epic-expanded-harness-support-declaration-managed-authority-contract]
@@ -60,3 +60,27 @@ accepted by a foreground caller.
 
 Depends on the authority contract. Execution/status consumes both the
 authorization result and exact partial execution semantics.
+
+## Implementation notes
+
+- Added `ExecutionAcknowledgments` and
+  `execute_plan_with_acknowledgments`; the legacy executor remains an empty-
+  acknowledgment safe default and accepted partials use the same dependency,
+  journal, and execution-port path.
+- Added a validated partial managed-materialization constructor that preserves
+  exact evidence, consequence, resource/component selectors, and attention
+  semantics.
+- Managed lifecycle planning now computes declaration/optional-loss partials
+  from the current plan rather than rejecting them in the adapter gate, and
+  foreground lifecycle execution derives acknowledgment from that unchanged
+  plan. Daemon execution still uses the empty default.
+- Unknown or absent capability lookup now fails closed instead of becoming
+  `Unverified`.
+- Verification: `cargo fmt --all && cargo test --workspace --all-targets`
+  (704 passed).
+
+## Completion
+
+Implemented and verified. Remaining lock-time binding, standalone-skill
+migration, daemon classification, and status projection are subsequent
+checkpoints.

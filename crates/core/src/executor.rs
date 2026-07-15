@@ -13,8 +13,9 @@ use std::{
 
 use crate::{
     domain::{
-        ApplyOutcome, ApplyResult, AttentionReason, EvidenceCode, EvidenceDetail, Operation,
-        OperationClass, OperationId, OperationOutcome, OperationResult, Plan,
+        AcknowledgmentRequirement, ApplyOutcome, ApplyResult, AttentionReason, EvidenceCode,
+        EvidenceDetail, Operation, OperationClass, OperationId, OperationOutcome, OperationResult,
+        Plan,
     },
     operation_graph::{GraphError, dependency_waves},
     runtime::{ConfigurationLock, ConfigurationLockGuard, RuntimeError},
@@ -47,6 +48,61 @@ pub trait ExecutionJournal {
 pub struct ExecutionReport {
     pub result: ApplyResult,
     pub changed: bool,
+}
+
+/// Exact foreground authorization for partial operations.
+///
+/// The map is intentionally keyed by operation id and stores the complete
+/// requirement from the current plan. This prevents a caller from approving a
+/// selector or consequence reconstructed from stale or broader context.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ExecutionAcknowledgments {
+    accepted: BTreeMap<OperationId, AcknowledgmentRequirement>,
+}
+
+impl ExecutionAcknowledgments {
+    /// Accept every partial operation in this already-built plan. This is the
+    /// only convenience used by a foreground `--yes` path; it cannot add or
+    /// widen an operation.
+    pub fn foreground_all(plan: &Plan) -> Self {
+        Self {
+            accepted: plan
+                .iter()
+                .filter(|(_, operation)| operation.class() == OperationClass::Partial)
+                .map(|(id, operation)| (id.clone(), operation.acknowledgment().clone()))
+                .collect(),
+        }
+    }
+
+    /// Validate exact operation ids and requirements against the current plan.
+    pub fn new(
+        plan: &Plan,
+        accepted: impl IntoIterator<Item = (OperationId, AcknowledgmentRequirement)>,
+    ) -> Result<Self, GraphError> {
+        let mut values = BTreeMap::new();
+        for (id, requirement) in accepted {
+            if values.insert(id.clone(), requirement.clone()).is_some() {
+                return Err(GraphError::InvalidAcknowledgment);
+            }
+            let Some(operation) = plan.get(&id) else {
+                return Err(GraphError::UnknownOperation { operation: id });
+            };
+            if operation.class() != OperationClass::Partial
+                || operation.acknowledgment() != &requirement
+            {
+                return Err(GraphError::InvalidAcknowledgment);
+            }
+        }
+        Ok(Self { accepted: values })
+    }
+
+    pub fn accepts(&self, operation: &Operation) -> bool {
+        operation.class() != OperationClass::Partial
+            || self
+                .accepted
+                .get(operation.id())
+                .is_some_and(|requirement| requirement == operation.acknowledgment())
+    }
 }
 
 /// Errors raised while acquiring the lock, validating the plan boundary, or
@@ -199,10 +255,34 @@ where
     P: ExecutionPort + ?Sized,
     J: ExecutionJournal + ?Sized,
 {
+    execute_plan_with_acknowledgments(
+        lock,
+        lock_path,
+        port,
+        journal,
+        plan,
+        &ExecutionAcknowledgments::default(),
+    )
+}
+
+/// Execute a plan with exact foreground acknowledgment entries.
+pub fn execute_plan_with_acknowledgments<L, P, J>(
+    lock: &L,
+    lock_path: &crate::domain::AbsolutePath,
+    port: &P,
+    journal: &J,
+    plan: &Plan,
+    acknowledgments: &ExecutionAcknowledgments,
+) -> Result<ExecutionReport, ExecutionError>
+where
+    L: ConfigurationLock,
+    P: ExecutionPort + ?Sized,
+    J: ExecutionJournal + ?Sized,
+{
     let waves = dependency_waves(plan)?;
     let guard = lock.try_acquire(lock_path).map_err(ExecutionError::Lock)?;
 
-    let execution = execute_locked(port, journal, plan, &waves);
+    let execution = execute_locked(port, journal, plan, &waves, acknowledgments);
     let release = guard.release().map_err(ExecutionError::Release);
     match (execution, release) {
         (Err(error), _) => Err(error),
@@ -216,6 +296,7 @@ fn execute_locked<P, J>(
     journal: &J,
     plan: &Plan,
     waves: &[crate::operation_graph::OperationWave],
+    acknowledgments: &ExecutionAcknowledgments,
 ) -> Result<ExecutionReport, ExecutionError>
 where
     P: ExecutionPort + ?Sized,
@@ -258,7 +339,7 @@ where
                     },
                 )?
             } else {
-                execute_operation(port, journal, operation, &mut changed)?
+                execute_operation(port, journal, operation, acknowledgments, &mut changed)?
             };
 
             // `execute_operation` journals terminal outcomes itself for
@@ -297,6 +378,7 @@ fn execute_operation<P, J>(
     port: &P,
     journal: &J,
     operation: &Operation,
+    acknowledgments: &ExecutionAcknowledgments,
     changed: &mut bool,
 ) -> Result<OperationResult, ExecutionError>
 where
@@ -305,14 +387,22 @@ where
 {
     let terminal = match operation.class() {
         OperationClass::NoOp => OperationOutcome::NoChange,
-        OperationClass::Unsupported | OperationClass::Conflict | OperationClass::Partial => {
+        OperationClass::Unsupported | OperationClass::Conflict => {
             let reason = operation
                 .attention()
                 .cloned()
                 .expect("validated attention operation carries an attention reason");
             OperationOutcome::Blocked { reason }
         }
-        OperationClass::SafeNative
+        OperationClass::Partial if !acknowledgments.accepts(operation) => {
+            let reason = operation
+                .attention()
+                .cloned()
+                .expect("validated partial operation carries an attention reason");
+            OperationOutcome::Blocked { reason }
+        }
+        OperationClass::Partial
+        | OperationClass::SafeNative
         | OperationClass::SafeFaithfulEquivalent
         | OperationClass::SafeMaterialization => {
             let pending = OperationResult::new(operation.id().clone(), OperationOutcome::Pending)?;
@@ -746,5 +836,61 @@ mod tests {
                 .outcome(),
             OperationOutcome::Blocked { .. }
         ));
+    }
+
+    #[test]
+    fn exact_foreground_acknowledgment_allows_the_same_partial_operation() {
+        let lock = FakeLock {
+            acquired: RefCell::new(false),
+            contended: false,
+        };
+        let port = FakePort::default();
+        let journal = FakeJournal::default();
+        let target = HarnessId::new("codex").unwrap();
+        let resource = ResourceKey::new(ResourceId::new("plugin:demo").unwrap(), Scope::Global);
+        let component = crate::domain::ComponentId::new("mcp:demo").unwrap();
+        let operation = crate::lifecycle_operation::managed_partial_materialization_operation(
+            OperationId::new("partial").unwrap(),
+            target.clone(),
+            resource,
+            OperationAction::PluginInstall,
+            [crate::domain::AbsolutePath::new("/tmp/skilltap-partial").unwrap()],
+            [CompatibilityEvidence::new(
+                EvidenceCode::new("managed.effective_unverified").unwrap(),
+                target,
+                [component.clone()],
+                EvidenceDetail::new("The declaration cannot prove effective loading.").unwrap(),
+            )],
+            [MaterialConsequence::new(
+                ConsequenceCode::new("managed.effective_unverified").unwrap(),
+                [component],
+                ConsequenceSummary::new("Effective loading remains unverified.").unwrap(),
+            )],
+        )
+        .unwrap();
+        let plan = plan([operation]);
+
+        let blocked = execute_plan(&lock, &path(), &port, &journal, &plan).unwrap();
+        assert_eq!(blocked.result.outcome(), ApplyOutcome::AttentionRequired);
+        assert!(!blocked.changed);
+        assert!(port.calls.borrow().is_empty());
+
+        let acknowledgments = ExecutionAcknowledgments::foreground_all(&plan);
+        assert!(acknowledgments.accepts(plan.get(&OperationId::new("partial").unwrap()).unwrap()));
+        let accepted = execute_plan_with_acknowledgments(
+            &lock,
+            &path(),
+            &port,
+            &journal,
+            &plan,
+            &acknowledgments,
+        )
+        .unwrap();
+        assert_eq!(accepted.result.outcome(), ApplyOutcome::Succeeded);
+        assert!(accepted.changed);
+        assert_eq!(
+            port.calls.borrow().as_slice(),
+            &[OperationId::new("partial").unwrap()]
+        );
     }
 }

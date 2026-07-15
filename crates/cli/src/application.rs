@@ -11,19 +11,22 @@ use skilltap_core::{
     },
     domain::{
         AbsolutePath, ArtifactFile, CapabilityId, CapabilityProfileSelection, CapabilitySupport,
-        CommandArgument, CompatibilityClass, ComponentGraph, ComponentId, ConfiguredBinary,
-        DesiredOrigin, DesiredResource, EvidenceCode, EvidenceDetail, ExecutableIdentity,
-        Fingerprint, GitCommit, HarnessId, HarnessObservation, HarnessObservationOutcome,
-        HarnessReachability, HarnessSet, NativeId, NativeVersion, ObservationAdapterError,
-        ObservationBatch, ObservationEvidence, ObservationFields, ObservationFinding,
-        ObservationFindingCode, ObservationKey, ObservationLayer, ObservationRequest,
-        ObservationSeverity, ObservationSubject, ObservationSummary, ObservationTarget,
-        ObservedResource, OperationAction, OperationDependency, OperationId, OperationOutcome,
-        OperationResult, OperationSelector, Ownership, Plan, ProfileAuthority, Provenance,
-        ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope, Source, SourceKind,
-        SourceLocator, UpdateIntent,
+        CommandArgument, CompatibilityClass, CompatibilityEvidence, ComponentGraph, ComponentId,
+        ConfiguredBinary, ConsequenceCode, DesiredOrigin, DesiredResource, EvidenceCode,
+        EvidenceDetail, ExecutableIdentity, Fingerprint, GitCommit, HarnessId, HarnessObservation,
+        HarnessObservationOutcome, HarnessReachability, HarnessSet, MaterialConsequence, NativeId,
+        NativeVersion, ObservationAdapterError, ObservationBatch, ObservationEvidence,
+        ObservationFields, ObservationFinding, ObservationFindingCode, ObservationKey,
+        ObservationLayer, ObservationRequest, ObservationSeverity, ObservationSubject,
+        ObservationSummary, ObservationTarget, ObservedResource, OperationAction,
+        OperationDependency, OperationId, OperationOutcome, OperationResult, OperationSelector,
+        Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth, ResourceId, ResourceKey,
+        ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
     },
-    executor::{ExecutionError, ExecutionJournal, ExecutionPort, execute_plan},
+    executor::{
+        ExecutionAcknowledgments, ExecutionError, ExecutionJournal, ExecutionPort, execute_plan,
+        execute_plan_with_acknowledgments,
+    },
     foreground_update::{
         ForegroundUpdateRequest, plan_foreground_updates,
         select_foreground_updates_with_acknowledgment,
@@ -33,13 +36,20 @@ use skilltap_core::{
         InstructionBridgeSpec, InstructionHealth, ObservedInstructionBridge, classify_bridge,
         fingerprint_contents, relative_symlink_target, resolve_symlink_target,
     },
-    lifecycle_operation::native_operation,
+    lifecycle_operation::{
+        managed_materialization_operation, managed_partial_materialization_operation,
+        native_operation,
+    },
     lifecycle_representation::{
         LifecycleRepresentation, LifecycleRepresentationError, RepresentationCandidate,
         RepresentationEvidence, applied_lifecycle_representation, select_lifecycle_representation,
     },
     managed_projection::{ManagedFileWrite, ManagedPluginWrite, ResolvedSourceCheckout},
     materialization::MaterializationPlan,
+    mutation_authority::{
+        CapabilityRequirement, ManagedSurfaceKind, MutationAuthorityRequest, MutationAuthorization,
+        MutationChannel, authorize_mutation,
+    },
     runtime::{
         ConfinedEntryObservation, DirectoryTreeFileSystem, ExecutableResolutionRequest,
         ExecutableResolver, ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest,
@@ -1335,7 +1345,7 @@ fn configured_adapter_profile(
                 .for_scope(request.scope)
                 .support(&capability_id)
         })
-        .unwrap_or(CapabilitySupport::Unverified);
+        .unwrap_or(CapabilitySupport::Unsupported);
     Ok(Some(ConfiguredAdapterProfile {
         target: target.clone(),
         scope: request.scope.clone(),
@@ -1460,15 +1470,6 @@ fn plan_managed_lifecycle(
     profile: ConfiguredAdapterProfile,
     context: ManagedPlanContext<'_>,
 ) -> Result<PlannedManagedLifecycle, ErrorDetail> {
-    if profile.capability != CapabilitySupport::Supported {
-        return Err(ErrorDetail::new(
-            "conditional_profile_mutation_unauthorized",
-            "The selected managed projection is not mutation-authorized for this target and scope.",
-        )
-        .with_context("target", target.as_str())
-        .with_context("scope", scope_label(resource.scope()))
-        .with_next_action(conditional_profile::conditional_profile_next_action()));
-    }
     let adapter = registry.adapter(target).ok_or_else(|| {
         managed_project_error(
             "managed_project_target_unregistered",
@@ -1481,6 +1482,8 @@ fn plan_managed_lifecycle(
             "The selected target does not provide managed project projection.",
         )
     })?;
+    let declaration_contract = adapter
+        .managed_declaration_contract(skilltap_core::domain::CapabilityScope::from(context.scope));
     let ManagedPlanContext {
         scope,
         documents,
@@ -1631,7 +1634,9 @@ fn plan_managed_lifecycle(
             kind: managed_lifecycle_kind(kind),
             input,
             prior: prior_projections,
-            acknowledged,
+            // The adapter reports optional loss; the planner owns whether the
+            // resulting exact partial operation is accepted.
+            acknowledged: true,
             filesystem,
             json_limits,
         })
@@ -1648,16 +1653,6 @@ fn plan_managed_lifecycle(
                 "The managed projection manifest could not be compared safely.",
             )
         })?;
-    if !acknowledged
-        && managed_projections
-            .iter()
-            .any(|projection| matches!(projection, ManagedProjection::Omitted { .. }))
-    {
-        return Err(managed_project_error(
-            "partial_operation_requires_acknowledgment",
-            "The managed project plan omits optional components; rerun with `--yes` to accept the reported loss.",
-        ));
-    }
     let files = plan
         .files
         .into_iter()
@@ -1699,6 +1694,84 @@ fn plan_managed_lifecycle(
         ))
         .expect("validated projection path")
     }));
+    let mut surface_kinds = BTreeSet::new();
+    if !files.is_empty() {
+        surface_kinds.insert(ManagedSurfaceKind::ManagedDocument);
+    }
+    if !trees.is_empty() {
+        surface_kinds.insert(ManagedSurfaceKind::CompleteSkillTree);
+    }
+    let authorization = if surfaces.is_empty() {
+        MutationAuthorization::Supported
+    } else {
+        let requirement = CapabilityRequirement::new(
+            CapabilityId::new("managed.projection").expect("static capability id is valid"),
+            [],
+        );
+        authorize_mutation(MutationAuthorityRequest {
+            profile: &profile.profile,
+            scope,
+            channel: MutationChannel::ManagedProjection,
+            required: &[requirement],
+            surfaces: &surface_kinds,
+            declaration: declaration_contract,
+        })
+        .map_err(|error| {
+            ErrorDetail::new("managed_mutation_unauthorized", error.to_string())
+                .with_context("target", target.as_str())
+                .with_context("scope", scope_label(scope))
+        })?
+    };
+    let mut partial_evidence = BTreeSet::new();
+    let mut partial_consequences = BTreeSet::new();
+    for projection in &managed_projections {
+        let ManagedProjection::Omitted { id, consequence } = projection else {
+            continue;
+        };
+        let code = consequence.clone();
+        let component = id.clone();
+        partial_evidence.insert(CompatibilityEvidence::new(
+            code.clone(),
+            target.clone(),
+            [component.clone()],
+            EvidenceDetail::new(
+                "An optional component cannot be represented faithfully on this target.",
+            )
+            .expect("static evidence detail is valid"),
+        ));
+        partial_consequences.insert(MaterialConsequence::new(
+            ConsequenceCode::new(code.as_str()).expect("stored consequence code is valid"),
+            [component],
+            skilltap_core::domain::ConsequenceSummary::new(
+                "The optional component will be omitted from the managed declaration.",
+            )
+            .expect("static consequence summary is valid"),
+        ));
+    }
+    if let MutationAuthorization::DeclarationManaged { unverified } = &authorization {
+        for requirement in unverified {
+            let components = requirement.affected_components.clone();
+            partial_evidence.insert(CompatibilityEvidence::new(
+                EvidenceCode::new("managed.effective_unverified")
+                    .expect("static evidence code is valid"),
+                target.clone(),
+                components.clone(),
+                EvidenceDetail::new(
+                    "The managed declaration can be verified on disk, but the harness load or activation result is unverified.",
+                )
+                .expect("static evidence detail is valid"),
+            ));
+            partial_consequences.insert(MaterialConsequence::new(
+                ConsequenceCode::new("managed.effective_unverified")
+                    .expect("static consequence code is valid"),
+                components,
+                skilltap_core::domain::ConsequenceSummary::new(
+                    "The declaration will be written, but effective harness loading remains unverified.",
+                )
+                .expect("static consequence summary is valid"),
+            ));
+        }
+    }
     let operation = if surfaces.is_empty() && resource.kind() == ResourceKind::Marketplace {
         skilltap_core::lifecycle_operation::managed_source_registration_operation(
             operation_id,
@@ -1706,8 +1779,18 @@ fn plan_managed_lifecycle(
             resource.key().clone(),
             request.operation_action(),
         )
+    } else if !partial_consequences.is_empty() {
+        managed_partial_materialization_operation(
+            operation_id,
+            target.clone(),
+            resource.key().clone(),
+            request.operation_action(),
+            surfaces,
+            partial_evidence,
+            partial_consequences,
+        )
     } else {
-        skilltap_core::lifecycle_operation::managed_materialization_operation(
+        managed_materialization_operation(
             operation_id,
             target.clone(),
             resource.key().clone(),
@@ -1912,28 +1995,21 @@ fn select_lifecycle_route(
     )
     .ok()
     .flatten();
-    let managed_profile = if adapter
-        .supports_managed_projection(skilltap_core::domain::CapabilityScope::from(scope))
-    {
-        configured_adapter_profile(
-            registry,
-            &documents.config,
-            target,
-            NativeProfileRequest {
-                scope,
-                environment,
-                process_limits,
-                json_limits,
-                search_path,
-                capability_name: "managed.projection",
-            },
-        )
-        .ok()
-        .flatten()
-        .filter(|profile| profile.capability == CapabilitySupport::Supported)
-    } else {
-        None
-    };
+    let managed_profile = configured_adapter_profile(
+        registry,
+        &documents.config,
+        target,
+        NativeProfileRequest {
+            scope,
+            environment,
+            process_limits,
+            json_limits,
+            search_path,
+            capability_name: "managed.projection",
+        },
+    )
+    .ok()
+    .flatten();
 
     let mut managed_error = None;
     let mut managed_plan = None;

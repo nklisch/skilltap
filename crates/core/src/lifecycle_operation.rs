@@ -321,14 +321,112 @@ pub fn managed_materialization_operation(
         )],
     )
     .expect("managed materialization operations have no partial consequences");
+    managed_operation(
+        id,
+        target,
+        resource,
+        action,
+        paths,
+        compatibility,
+        OperationClass::SafeMaterialization,
+        AcknowledgmentRequirement::not_required(),
+        None,
+    )
+}
+
+/// Build a declaration-managed partial operation from the exact evidence and
+/// consequences produced by the current plan. The operation selector remains
+/// resource-exact while acknowledgment selectors narrow to affected
+/// components whenever the consequence identifies them.
+pub fn managed_partial_materialization_operation(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+    paths: impl IntoIterator<Item = crate::domain::AbsolutePath>,
+    evidence: impl IntoIterator<Item = CompatibilityEvidence>,
+    consequences: impl IntoIterator<Item = MaterialConsequence>,
+) -> Result<Operation, crate::domain::OperationContractError> {
+    let consequences = consequences
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    let evidence = evidence
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    let compatibility = CompatibilityResult::new(
+        target.clone(),
+        CompatibilityClass::TargetSpecific,
+        TransferFidelity::Partial,
+        evidence,
+        consequences.clone(),
+    )
+    .expect("partial managed operations require valid evidence and consequences");
+    let selectors = acknowledgment_selectors(&resource, &consequences);
+    let acknowledgment =
+        AcknowledgmentRequirement::required(selectors.clone(), consequences.clone())?;
+    let attention = Some(crate::domain::AttentionReason::acknowledgment_required(
+        selectors,
+        consequences,
+    )?);
+    managed_operation(
+        id,
+        target,
+        resource,
+        action,
+        paths,
+        compatibility,
+        OperationClass::Partial,
+        acknowledgment,
+        attention,
+    )
+}
+
+fn acknowledgment_selectors(
+    resource: &ResourceKey,
+    consequences: &std::collections::BTreeSet<MaterialConsequence>,
+) -> std::collections::BTreeSet<OperationSelector> {
+    let mut selectors = std::collections::BTreeSet::new();
+    for consequence in consequences {
+        if consequence.affected_components.is_empty() {
+            selectors.insert(OperationSelector::Resource {
+                resource: resource.clone(),
+            });
+        } else {
+            selectors.extend(
+                consequence
+                    .affected_components
+                    .iter()
+                    .cloned()
+                    .map(|component_id| OperationSelector::Component {
+                        resource: resource.clone(),
+                        component_id,
+                    }),
+            );
+        }
+    }
+    selectors
+}
+
+fn managed_operation(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+    paths: impl IntoIterator<Item = crate::domain::AbsolutePath>,
+    compatibility: CompatibilityResult,
+    class: OperationClass,
+    acknowledgment: AcknowledgmentRequirement,
+    attention: Option<crate::domain::AttentionReason>,
+) -> Result<Operation, crate::domain::OperationContractError> {
+    let reason = OperationReason::new(
+        EvidenceCode::new("managed.lifecycle").expect("static evidence code is valid"),
+        EvidenceDetail::new("The documented managed harness load paths will be updated.")
+            .expect("static evidence detail is valid"),
+    );
     let semantics = OperationSemantics::new(
         action,
         resource.scope().clone(),
-        OperationReason::new(
-            EvidenceCode::new("managed.lifecycle").expect("static evidence code is valid"),
-            EvidenceDetail::new("The documented managed harness load paths will be updated.")
-                .expect("static evidence detail is valid"),
-        ),
+        reason,
         compatibility,
         Provenance::Materialized,
         paths.into_iter().map(AffectedSurface::file),
@@ -338,11 +436,11 @@ pub fn managed_materialization_operation(
         target,
         OperationSelector::Resource { resource },
         semantics,
-        OperationClass::SafeMaterialization,
+        class,
         Reversibility::Reversible,
         [],
-        AcknowledgmentRequirement::not_required(),
-        None,
+        acknowledgment,
+        attention,
     )
 }
 

@@ -1929,20 +1929,31 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let report =
-            match execute_plan(&SystemConfigurationLock, &lock_path, &port, &journal, &plan) {
-                Ok(report) => report,
-                Err(error) => {
-                    outcome.result = ResultClass::AttentionRequired;
-                    let action = NextAction::new(
-                        "reobserve_before_retry",
-                        "Re-observe the selected harness before retrying the lifecycle operation.",
-                    );
-                    return outcome
-                        .with_error(native_execution_error(&error).with_next_action(action.clone()))
-                        .with_next_action(action);
-                }
-            };
+        let acknowledgments = if acknowledged {
+            ExecutionAcknowledgments::foreground_all(&plan)
+        } else {
+            ExecutionAcknowledgments::default()
+        };
+        let report = match execute_plan_with_acknowledgments(
+            &SystemConfigurationLock,
+            &lock_path,
+            &port,
+            &journal,
+            &plan,
+            &acknowledgments,
+        ) {
+            Ok(report) => report,
+            Err(error) => {
+                outcome.result = ResultClass::AttentionRequired;
+                let action = NextAction::new(
+                    "reobserve_before_retry",
+                    "Re-observe the selected harness before retrying the lifecycle operation.",
+                );
+                return outcome
+                    .with_error(native_execution_error(&error).with_next_action(action.clone()))
+                    .with_next_action(action);
+            }
+        };
         let observation = match self.native_observation {
             NativeObservationMode::Disabled => NativeObservation::default(),
             NativeObservationMode::System => {
@@ -1986,6 +1997,29 @@ impl StatusApplication<'_> {
                     | OperationOutcome::Pending
             ) {
                 outcome.result = ResultClass::AttentionRequired;
+            }
+            if !acknowledged
+                && report
+                    .result
+                    .plan()
+                    .get(result.operation_id())
+                    .is_some_and(|operation| {
+                        operation.class() == skilltap_core::domain::OperationClass::Partial
+                    })
+                && matches!(result.outcome(), OperationOutcome::Blocked { .. })
+            {
+                outcome = outcome
+                    .with_error(ErrorDetail::new(
+                        "partial_operation_requires_acknowledgment",
+                        "The managed plan is partial; rerun with `--yes` to accept its exact reported consequences.",
+                    ))
+                    .with_next_action(
+                        NextAction::new(
+                            "acknowledge_partial_operation",
+                            "Review the plan and rerun the same command with `--yes`.",
+                        )
+                        .with_command("skilltap sync --yes"),
+                    );
             }
             if let OperationOutcome::Failed { reason } = result.outcome()
                 && let (Some(code), Some(detail)) = (reason.code(), reason.detail())
