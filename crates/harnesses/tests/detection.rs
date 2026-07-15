@@ -567,7 +567,7 @@ fn blocked_candidate_reports_match_registry_absence_and_first_party_bootstrap_sc
         registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
         [
             "codex", "claude", "droid", "copilot", "gemini", "qwen", "opencode", "kiro", "kimi",
-            "vibe", "kilo", "pi"
+            "vibe", "kilo", "junie", "amp", "pi"
         ]
     );
     assert_eq!(

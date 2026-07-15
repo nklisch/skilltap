@@ -1224,6 +1224,8 @@ fn managed_projection_profiles_pass_the_shared_acceptance_matrix_repeatedly() {
     let kimi = ManagedProjectionProfile::kimi();
     let vibe = ManagedProjectionProfile::vibe();
     let kilo = ManagedProjectionProfile::kilo();
+    let junie = ManagedProjectionProfile::junie();
+    let amp = ManagedProjectionProfile::amp();
     for run in 0..2 {
         for profile in [
             codex,
@@ -1235,6 +1237,8 @@ fn managed_projection_profiles_pass_the_shared_acceptance_matrix_repeatedly() {
             &kimi,
             &vibe,
             &kilo,
+            &junie,
+            &amp,
         ] {
             let report = managed_acceptance_matrix(profile, exercise_managed_acceptance)
                 .unwrap_or_else(|error| panic!("matrix run {run} failed: {error}"));
@@ -1254,7 +1258,9 @@ fn exercise_managed_acceptance(
         "fake-managed" | "gemini" | "opencode" | "kiro" | "copilot" => {
             exercise_fake_managed_acceptance(scenario)
         }
-        "kimi" | "vibe" | "kilo" => exercise_declaration_managed_acceptance(profile, scenario),
+        "kimi" | "vibe" | "kilo" | "junie" | "amp" => {
+            exercise_declaration_managed_acceptance(profile, scenario)
+        }
         other => panic!("no managed acceptance runner registered for {other}"),
     }
 }

@@ -12,8 +12,9 @@ use skilltap_core::{
 use crate::{
     CanonicalObservation, DetectionError,
     adapters::{
-        ClaudeAdapter, CodexAdapter, CopilotAdapter, FactoryAdapter, GeminiAdapter, KiloAdapter,
-        KimiAdapter, KiroAdapter, OpenCodeAdapter, PiAdapter, QwenAdapter, VibeAdapter,
+        AmpAdapter, ClaudeAdapter, CodexAdapter, CopilotAdapter, FactoryAdapter, GeminiAdapter,
+        JunieAdapter, KiloAdapter, KimiAdapter, KiroAdapter, OpenCodeAdapter, PiAdapter,
+        QwenAdapter, VibeAdapter,
     },
     conditional_profile::ConditionalProfilePort,
     lifecycle::{
@@ -289,6 +290,8 @@ impl TargetRegistry {
             KimiAdapter::static_ref(),
             VibeAdapter::static_ref(),
             KiloAdapter::static_ref(),
+            JunieAdapter::static_ref(),
+            AmpAdapter::static_ref(),
             PiAdapter::static_ref(),
         ])
     }
@@ -452,16 +455,53 @@ mod tests {
             registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
             [
                 "codex", "claude", "droid", "copilot", "gemini", "qwen", "opencode", "kiro",
-                "kimi", "vibe", "kilo", "pi"
+                "kimi", "vibe", "kilo", "junie", "amp", "pi"
             ]
         );
-        assert_eq!(registry.iter().count(), 12);
+        assert_eq!(registry.iter().count(), 14);
         assert_eq!(registry.first_party_targets().count(), 2);
         assert!(
             registry
                 .adapter(&HarnessId::new("gemini").unwrap())
                 .is_some()
         );
+    }
+
+    #[test]
+    fn relaxed_trust_interactive_targets_are_declaration_only() {
+        let registry = TargetRegistry::canonical();
+        for id in ["junie", "amp"] {
+            let adapter = registry.adapter(&HarnessId::new(id).unwrap()).unwrap();
+            assert_eq!(
+                adapter.identity().distribution_surface,
+                DistributionSurface::Managed
+            );
+            assert!(adapter.native_lifecycle().is_none());
+            assert!(adapter.effective_state_probe().is_none());
+            for scope in [
+                skilltap_core::domain::CapabilityScope::Global,
+                skilltap_core::domain::CapabilityScope::Project,
+            ] {
+                let contract = adapter.managed_declaration_contract(scope);
+                assert!(contract.is_some(), "{id} lacks declaration contract");
+                let selection = adapter.select_profile(
+                    &skilltap_core::domain::NativeVersion::new(match id {
+                        "junie" => "26.6.29+2144.10",
+                        "amp" => "0.0.1784073393-g9a3a12+2026-07-14T23:56:33.000Z",
+                        _ => unreachable!(),
+                    })
+                    .unwrap(),
+                );
+                let capabilities = selection.mutation_capabilities().unwrap();
+                assert!(
+                    capabilities
+                        .for_scope_kind(scope)
+                        .iter()
+                        .all(|(_, support)| support == CapabilitySupport::Unverified
+                            || support == CapabilitySupport::Supported)
+                );
+            }
+        }
     }
 
     #[test]

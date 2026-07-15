@@ -48,6 +48,21 @@ impl InstalledFakeHarness {
     fn executable(&self) -> &Path {
         &self.executable
     }
+
+    fn invocation_arguments(&self) -> Vec<Vec<String>> {
+        self._fixture
+            .captured_invocations()
+            .expect("read fake harness invocations")
+            .into_iter()
+            .map(|invocation| {
+                invocation
+                    .arguments()
+                    .iter()
+                    .map(|argument| String::from_utf8_lossy(argument).into_owned())
+                    .collect()
+            })
+            .collect()
+    }
 }
 
 fn fake_harness(machine: &IsolatedMachine, profile: &FakeHarnessProfile) -> InstalledFakeHarness {
@@ -137,6 +152,15 @@ fn native_config_with_opencode(codex: &Path, claude: &Path, opencode: &Path) -> 
         "{}\n[harnesses.opencode]\nenabled = true\nbinary = {}\n",
         native_config(codex, claude),
         toml_string(opencode),
+    )
+}
+
+fn native_config_with_junie_amp(junie: &Path, amp: &Path) -> String {
+    format!(
+        "{}\n[harnesses.junie]\nenabled = true\nbinary = {}\n\n[harnesses.amp]\nenabled = true\nbinary = {}\n",
+        native_config(junie, junie),
+        toml_string(junie),
+        toml_string(amp),
     )
 }
 
@@ -1523,6 +1547,8 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
     assert!(stdout(&list_plain).contains("codex  enabled"));
     assert!(stdout(&list_plain).contains("claude  disabled"));
     assert!(stdout(&list_plain).contains("gemini  disabled"));
+    assert!(stdout(&list_plain).contains("junie  disabled"));
+    assert!(stdout(&list_plain).contains("amp  disabled"));
     assert!(stdout(&list_plain).contains("Result: attention required"));
 
     let disable = run(&machine, &["harness", "disable", "codex"]);
@@ -2268,6 +2294,221 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
             .iter()
             .any(|resource| resource["id"] == "omitted:mcp:plugin-relative")
     );
+}
+
+#[test]
+fn relaxed_junie_and_amp_profiles_project_both_scopes_without_native_processes() {
+    for (target, profile) in [
+        ("junie", FakeHarnessProfile::junie()),
+        ("amp", FakeHarnessProfile::amp()),
+    ] {
+        for project_scope in [false, true] {
+            let machine = IsolatedMachine::new(match (target, project_scope) {
+                ("junie", false) => "skilltap-compiled-junie-global",
+                ("junie", true) => "skilltap-compiled-junie-project",
+                ("amp", false) => "skilltap-compiled-amp-global",
+                _ => "skilltap-compiled-amp-project",
+            })
+            .unwrap();
+            let harness = fake_harness(&machine, &profile);
+            let config = native_config_with_junie_amp(harness.executable(), harness.executable())
+                .replace(
+                    "[harnesses.codex]\nenabled = true",
+                    "[harnesses.codex]\nenabled = false",
+                )
+                .replace(
+                    "[harnesses.claude]\nenabled = true",
+                    "[harnesses.claude]\nenabled = false",
+                );
+            write_owned(&machine, "config.toml", &config);
+            let source = write_gemini_marketplace(&machine);
+            let project = machine.home().join("relaxed-project");
+            fs::create_dir_all(&project).unwrap();
+            let mcp_document = if target == "junie" {
+                if project_scope {
+                    project.join(".junie/mcp/mcp.json")
+                } else {
+                    machine.home().join(".junie/mcp/mcp.json")
+                }
+            } else if project_scope {
+                project.join(".amp/settings.json")
+            } else {
+                machine.configuration_home().join("amp/settings.json")
+            };
+            if let Some(parent) = mcp_document.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            let initial = br#"{"future":{"keep":true}}"#.as_slice();
+            fs::write(&mcp_document, initial).unwrap();
+
+            let mut add = vec![
+                "marketplace",
+                "add",
+                source.to_str().unwrap(),
+                "--name",
+                "team",
+            ];
+            if project_scope {
+                add.extend(["--project", project.to_str().unwrap()]);
+            }
+            add.extend(["--target", target, "--json"]);
+            assert_code(&run(&machine, &add), 0);
+
+            let mut install = vec!["plugin", "install", "demo@team", "--yes"];
+            if project_scope {
+                install.extend(["--project", project.to_str().unwrap()]);
+            }
+            install.extend(["--target", target, "--json"]);
+            let installed = run(&machine, &install);
+            assert_code(&installed, 0);
+            assert_eq!(json(&installed)["result"], "completed");
+            assert!(if target == "junie" {
+                if project_scope {
+                    project.join(".junie/skills/demo/SKILL.md").is_file()
+                } else {
+                    machine.home().join(".junie/skills/demo/SKILL.md").is_file()
+                }
+            } else if project_scope {
+                project.join(".agents/skills/demo/SKILL.md").is_file()
+            } else {
+                machine
+                    .home()
+                    .join(".agents/skills/demo/SKILL.md")
+                    .is_file()
+            });
+            let document: Value =
+                serde_json::from_slice(&fs::read(&mcp_document).unwrap()).unwrap();
+            assert_eq!(document["future"]["keep"], true);
+            if target == "junie" {
+                assert_eq!(document["mcpServers"]["demo-docs"]["command"], "demo-mcp");
+            } else {
+                assert_eq!(
+                    document["amp.mcpServers"]["demo-docs"]["command"],
+                    "demo-mcp"
+                );
+            }
+
+            let repeated = run(&machine, &install);
+            assert_code(&repeated, 0);
+            assert_eq!(json(&repeated)["summary"]["changed"], false);
+            let invocations = harness.invocation_arguments();
+            assert!(!invocations.is_empty());
+            assert!(
+                invocations
+                    .iter()
+                    .all(|arguments| { arguments.len() == 1 && arguments[0] == "--version" })
+            );
+            assert!(!invocations.iter().any(|arguments| {
+                arguments.len() == 3
+                    && arguments[0] == "mcp"
+                    && arguments[1] == "list"
+                    && arguments[2] == "--json"
+                    || arguments
+                        .iter()
+                        .any(|argument| matches!(argument.as_str(), "doctor" | "oauth" | "login"))
+            }));
+            let mut remove = vec!["plugin", "remove", "demo@team"];
+            if project_scope {
+                remove.extend(["--project", project.to_str().unwrap()]);
+            }
+            remove.extend(["--target", target, "--json"]);
+            let removed = run(&machine, &remove);
+            assert_code(&removed, 0);
+            let document: Value =
+                serde_json::from_slice(&fs::read(&mcp_document).unwrap()).unwrap();
+            assert_eq!(document["future"]["keep"], true);
+            assert!(
+                document
+                    .get(if target == "junie" {
+                        "mcpServers"
+                    } else {
+                        "amp.mcpServers"
+                    })
+                    .and_then(Value::as_object)
+                    .is_none_or(|servers| !servers.contains_key("demo-docs"))
+            );
+        }
+    }
+}
+
+#[test]
+fn relaxed_unknown_versions_never_write_or_touch_native_state() {
+    for (target, profile) in [
+        (
+            "junie",
+            FakeHarnessProfile::junie_with_version("26.6.29 (2144.11)"),
+        ),
+        (
+            "amp",
+            FakeHarnessProfile::amp_with_output(
+                "0.0.1784073393-g9a3a12 (released 2026-07-14T23:56:34.000Z, 8m ago)\n",
+            ),
+        ),
+    ] {
+        let machine = IsolatedMachine::new(match target {
+            "junie" => "skilltap-compiled-junie-unknown",
+            _ => "skilltap-compiled-amp-unknown",
+        })
+        .unwrap();
+        let harness = fake_harness(&machine, &profile);
+        let config = native_config_with_junie_amp(harness.executable(), harness.executable())
+            .replace(
+                "[harnesses.codex]\nenabled = true",
+                "[harnesses.codex]\nenabled = false",
+            )
+            .replace(
+                "[harnesses.claude]\nenabled = true",
+                "[harnesses.claude]\nenabled = false",
+            );
+        write_owned(&machine, "config.toml", &config);
+        let source = write_gemini_marketplace(&machine);
+        let before = [
+            machine.home().join(".junie"),
+            machine.home().join(".agents"),
+            machine.configuration_home().join("amp"),
+        ]
+        .map(|root| snapshot_native_tree(&root));
+        let add = run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                source.to_str().unwrap(),
+                "--name",
+                "team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&add, 2);
+        assert_eq!(json(&add)["summary"]["changed"], false);
+        let install = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "demo@team",
+                "--yes",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&install, 2);
+        assert_eq!(json(&install)["summary"]["changed"], false);
+        let after = [
+            machine.home().join(".junie"),
+            machine.home().join(".agents"),
+            machine.configuration_home().join("amp"),
+        ]
+        .map(|root| snapshot_native_tree(&root));
+        assert_eq!(
+            before, after,
+            "unknown {target} profile wrote a native surface"
+        );
+        assert!(!config_root(&machine).join("state.json").exists());
+    }
 }
 
 #[test]

@@ -206,6 +206,30 @@ impl ManagedProjectionProfile {
         )
     }
 
+    pub const fn junie() -> Self {
+        Self::declaration(
+            "junie",
+            &[
+                ".agents/plugins/marketplace.json",
+                ".claude-plugin/marketplace.json",
+            ],
+            Some(".junie/mcp/mcp.json"),
+            ".junie/skills",
+        )
+    }
+
+    pub const fn amp() -> Self {
+        Self::declaration(
+            "amp",
+            &[
+                ".agents/plugins/marketplace.json",
+                ".claude-plugin/marketplace.json",
+            ],
+            Some(".amp/settings.json"),
+            ".agents/skills",
+        )
+    }
+
     /// Construct a dependency-neutral profile for a test adapter or a future
     /// concrete adapter acceptance suite.
     pub const fn new(

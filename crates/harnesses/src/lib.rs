@@ -19,20 +19,22 @@ mod adapter_helpers;
 pub mod adapters;
 pub mod conditional_profile;
 pub use adapters::{
-    ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection, CodexAdapter,
-    CodexInstructionBridge, CodexLifecycle, CodexManagedProjection, CodexSkillProjection,
-    CopilotAdapter, CopilotEffectiveMcpObservation, CopilotEffectiveStateProbe,
-    CopilotManagedProjection, CopilotPolicyHealth, CopilotSkillProjection, FactoryAdapter,
-    FactoryLifecycle, FactoryManagedProjection, FactoryNativeDistribution, FactorySkillProjection,
-    GeminiAdapter, GeminiEffectiveStateProbe, GeminiManagedProjection, GeminiSkillProjection,
-    KiloAdapter, KiloManagedProjection, KiloSkillProjection, KimiAdapter, KimiManagedProjection,
-    KimiSkillProjection, KiroAdapter, KiroManagedProjection, KiroSkillProjection, OpenCodeAdapter,
-    OpenCodeEffectiveStateProbe, OpenCodeManagedProjection, OpenCodeSkillProjection, PiAdapter,
-    PiConditionalProfile, PiSkillProjection, QwenAdapter, QwenEffectiveStateProbe,
-    QwenExtensionRecord, QwenLifecycle, QwenManagedProjection, QwenNativeDistribution,
-    QwenSkillProjection, VibeAdapter, VibeManagedProjection, VibeSkillProjection,
-    copilot_policy_finding, decode_factory_plugin_list, decode_qwen_extensions,
-    decode_qwen_mcp_status,
+    AmpAdapter, AmpDeclaredListError, AmpDeclaredServer, AmpDeclaredSource, AmpManagedProjection,
+    AmpSkillProjection, ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle,
+    ClaudeSkillProjection, CodexAdapter, CodexInstructionBridge, CodexLifecycle,
+    CodexManagedProjection, CodexSkillProjection, CopilotAdapter, CopilotEffectiveMcpObservation,
+    CopilotEffectiveStateProbe, CopilotManagedProjection, CopilotPolicyHealth,
+    CopilotSkillProjection, FactoryAdapter, FactoryLifecycle, FactoryManagedProjection,
+    FactoryNativeDistribution, FactorySkillProjection, GeminiAdapter, GeminiEffectiveStateProbe,
+    GeminiManagedProjection, GeminiSkillProjection, JunieAdapter, JunieManagedProjection,
+    JunieSkillProjection, KiloAdapter, KiloManagedProjection, KiloSkillProjection, KimiAdapter,
+    KimiManagedProjection, KimiSkillProjection, KiroAdapter, KiroManagedProjection,
+    KiroSkillProjection, OpenCodeAdapter, OpenCodeEffectiveStateProbe, OpenCodeManagedProjection,
+    OpenCodeSkillProjection, PiAdapter, PiConditionalProfile, PiSkillProjection, QwenAdapter,
+    QwenEffectiveStateProbe, QwenExtensionRecord, QwenLifecycle, QwenManagedProjection,
+    QwenNativeDistribution, QwenSkillProjection, VibeAdapter, VibeManagedProjection,
+    VibeSkillProjection, copilot_policy_finding, declared_list_arguments, decode_declared_mcp_list,
+    decode_factory_plugin_list, decode_qwen_extensions, decode_qwen_mcp_status,
 };
 
 mod plugin_graph;

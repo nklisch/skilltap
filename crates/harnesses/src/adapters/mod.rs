@@ -20,6 +20,7 @@ mod pi_profile;
 mod pi_settings;
 mod qwen;
 mod qwen_managed;
+mod trust_interactive;
 mod vibe;
 
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
@@ -50,6 +51,11 @@ pub use qwen::{
     QwenNativeDistribution, QwenSkillProjection, decode_qwen_extensions, decode_qwen_mcp_status,
 };
 pub use qwen_managed::QwenManagedProjection;
+pub use trust_interactive::{
+    AmpAdapter, AmpDeclaredListError, AmpDeclaredServer, AmpDeclaredSource, AmpManagedProjection,
+    AmpSkillProjection, JunieAdapter, JunieManagedProjection, JunieSkillProjection,
+    declared_list_arguments, decode_declared_mcp_list,
+};
 pub use vibe::{VibeAdapter, VibeManagedProjection, VibeSkillProjection};
 
 #[cfg(test)]

@@ -22,6 +22,9 @@ pub enum VersionResponse {
     Json {
         version: &'static str,
     },
+    Literal {
+        output: &'static str,
+    },
 }
 
 impl VersionResponse {
@@ -30,6 +33,7 @@ impl VersionResponse {
             Self::TextPrefix { prefix, version } => format!("{prefix}{version}\n"),
             Self::TextSuffix { version, suffix } => format!("{version}{suffix}\n"),
             Self::Json { version } => format!(r#"{{"version":"{version}"}}"#),
+            Self::Literal { output } => (*output).to_owned(),
         }
     }
 }
@@ -59,6 +63,8 @@ enum LayoutBase {
     Qwen,
     Config,
     Kiro,
+    Junie,
+    Amp,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -338,6 +344,70 @@ impl FakeHarnessProfile {
         }
     }
 
+    pub const fn junie() -> Self {
+        Self::junie_with_version("26.6.29 (2144.10)")
+    }
+
+    pub const fn junie_with_version(version: &'static str) -> Self {
+        Self {
+            id: "junie",
+            version_response: VersionResponse::TextPrefix {
+                prefix: "Junie version: ",
+                version,
+            },
+            lifecycle_dialect: LifecycleDialect::None,
+            managed_projection: Some(ManagedProjectionProfile::new(
+                "junie",
+                &[],
+                Some("mcp/mcp.json"),
+                "skills",
+            )),
+            conditional_profile: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Junie,
+                global_mcp_base: LayoutBase::Junie,
+                global_skill: "skills/contract-skill",
+                global_mcp: "mcp/mcp.json",
+                project_skill: ".junie/skills/contract-skill",
+                project_mcp: ".junie/mcp/mcp.json",
+                mcp_initial: br#"{"mcpServers":{"contract":{"command":"contract-server"}}}"#,
+                mcp_reloaded: br#"{"mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
+            },
+        }
+    }
+
+    pub const fn amp() -> Self {
+        Self::amp_with_output(
+            "0.0.1784073393-g9a3a12 (released 2026-07-14T23:56:33.000Z, 8m ago)\n",
+        )
+    }
+
+    pub const fn amp_with_output(output: &'static str) -> Self {
+        Self {
+            id: "amp",
+            version_response: VersionResponse::Literal { output },
+            lifecycle_dialect: LifecycleDialect::None,
+            managed_projection: Some(ManagedProjectionProfile::new(
+                "amp",
+                &[],
+                Some("amp/settings.json"),
+                ".agents/skills",
+            )),
+            conditional_profile: None,
+            layout: AcceptanceLayoutSpec {
+                global_skill_base: LayoutBase::Home,
+                global_mcp_base: LayoutBase::Amp,
+                global_skill: ".agents/skills/contract-skill",
+                global_mcp: "amp/settings.json",
+                project_skill: ".agents/skills/contract-skill",
+                project_mcp: ".amp/settings.json",
+                mcp_initial: br#"{"amp.mcpServers":{"contract":{"command":"contract-server"}}}"#,
+                mcp_reloaded:
+                    br#"{"amp.mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
+            },
+        }
+    }
+
     pub const fn id(&self) -> &'static str {
         self.id
     }
@@ -392,6 +462,8 @@ impl FakeHarnessProfile {
             LayoutBase::Factory => machine.factory_home(),
             LayoutBase::Kiro => machine.kiro_home(),
             LayoutBase::Qwen => machine.qwen_home(),
+            LayoutBase::Junie => machine.home(),
+            LayoutBase::Amp => machine.configuration_home(),
         };
         let mcp_base = match self.layout.global_mcp_base {
             LayoutBase::Home => machine.home(),
@@ -401,6 +473,8 @@ impl FakeHarnessProfile {
             LayoutBase::Factory => machine.factory_home(),
             LayoutBase::Kiro => machine.kiro_home(),
             LayoutBase::Qwen => machine.qwen_home(),
+            LayoutBase::Junie => machine.home(),
+            LayoutBase::Amp => machine.configuration_home(),
         };
         Ok(AcceptanceLayout {
             global: ScopeLayout {
@@ -675,6 +749,8 @@ mod tests {
             FakeHarnessProfile::gemini(),
             FakeHarnessProfile::opencode(),
             FakeHarnessProfile::kiro(),
+            FakeHarnessProfile::junie(),
+            FakeHarnessProfile::amp(),
         ] {
             let machine = IsolatedMachine::new("skilltap-acceptance-matrix").unwrap();
             let report = acceptance_matrix(&profile, &machine).unwrap();
@@ -713,6 +789,8 @@ mod tests {
             FakeHarnessProfile::gemini(),
             FakeHarnessProfile::opencode(),
             FakeHarnessProfile::kiro(),
+            FakeHarnessProfile::junie(),
+            FakeHarnessProfile::amp(),
         ] {
             assert_eq!(
                 profile
