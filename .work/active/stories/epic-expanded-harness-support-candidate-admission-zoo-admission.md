@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-candidate-admission-zoo-admission
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-candidate-admission
 depends_on: [epic-expanded-harness-support-candidate-admission-zoo-boundary, epic-expanded-harness-support-file-managed-contracts]
@@ -41,13 +41,47 @@ writes editor extension storage or caches.
 
 ## Acceptance evidence
 
-- [ ] Production shape exactly matches the boundary disposition.
-- [ ] Admitted profile passes both scopes and both shared acceptance matrices,
-      including effective reload, drift, ownership, removal, and repeat.
-- [ ] Observe-only profile exposes no mutation capability or mutating port.
-- [ ] Unknown versions are observe-only and runtime probes only narrow support.
-- [ ] Blocked disposition leaves `zoo` absent from canonical registry/help and
-      introduces no guessed path.
+- [x] Production shape exactly matches the boundary disposition: `blocked`.
+- [x] No admitted profile or shared acceptance matrix was added because the
+      boundary did not establish an admissible or observe-only runtime.
+- [x] No observe-only profile or mutating port was added.
+- [x] No version probe was added; the boundary found no compatible host or
+      installed extension from which to derive one.
+- [x] Blocked disposition leaves `zoo` absent from adapters, profiles, ports,
+      path constants, canonical registry/help, and fixtures.
+
+## Disposition rationale
+
+**Blocked**, exactly as recorded by the Zoo boundary checkpoint at commit
+`8b393752` under the candidate-admission gate established at commit `8137cbd2`.
+The boundary's exact rationale is that Zoo is an editor extension, no compatible
+host or Zoo executable was available, no installed extension identity/version or
+safe deterministic read-only effective-state observation could be obtained, and
+all native skill/MCP discovery, precedence, reload, preservation, ownership,
+removal, repeat, and full isolation checks therefore remained unavailable under
+the mandated non-UI isolation. Source and distribution artifacts were not
+promoted to runtime evidence. Consequently this story intentionally adds no
+adapter, profile, port, path constant, fixture, or registry/help entry.
+
+## Implementation notes
+
+- Files changed: this story only.
+- No Zoo adapter/profile/port/registry entry was added.
+- No production or test-support source was changed.
+- No candidate integration test was added because the boundary explicitly
+  forbids one until native roots and processes can be safely isolated.
+
+## Verification
+
+- Confirmed the boundary story at `8b393752` records `**blocked**` and names
+  every missing admission check.
+- Confirmed the shared gate at `8137cbd2` provides the disposition contract and
+  treats incomplete observation as `Blocked`.
+- Confirmed the production tree contains no Zoo adapter, profile, port, path
+  constant, or registry entry; the only `zoo` source hit is the gate's
+  test-support matrix fixture.
+- Confirmed no Zoo-named adapter/profile/port file or candidate integration test
+  exists.
 
 ## Ordering
 
