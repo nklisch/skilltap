@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-declaration-managed
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links]
@@ -42,6 +42,25 @@ state. Registration and support are per component and scope rather than
 all-or-nothing per target. `Supported` remains ordinary verified authority;
 `Unverified` becomes an acknowledgment-gated managed-declaration tier;
 `Unsupported` remains non-executable.
+
+## Realized implementation and review
+
+All six checkpoints landed with 704 workspace tests, strict Clippy, formatting,
+and diff checks green. The required standard independent review approved the
+feature with no material blockers. The implementation retained the private
+`ConfiguredAdapterProfile` shape while changing its missing-capability fallback
+to `Unsupported`; this is behaviorally equivalent to the proposed replacement
+binding and keeps the lock-time equality check explicit.
+
+No canonical adapter exposed a `ManagedDeclarationContract` at feature closure,
+so the new declaration-managed path was intentionally dormant and fail-closed.
+The first downstream adapter that opts in must add a real compiled-binary
+`plugin install --yes` or equivalent end-to-end test; synthetic authority tests
+alone are not sufficient. Future target work should also split the currently
+coupled `managed.projection` and `component.mcp` profile-helper flags when their
+support differs. Internal native filesystem observations remain suitable for
+adoption while rendered status labels them `declared`; only a native effective
+probe may render effective health.
 
 ## Epic context
 
