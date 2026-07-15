@@ -344,20 +344,28 @@ fn isolated_platform_paths(root: &TempRoot) -> PlatformPaths {
     .unwrap()
 }
 
-fn enable_codex_only(paths: &PlatformPaths) {
+fn enable_codex_only(paths: &PlatformPaths) -> FakeNativeProcess {
+    let root = Path::new(paths.home().as_str());
+    let native = FakeHarnessProfile::codex()
+        .build(root, FakeNativeMode::VersionKnown)
+        .unwrap();
+    let executable = native
+        .install_alias(&root.join("fake-bin"), "codex")
+        .unwrap();
     let filesystem = SystemFileSystem;
     let repository =
         FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
-    let defaults = ConfigDocument::defaults();
+    let binary = HarnessBinary::new(executable.to_string_lossy().into_owned()).unwrap();
     repository
         .replace(
-            &defaults
-                .with_harness_enabled(&codex_target_id(), true)
+            &ConfigDocument::defaults()
+                .with_harness_policy(&codex_target_id(), true, Some(&binary))
                 .unwrap()
-                .with_harness_enabled(&HarnessId::new("claude").unwrap(), false)
+                .with_harness_enabled(&claude_target_id(), false)
                 .unwrap(),
         )
         .unwrap();
+    native
 }
 
 fn enable_claude_only_with_binary(paths: &PlatformPaths, binary: &Path) {
@@ -2143,15 +2151,15 @@ fn exercise_codex_managed_acceptance(
     }
 }
 
-fn codex_fixture(prefix: &str) -> (TempRoot, PlatformPaths, PathBuf, PathBuf) {
+fn codex_fixture(prefix: &str) -> (TempRoot, FakeNativeProcess, PlatformPaths, PathBuf, PathBuf) {
     let root = TempRoot::new(prefix).unwrap();
     let paths = isolated_platform_paths(&root);
-    enable_codex_only(&paths);
+    let native = enable_codex_only(&paths);
     let project = root.join("project");
     let source = root.join("marketplace");
     fs::create_dir_all(&project).unwrap();
     write_managed_marketplace(&source);
-    (root, paths, project, source)
+    (root, native, paths, project, source)
 }
 
 fn install_codex_fixture(
@@ -2208,7 +2216,7 @@ fn install_codex_fixture(
 
 fn codex_apply_projection_acceptance() -> ManagedAcceptanceEvidence {
     let profile = ManagedProjectionProfile::codex();
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-apply");
+    let (_root, _native, paths, project, source) = codex_fixture("skilltap-codex-managed-apply");
     fs::create_dir_all(project.join(".codex")).unwrap();
     fs::write(
         project.join(".codex/config.toml"),
@@ -2239,7 +2247,7 @@ fn codex_apply_projection_acceptance() -> ManagedAcceptanceEvidence {
     assert!(mcp.contains("[mcp_servers.unmanaged]"));
     assert!(mcp.contains("command = \"leave-me\""));
 
-    let (_root, paths, legacy_project, legacy_source) =
+    let (_root, _native, paths, legacy_project, legacy_source) =
         codex_fixture("skilltap-codex-managed-legacy-catalog");
     fs::create_dir_all(legacy_source.join(".claude-plugin")).unwrap();
     fs::rename(
@@ -2276,7 +2284,7 @@ fn codex_apply_projection_acceptance() -> ManagedAcceptanceEvidence {
 }
 
 fn codex_projection_evidence_acceptance() -> ManagedAcceptanceEvidence {
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-evidence");
+    let (_root, _native, paths, project, source) = codex_fixture("skilltap-codex-managed-evidence");
     let managed_filesystem = RecordingFaultFileSystem::new();
     let state_filesystem = RecordingFaultFileSystem::new();
     let installed = install_codex_fixture(
@@ -2315,7 +2323,7 @@ fn codex_projection_evidence_acceptance() -> ManagedAcceptanceEvidence {
 
 fn codex_removal_without_checkout_acceptance() -> ManagedAcceptanceEvidence {
     managed_marketplace_removal_uses_observed_projection_without_source();
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-remove");
+    let (_root, _native, paths, project, source) = codex_fixture("skilltap-codex-managed-remove");
     let managed_filesystem = RecordingFaultFileSystem::new();
     let state_filesystem = RecordingFaultFileSystem::new();
     let installed = install_codex_fixture(
@@ -2359,7 +2367,7 @@ fn codex_removal_without_checkout_acceptance() -> ManagedAcceptanceEvidence {
 }
 
 fn codex_compatibility_acceptance() -> ManagedAcceptanceEvidence {
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-optional");
+    let (_root, _native, paths, project, source) = codex_fixture("skilltap-codex-managed-optional");
     fs::write(
         source.join("plugins/demo/.codex-plugin/mcp.json"),
         r#"{"mcpServers":{"plugin-relative":{"command":"${CODEX_PLUGIN_ROOT}/bin/server"}}}"#,
@@ -2396,7 +2404,7 @@ fn codex_compatibility_acceptance() -> ManagedAcceptanceEvidence {
             if consequence.as_str() == "plugin_root_relative_mcp_omitted"
     ));
 
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-required");
+    let (_root, _native, paths, project, source) = codex_fixture("skilltap-codex-managed-required");
     fs::remove_file(source.join("plugins/demo/skills/demo/SKILL.md")).unwrap();
     fs::write(
         source.join("plugins/demo/.codex-plugin/mcp.json"),
@@ -2436,7 +2444,8 @@ fn codex_compatibility_acceptance() -> ManagedAcceptanceEvidence {
 }
 
 fn codex_ownership_acceptance() -> ManagedAcceptanceEvidence {
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-ownership");
+    let (_root, _native, paths, project, source) =
+        codex_fixture("skilltap-codex-managed-ownership");
     let managed_filesystem = RecordingFaultFileSystem::new();
     let state_filesystem = RecordingFaultFileSystem::new();
     let installed = install_codex_fixture(
@@ -2520,7 +2529,7 @@ fn codex_ownership_acceptance() -> ManagedAcceptanceEvidence {
     );
     assert_error_code(&drifted, "managed_project_drifted");
 
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-unowned");
+    let (_root, _native, paths, project, source) = codex_fixture("skilltap-codex-managed-unowned");
     let managed_filesystem = RecordingFaultFileSystem::new();
     let state_filesystem = RecordingFaultFileSystem::new();
     let add = execute_managed_lifecycle(
@@ -2550,7 +2559,7 @@ fn codex_ownership_acceptance() -> ManagedAcceptanceEvidence {
     );
     assert_error_code(&unowned, "managed_project_unowned");
 
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-update");
+    let (_root, _native, paths, project, source) = codex_fixture("skilltap-codex-managed-update");
     let managed_filesystem = RecordingFaultFileSystem::new();
     let state_filesystem = RecordingFaultFileSystem::new();
     let installed = install_codex_fixture(
@@ -2589,7 +2598,8 @@ fn codex_ownership_acceptance() -> ManagedAcceptanceEvidence {
 
 fn codex_fresh_load_acceptance() -> ManagedAcceptanceEvidence {
     managed_project_tree_limits_preserve_planning_and_revalidation_failures();
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-fresh-load");
+    let (_root, _native, paths, project, source) =
+        codex_fixture("skilltap-codex-managed-fresh-load");
     let managed_filesystem = RecordingFaultFileSystem::new();
     let state_filesystem = RecordingFaultFileSystem::new();
     managed_filesystem.fail_next_post_write_read();
@@ -2619,7 +2629,7 @@ fn codex_fresh_load_acceptance() -> ManagedAcceptanceEvidence {
 }
 
 fn codex_repeat_acceptance() -> ManagedAcceptanceEvidence {
-    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-repeat");
+    let (_root, _native, paths, project, source) = codex_fixture("skilltap-codex-managed-repeat");
     let managed_filesystem = RecordingFaultFileSystem::new();
     let state_filesystem = RecordingFaultFileSystem::new();
     let installed = install_codex_fixture(
@@ -2733,7 +2743,7 @@ fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
     ] {
         let root = TempRoot::new("skilltap-managed-publication-failure").unwrap();
         let paths = isolated_platform_paths(&root);
-        enable_codex_only(&paths);
+        let _native = enable_codex_only(&paths);
         let project = root.join("project");
         let source = root.join("marketplace");
         fs::create_dir_all(&project).unwrap();
@@ -2861,7 +2871,7 @@ fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
 fn managed_marketplace_removal_uses_observed_projection_without_source() {
     let root = TempRoot::new("skilltap-managed-marketplace-source-free-remove").unwrap();
     let paths = isolated_platform_paths(&root);
-    enable_codex_only(&paths);
+    let _native = enable_codex_only(&paths);
     let project = root.join("project");
     let source = root.join("marketplace");
     fs::create_dir_all(&project).unwrap();
@@ -2910,7 +2920,7 @@ fn managed_project_tree_limits_preserve_planning_and_revalidation_failures() {
     for post_plan_growth in [false, true] {
         let root = TempRoot::new("skilltap-managed-tree-limit-failure").unwrap();
         let paths = isolated_platform_paths(&root);
-        enable_codex_only(&paths);
+        let _native = enable_codex_only(&paths);
         let project = root.join("project");
         let source = root.join("marketplace");
         fs::create_dir_all(&project).unwrap();
@@ -2973,7 +2983,7 @@ fn managed_project_tree_limits_preserve_planning_and_revalidation_failures() {
 fn managed_terminal_journal_failure_recovers_without_duplicate_projection_publication() {
     let root = TempRoot::new("skilltap-managed-terminal-journal").unwrap();
     let paths = isolated_platform_paths(&root);
-    enable_codex_only(&paths);
+    let _native = enable_codex_only(&paths);
     let project = root.join("project");
     let source = root.join("marketplace");
     fs::create_dir_all(&project).unwrap();

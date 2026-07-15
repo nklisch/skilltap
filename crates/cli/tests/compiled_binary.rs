@@ -13,28 +13,6 @@ use skilltap_test_support::{
     compiled_binary, observe_only_candidate_admission_reports,
 };
 
-const ENABLED_CONFIG: &str = r#"schema = 1
-
-[harnesses.codex]
-enabled = true
-binary = "codex"
-
-[harnesses.claude]
-enabled = true
-binary = "claude"
-
-[instructions]
-claude_mode = "symlink"
-
-[updates]
-mode = "apply-safe"
-interval = "6h"
-
-[bootstrap]
-mode = "off"
-allow_major = false
-"#;
-
 fn machine() -> IsolatedMachine {
     IsolatedMachine::new("skilltap-compiled-cli").expect("create isolated machine")
 }
@@ -81,6 +59,22 @@ fn fake_harness(machine: &IsolatedMachine, profile: &FakeHarnessProfile) -> Inst
         _fixture: fixture,
         executable,
     }
+}
+
+struct EnabledHarnesses {
+    codex: InstalledFakeHarness,
+    claude: InstalledFakeHarness,
+}
+
+fn enable_default_harnesses(machine: &IsolatedMachine) -> EnabledHarnesses {
+    let codex = fake_harness(machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(machine, &FakeHarnessProfile::claude());
+    write_owned(
+        machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+    EnabledHarnesses { codex, claude }
 }
 
 fn conditional_pi(
@@ -1577,7 +1571,9 @@ fn observe_only_candidates_have_registry_help_and_zero_native_write_surface() {
     let target_all_value = json(&target_all);
     assert_eq!(target_all_value["command"], "plan");
 
-    let mut candidate_config = ENABLED_CONFIG.to_owned();
+    let harnesses = enable_default_harnesses(&machine);
+    let mut candidate_config =
+        native_config(harnesses.codex.executable(), harnesses.claude.executable());
     for report in &reports {
         candidate_config.push_str(&format!(
             "\n[harnesses.{}]\nenabled = true\n",
@@ -4459,7 +4455,7 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
     )
     .unwrap();
     fs::write(source.join("docs/example.txt"), "sibling").unwrap();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source_text = source.to_str().unwrap();
 
     let mismatch = run(
@@ -4667,7 +4663,7 @@ fn whole_skill_modes_are_normalized_for_global_and_project_codex_and_claude() {
     }
 
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let global_source = machine.home().join("global-mode-skill");
     write_skill(&global_source, "global-mode-skill");
     let install = run(
@@ -5352,7 +5348,7 @@ fn project_skill_content_update_requires_all_desired_targets() {
         "---\nname: shared-project\ndescription: v1\n---\nv1\n",
     )
     .unwrap();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let project = machine.working_directory().join("shared-project");
     fs::create_dir_all(&project).unwrap();
     let source_text = source.to_str().unwrap();
@@ -5436,7 +5432,7 @@ fn skill_install_requires_generic_yes_for_loadable_partial_frontmatter() {
         "---\nname: partial\ndescription: loadable but unterminated\nbody\n",
     )
     .unwrap();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source = source.to_str().unwrap();
 
     let blocked = run(
@@ -5486,7 +5482,7 @@ fn claude_only_skill_install_keeps_canonical_and_harness_projection() {
         "---\nname: claude-only\ndescription: test\n---\nbody\n",
     )
     .unwrap();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source_text = source.to_str().unwrap();
 
     let install = run(
@@ -5619,7 +5615,7 @@ fn git_skill_install_clones_a_bounded_source_and_records_the_commit() {
         .output()
         .unwrap();
     assert!(commit.status.success());
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source = format!("file://{}", repository.to_str().unwrap());
     let output = run(
         &machine,
@@ -5752,7 +5748,7 @@ fn git_skill_subdirectory_is_reused_by_unnamed_update() {
             .unwrap();
         assert!(result.status.success());
     }
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source = format!("file://{}", repository.to_str().unwrap());
     let install = run(
         &machine,
@@ -5854,7 +5850,7 @@ fn explicitly_named_git_skill_update_preserves_the_managed_name() {
             .unwrap();
         assert!(result.status.success());
     }
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source = format!("file://{}", repository.to_str().unwrap());
 
     let local = run(
@@ -5948,7 +5944,7 @@ fn targeted_skill_remove_preserves_unselected_target_inventory() {
         "---\nname: targeted-skill\ndescription: test\n---\nbody\n",
     )
     .unwrap();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source_text = source.to_str().unwrap();
     let install = run(
         &machine,
@@ -5995,7 +5991,7 @@ fn targeted_skill_update_preserves_unselected_target_and_native_ids() {
         "---\nname: targeted-update\ndescription: v1\n---\nv1\n",
     )
     .unwrap();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source_text = source.to_str().unwrap();
     let install = run(
         &machine,
@@ -6116,7 +6112,7 @@ fn non_default_git_ref_resolves_and_same_tree_commit_advances_sha() {
         .output()
         .unwrap();
     assert!(checkout_feature.status.success());
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source = format!("file://{}", repository.to_str().unwrap());
 
     let install = run(
@@ -6193,7 +6189,7 @@ fn skill_remove_blocks_all_targets_when_one_target_is_drifted() {
         "---\nname: drifted-skill\ndescription: test\n---\nbody\n",
     )
     .unwrap();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let source_text = source.to_str().unwrap();
     let install = run(
         &machine,
@@ -6240,7 +6236,7 @@ fn skill_remove_blocks_all_targets_when_one_target_is_drifted() {
 #[test]
 fn instruction_setup_creates_canonical_global_file_and_bridges() {
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
 
     let output = run(&machine, &["instructions", "setup", "--json"]);
     assert_code(&output, 0);
@@ -6499,7 +6495,7 @@ fn reconciliation_plan_and_sync_preserve_nested_project_claude_bridge() {
 #[test]
 fn daemon_run_accepts_json_output() {
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
 
     let output = run(&machine, &["daemon", "run", "--json"]);
 
@@ -6513,7 +6509,7 @@ fn daemon_run_accepts_json_output() {
 #[test]
 fn daemon_enable_is_idempotent_in_an_isolated_config_root() {
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
 
     let first = run(&machine, &["daemon", "enable", "--json"]);
     assert!(first.status.code() == Some(0) || first.status.code() == Some(2));
@@ -6619,7 +6615,7 @@ fn first_use_status_is_read_only_and_reports_no_enabled_harnesses() {
 #[test]
 fn instruction_status_reports_duplicate_project_claude_bridges() {
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     fs::write(
         machine.working_directory().join("AGENTS.md"),
         b"canonical\n",
@@ -6656,7 +6652,7 @@ fn instruction_status_reports_duplicate_project_claude_bridges() {
 #[test]
 fn instruction_setup_preserves_existing_nested_project_claude_bridge() {
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     fs::write(
         machine.working_directory().join("AGENTS.md"),
         b"canonical\n",
@@ -6682,7 +6678,7 @@ fn instruction_setup_preserves_existing_nested_project_claude_bridge() {
 #[test]
 fn instruction_repair_consolidates_duplicate_project_claude_bridges() {
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     fs::write(
         machine.working_directory().join("AGENTS.md"),
         b"canonical\n",
@@ -6724,7 +6720,7 @@ fn instruction_repair_consolidates_duplicate_project_claude_bridges() {
 #[test]
 fn instruction_repair_does_not_remove_broken_duplicate_bridge_entries() {
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     fs::write(
         machine.working_directory().join("AGENTS.md"),
         b"canonical\n",
@@ -7490,10 +7486,11 @@ fn safe_update_cycle_reports_changed_git_revision_and_records_daemon_result() {
             String::from_utf8_lossy(&result.stderr)
         );
     }
+    let harnesses = enable_default_harnesses(&machine);
     write_owned(
         &machine,
         "config.toml",
-        &ENABLED_CONFIG.replace(
+        &native_config(harnesses.codex.executable(), harnesses.claude.executable()).replace(
             "[harnesses.claude]\nenabled = true",
             "[harnesses.claude]\nenabled = false",
         ),
@@ -8018,7 +8015,7 @@ fn safe_update_lock_contention_records_pending_failure_and_recovers() {
 #[test]
 fn daemon_service_failure_paths_preserve_unmanaged_and_nonregular_definitions() {
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let _harnesses = enable_default_harnesses(&machine);
     let service_root = machine.configuration_home().join("systemd/user");
     fs::create_dir_all(&service_root).unwrap();
     let service = service_root.join("skilltap-update.service");
