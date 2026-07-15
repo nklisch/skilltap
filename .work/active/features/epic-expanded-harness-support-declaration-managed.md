@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-declaration-managed
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links]
@@ -760,6 +760,25 @@ pub struct DaemonPendingUpdate {
 - [ ] Current Codex/Claude and landed managed-adapter regression suites pass;
       workspace tests, all-feature Clippy with warnings denied, formatting, and
       `git diff --check` are green.
+
+## Realized implementation
+
+All six implementation checkpoints are complete. The shared authority now
+requires exact scoped profiles and narrow declaration contracts; partial managed
+outcomes carry validated selectors and consequences through the existing lock,
+journal, rollback, and execution ports; status separates declared ownership
+from effective-unverified evidence; daemon reconciliation skips declaration-
+managed work; and existing standalone/adaptor paths use exact profile bindings.
+
+Verification is green:
+
+- `cargo test --workspace --all-targets` — 704 passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — clean.
+- `cargo fmt --all -- --check` — clean.
+- `git diff --check` — clean.
+- Existing compiled acceptance matrix — 69 passed.
+
+The feature is committed and ready for the requested parent review pass.
 
 ## Implementation order
 
