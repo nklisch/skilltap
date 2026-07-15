@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-declaration-managed-execution-status
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-declaration-managed
 depends_on: [epic-expanded-harness-support-declaration-managed-authority-contract, epic-expanded-harness-support-declaration-managed-planner-acknowledgment]
@@ -67,3 +67,23 @@ No new executor or persisted runtime-health state is introduced.
 
 Depends on authority and acknowledgment. Daemon safety and migration consume
 this exact binding/status behavior.
+
+## Implementation notes
+
+- Managed lifecycle entries now retain exact required capabilities, managed
+  surface kinds, declaration authorization, and the scoped adapter declaration
+  contract. The executor re-detects the configured executable/profile and
+  recomputes that authority under the lock before checking file/tree identities.
+- Missing mutation capabilities remain unsupported rather than becoming
+  unverified, and declaration-contract changes invalidate the planned write.
+- Status keeps normalized native observations suitable for adoption while its
+  rendered native surfaces are explicitly labeled `layer=declared`; owned
+  unverified managed declarations produce separate declared-healthy and
+  effective-unverified attention output with no persisted schema change.
+- Verification: `cargo fmt --all && cargo test --workspace --all-targets`
+  (704 passed).
+
+## Completion
+
+Implemented and verified. Daemon exclusion and profile migration consume the
+lock-time binding and status semantics from this checkpoint.

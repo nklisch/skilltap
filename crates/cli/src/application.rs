@@ -10,18 +10,19 @@ use skilltap_core::{
         apply_adoption, plan_adoption,
     },
     domain::{
-        AbsolutePath, ArtifactFile, CapabilityId, CapabilityProfileSelection, CapabilitySupport,
-        CommandArgument, CompatibilityClass, CompatibilityEvidence, ComponentGraph, ComponentId,
-        ConfiguredBinary, ConsequenceCode, DesiredOrigin, DesiredResource, EvidenceCode,
-        EvidenceDetail, ExecutableIdentity, Fingerprint, GitCommit, HarnessId, HarnessObservation,
-        HarnessObservationOutcome, HarnessReachability, HarnessSet, MaterialConsequence, NativeId,
-        NativeVersion, ObservationAdapterError, ObservationBatch, ObservationEvidence,
-        ObservationFields, ObservationFinding, ObservationFindingCode, ObservationKey,
-        ObservationLayer, ObservationRequest, ObservationSeverity, ObservationSubject,
-        ObservationSummary, ObservationTarget, ObservedResource, OperationAction,
-        OperationDependency, OperationId, OperationOutcome, OperationResult, OperationSelector,
-        Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth, ResourceId, ResourceKey,
-        ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
+        AbsolutePath, ArtifactFile, CapabilityId, CapabilityProfileSelection, CapabilityScope,
+        CapabilitySupport, CommandArgument, CompatibilityClass, CompatibilityEvidence,
+        ComponentGraph, ComponentId, ConfiguredBinary, ConsequenceCode, DesiredOrigin,
+        DesiredResource, EvidenceCode, EvidenceDetail, ExecutableIdentity, Fingerprint, GitCommit,
+        HarnessId, HarnessObservation, HarnessObservationOutcome, HarnessReachability, HarnessSet,
+        MaterialConsequence, NativeId, NativeVersion, ObservationAdapterError, ObservationBatch,
+        ObservationEvidence, ObservationFields, ObservationFinding, ObservationFindingCode,
+        ObservationKey, ObservationLayer, ObservationRequest, ObservationSeverity,
+        ObservationSubject, ObservationSummary, ObservationTarget, ObservedResource,
+        OperationAction, OperationDependency, OperationId, OperationOutcome, OperationResult,
+        OperationSelector, Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth,
+        ResourceId, ResourceKey, ResourceKind, Scope, Source, SourceKind, SourceLocator,
+        UpdateIntent,
     },
     executor::{
         ExecutionAcknowledgments, ExecutionError, ExecutionJournal, ExecutionPort, execute_plan,
@@ -1271,6 +1272,7 @@ struct ConfiguredAdapterProfile {
     native_version: NativeVersion,
     profile: CapabilityProfileSelection,
     capability: CapabilitySupport,
+    declaration_contract: Option<skilltap_core::mutation_authority::ManagedDeclarationContract>,
 }
 
 struct ConfiguredNativeProfile {
@@ -1339,13 +1341,11 @@ fn configured_adapter_profile(
         return Ok(None);
     };
     let capability = profile
-        .mutation_capabilities()
-        .and_then(|capabilities| {
-            capabilities
-                .for_scope(request.scope)
-                .support(&capability_id)
-        })
+        .mutation_support(request.scope, &capability_id)
         .unwrap_or(CapabilitySupport::Unsupported);
+    let declaration_contract = adapter
+        .managed_declaration_contract(CapabilityScope::from(request.scope))
+        .cloned();
     Ok(Some(ConfiguredAdapterProfile {
         target: target.clone(),
         scope: request.scope.clone(),
@@ -1354,6 +1354,7 @@ fn configured_adapter_profile(
         native_version: native_version.clone(),
         profile,
         capability,
+        declaration_contract,
     }))
 }
 
@@ -1385,33 +1386,6 @@ fn configured_native_profile(
         executable,
         capability: runtime.capability,
     }))
-}
-
-fn managed_profile_matches(
-    registry: &skilltap_harnesses::TargetRegistry,
-    config: &ConfigDocument,
-    environment: &BTreeMap<OsString, OsString>,
-    search_path: Option<OsString>,
-    process_limits: ProcessLimits,
-    json_limits: JsonLimits,
-    expected: &ConfiguredAdapterProfile,
-) -> bool {
-    configured_adapter_profile(
-        registry,
-        config,
-        &expected.target,
-        NativeProfileRequest {
-            scope: &expected.scope,
-            environment,
-            process_limits,
-            json_limits,
-            search_path,
-            capability_name: "managed.projection",
-        },
-    )
-    .ok()
-    .flatten()
-    .is_some_and(|actual| actual == *expected)
 }
 
 fn command_arguments(arguments: Vec<std::ffi::OsString>) -> Result<Vec<CommandArgument>, ()> {
@@ -1482,15 +1456,13 @@ fn plan_managed_lifecycle(
             "The selected target does not provide managed project projection.",
         )
     })?;
-    let declaration_contract = adapter
-        .managed_declaration_contract(skilltap_core::domain::CapabilityScope::from(context.scope));
     let ManagedPlanContext {
         scope,
         documents,
         paths,
         timestamp,
         json_limits,
-        acknowledged,
+        acknowledged: _,
         filesystem,
         checkout: provided_checkout,
     } = context;
@@ -1701,20 +1673,20 @@ fn plan_managed_lifecycle(
     if !trees.is_empty() {
         surface_kinds.insert(ManagedSurfaceKind::CompleteSkillTree);
     }
+    let managed_requirement = CapabilityRequirement::new(
+        CapabilityId::new("managed.projection").expect("static capability id is valid"),
+        [],
+    );
     let authorization = if surfaces.is_empty() {
         MutationAuthorization::Supported
     } else {
-        let requirement = CapabilityRequirement::new(
-            CapabilityId::new("managed.projection").expect("static capability id is valid"),
-            [],
-        );
         authorize_mutation(MutationAuthorityRequest {
             profile: &profile.profile,
             scope,
             channel: MutationChannel::ManagedProjection,
-            required: &[requirement],
+            required: std::slice::from_ref(&managed_requirement),
             surfaces: &surface_kinds,
-            declaration: declaration_contract,
+            declaration: profile.declaration_contract.as_ref(),
         })
         .map_err(|error| {
             ErrorDetail::new("managed_mutation_unauthorized", error.to_string())
@@ -1837,6 +1809,9 @@ fn plan_managed_lifecycle(
             files,
             trees,
             profile,
+            requirements: vec![managed_requirement],
+            surfaces: surface_kinds,
+            authorization,
         },
         seed,
         materialization,

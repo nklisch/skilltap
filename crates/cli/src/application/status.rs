@@ -434,6 +434,13 @@ impl StatusProjection<'_> {
             PlatformPaths::resolve(&ProcessEnvironment).ok(),
             &mut outcome,
         );
+        managed_declaration_status_projection(
+            self.documents,
+            self.scope,
+            self.targets,
+            self.registry,
+            &mut outcome,
+        );
         for entry in update_entries {
             outcome = outcome.with_resource(entry);
         }
@@ -1138,6 +1145,7 @@ impl NativeObservation {
                         .with_field("harness", observation.target().harness().as_str())
                         .with_field("scope", scope_label(resource.scope()))
                         .with_field("kind", resource_kind(resource.kind()))
+                        .with_field("layer", "declared")
                         .with_field("native_identity", resource.native_identity().as_str());
                         if resource.native_identity().as_str().contains(".") {
                             entry = entry.with_field("native_entries", 0_u64);
@@ -1595,6 +1603,87 @@ fn resolution_error_label(error: &ResolutionError) -> &'static str {
         ResolutionError::TargetDisagreement => "target_disagreement",
     }
 }
+fn managed_declaration_status_projection(
+    documents: &StatusDocuments,
+    scope: &StatusScope,
+    targets: &StatusTargets,
+    registry: &skilltap_harnesses::TargetRegistry,
+    outcome: &mut Outcome,
+) {
+    let Some(state) = documents.state.as_ref() else {
+        return;
+    };
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded status process limits are valid");
+    let json_limits =
+        JsonLimits::new(256 * 1024, 64).expect("bounded status JSON limits are valid");
+    let environment = match PlatformPaths::resolve(&ProcessEnvironment)
+        .ok()
+        .and_then(|paths| {
+            paths
+                .native_process_environment(std::env::var_os("PATH"))
+                .ok()
+        }) {
+        Some(environment) => environment,
+        None => return,
+    };
+    for resource in state.resources().values() {
+        if !scope.resolved.contains(resource.key().scope()) {
+            continue;
+        }
+        for target in targets.iter() {
+            let Some(binding) = resource.target(target) else {
+                continue;
+            };
+            if binding.ownership() != Ownership::Skilltap
+                || binding.managed_projections().is_empty()
+            {
+                continue;
+            }
+            let Some(profile) = configured_adapter_profile(
+                registry,
+                &documents.config,
+                target,
+                NativeProfileRequest {
+                    scope: resource.key().scope(),
+                    environment: &environment,
+                    process_limits,
+                    json_limits,
+                    search_path: std::env::var_os("PATH"),
+                    capability_name: "managed.projection",
+                },
+            )
+            .ok()
+            .flatten() else {
+                continue;
+            };
+            if profile.capability != CapabilitySupport::Unverified {
+                continue;
+            }
+            let id = format!("{target}:{}:declaration", resource.key());
+            *outcome = outcome.clone().with_resource(
+                OutputEntry::new(id, "attention")
+                    .with_field("target", target.as_str())
+                    .with_field("scope", scope_label(resource.key().scope()))
+                    .with_field("resource", resource.key().to_string())
+                    .with_field("layer", "declared")
+                    .with_field("declared", "healthy")
+                    .with_field("effective", "unverified")
+                    .with_field("ownership", "skilltap"),
+            );
+            *outcome = outcome.clone().with_warning(
+                Warning::new(
+                    "managed.effective_unverified",
+                    "The managed declaration is owned and verified on disk, but effective harness loading remains unverified.",
+                )
+                .with_context("harness", target.as_str())
+                .with_context("scope", scope_label(resource.key().scope())),
+            );
+            outcome.result = ResultClass::AttentionRequired;
+        }
+    }
+}
+
 fn native_surface_resource(
     harness: &HarnessId,
     scope: &Scope,

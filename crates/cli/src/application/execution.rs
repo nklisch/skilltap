@@ -258,6 +258,9 @@ pub(super) struct ManagedLifecycleEntry {
     pub(super) files: Vec<ManagedLifecycleFileWrite>,
     pub(super) trees: Vec<ManagedLifecyclePluginWrite>,
     pub(super) profile: ConfiguredAdapterProfile,
+    pub(super) requirements: Vec<skilltap_core::mutation_authority::CapabilityRequirement>,
+    pub(super) surfaces: BTreeSet<skilltap_core::mutation_authority::ManagedSurfaceKind>,
+    pub(super) authorization: skilltap_core::mutation_authority::MutationAuthorization,
 }
 
 pub(super) struct ManagedLifecycleFileWrite {
@@ -306,18 +309,59 @@ impl ExecutionPort for ManagedLifecyclePort<'_> {
             })?;
             if operation.target() != &entry.profile.target
                 || operation.scope() != &entry.profile.scope
-                || !managed_profile_matches(
-                    self.registry,
-                    self.config,
-                    self.environment,
-                    self.search_path.clone(),
-                    self.process_limits,
-                    self.json_limits,
-                    &entry.profile,
-                )
             {
                 return Err(managed_lifecycle_apply_failure(
+                    "The managed projection target or scope changed after planning.",
+                ));
+            }
+            let actual_profile = super::configured_adapter_profile(
+                self.registry,
+                self.config,
+                &entry.profile.target,
+                super::NativeProfileRequest {
+                    scope: &entry.profile.scope,
+                    environment: self.environment,
+                    process_limits: self.process_limits,
+                    json_limits: self.json_limits,
+                    search_path: self.search_path.clone(),
+                    capability_name: "managed.projection",
+                },
+            )
+            .map_err(|_| {
+                managed_lifecycle_apply_failure(
+                    "The managed projection executable or version could not be revalidated.",
+                )
+            })?
+            .ok_or_else(|| {
+                managed_lifecycle_apply_failure(
+                    "The managed projection executable or version is no longer reachable.",
+                )
+            })?;
+            if actual_profile != entry.profile {
+                return Err(managed_lifecycle_apply_failure(
                     "The managed projection executable, version, or scoped compiled profile changed after planning.",
+                ));
+            }
+            let actual_authorization = if entry.surfaces.is_empty() {
+                super::MutationAuthorization::Supported
+            } else {
+                super::authorize_mutation(super::MutationAuthorityRequest {
+                    profile: &actual_profile.profile,
+                    scope: &entry.profile.scope,
+                    channel: super::MutationChannel::ManagedProjection,
+                    required: &entry.requirements,
+                    surfaces: &entry.surfaces,
+                    declaration: actual_profile.declaration_contract.as_ref(),
+                })
+                .map_err(|_| {
+                    managed_lifecycle_apply_failure(
+                        "The managed projection declaration authority changed after planning.",
+                    )
+                })?
+            };
+            if actual_authorization != entry.authorization {
+                return Err(managed_lifecycle_apply_failure(
+                    "The managed projection declaration authority changed after planning.",
                 ));
             }
             for file in &entry.files {
