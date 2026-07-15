@@ -57,8 +57,8 @@ skilltap plan --all-scopes --json
 ```
 
 Plans classify operations as native, faithful equivalent, managed
-materialization, partial, unsupported, conflicting, or no-op. Every native
-project file that may change appears in the plan.
+materialization, declaration-managed, partial, unsupported, conflicting, or
+no-op. Every native project file that may change appears in the plan.
 
 Logical resource and component selectors are resolved only across the scopes
 selected by the command. Each resulting operation carries the exact scoped
@@ -76,20 +76,25 @@ skilltap sync
 ```
 
 Safe independent operations may proceed even when another resource needs a
-decision. A partial or lossy foreground operation requires explicit `--yes`.
-That acknowledgment never overrides invalid configuration, missing required
-components, drift, or native harness policy.
+decision. A partial, lossy, or declaration-managed foreground operation
+requires explicit `--yes`. For declaration-managed work, the acknowledgment
+accepts that skilltap can verify owned file bytes but not harness loading or
+activation. It never overrides invalid configuration, unsupported components or
+scopes, unknown versions, authentication, trust, drift, conflicts, or native
+harness policy.
 
-After mutation, skilltap observes the targets again. Repeating the same sync
-against unchanged inputs produces no changes.
+After verified mutation, skilltap observes the targets again. Declaration-
+managed mutation reports the declaration as owned and healthy while effective
+state remains unverified. Repeating the same sync against unchanged inputs
+produces no changes.
 
 ## Delegate the workflow, not the decision
 
 Humans can ask an agent for a high-level outcome instead of assembling a
 command sequence. For example:
 
-> Use skilltap to make this project's Codex and Claude plugin setup match, but
-> show me anything partial or incompatible before you proceed.
+> Use skilltap to align this project's enabled harnesses, but show me anything
+> declaration-managed, partial, or incompatible before you proceed.
 
 The agent should inspect status, produce a plan, apply only authorized work,
 and explain any next action skilltap reports. A request to use skilltap does

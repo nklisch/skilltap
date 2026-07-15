@@ -21,9 +21,9 @@ No skilltap metadata is written into managed projects.
 Policy includes enabled harnesses, binary overrides, instruction bridge mode,
 and update behavior. It does not list installed resources.
 
-If this file is missing, neither harness is enabled. Read-only inspection does
-not create it and does not infer enabled harnesses from binaries found on the
-machine.
+If this file is missing, no harness is enabled. Read-only inspection does not
+create it and does not infer enabled harnesses from binaries or documented
+file-only surfaces found on the machine.
 
 ```toml
 schema = 1
@@ -35,6 +35,10 @@ binary = "codex"
 [harnesses.claude]
 enabled = true
 binary = "claude"
+
+# File-only observe-only targets have no binary field.
+[harnesses.zoo]
+enabled = false
 
 [instructions]
 claude_mode = "symlink"
@@ -62,8 +66,10 @@ configuration.
 
 Fresh declared/effective observations, capability-profile evidence, and health
 findings are ephemeral. `status` and `adopt` do not persist their snapshots to
-`state.json`. A successful mutation may update provenance, fingerprints,
-revisions, versions, timestamps, and apply results after re-observation.
+`state.json`. Declaration-managed results persist owned declaration provenance
+and fingerprints, not a claim that the harness loaded them. A successful
+mutation may update revisions, versions, timestamps, and apply results after the
+applicable disk or native re-observation.
 
 ## `managed/`
 

@@ -11,8 +11,8 @@
 
 skilltap gives agents an easy way to help you look after the tooling on your
 computer. It adopts, reconciles, and updates native marketplaces, plugins,
-complete skill directories, and shared instruction files across Codex and
-Claude Code.
+complete skill directories, MCP declarations, and shared instruction files
+across a typed registry of local agent harnesses.
 
 The harnesses remain authoritative for their own formats. skilltap uses native
 lifecycle commands when they exist, records desired state separately from
@@ -43,13 +43,20 @@ Callers provide explicit marketplace, plugin, skill, and project identities.
 
 ## The operating loop
 
-1. Enable the Codex and Claude adapters you use.
+1. Enable the registered harness adapters you want skilltap to manage.
 2. Adopt existing native configuration into skilltap's inventory.
 3. Review a clear plan.
 4. Synchronize safe, faithful changes.
-5. Use status to inspect health, drift, updates, and required decisions.
+5. Use status to inspect verified health, declared-but-unverified state, drift,
+   updates, and required decisions.
 
-Start with [Getting Started](./getting-started).
+Support is component- and scope-specific. Verified capabilities reconcile
+normally. Declaration-managed file surfaces require explicit foreground
+acknowledgment and remain effective-unverified. Observe-only targets never gain
+mutation authority.
+
+See the [Harness Support Matrix](../reference/harnesses) and start with
+[Getting Started](./getting-started).
 
 ---
 
@@ -110,8 +117,8 @@ The easiest human workflow is to describe the result you want. Your Codex or
 Claude agent can inspect the CLI, plan the work, and use skilltap on your
 behalf. Try prompts such as:
 
-> Use skilltap to check whether this computer's Codex and Claude environments
-> are healthy.
+> Use skilltap to check whether this computer's enabled harness environments
+> are healthy, and distinguish verified from effective-unverified state.
 
 > Use skilltap to adopt my existing Claude configuration and show what would
 > change before syncing it to Codex.
@@ -120,8 +127,8 @@ behalf. Try prompts such as:
 > Explain any drift or incompatibility and ask before accepting a partial
 > result.
 
-> Use skilltap to install `formatter@example-plugins` for this project in both
-> harnesses.
+> Use skilltap to install `formatter@example-plugins` for this project in every
+> selected target that can represent it safely.
 
 Agents should use `skilltap --help` and leaf-command help for exact syntax,
 start with `status` or `plan` when appropriate, and bring judgment calls back
@@ -137,18 +144,20 @@ machine:
 skilltap status
 ```
 
-When `config.toml` is absent, neither Codex nor Claude is considered enabled.
-`status` may report what is installed, but it does not infer management policy,
-create the skilltap configuration directory, or write any harness file.
+When `config.toml` is absent, no harness is considered enabled. `status` may
+report installed or file-only observe-only targets, but it does not infer
+management policy, create the skilltap configuration directory, or write any
+harness file.
 
 ## Enable native harnesses
 
 Enable only the harnesses you want skilltap to manage:
 
 ```bash
+skilltap harness list
 skilltap harness enable codex
 skilltap harness enable claude
-skilltap harness list
+# Other registered ids appear in `harness list` with their exact support tier.
 ```
 
 Enabling an adapter records policy. It does not adopt or modify native
@@ -176,8 +185,10 @@ skilltap adopt --project ~/src/example
 skilltap plan --project ~/src/example
 ```
 
-Bare scoped commands operate globally. `--target codex`, `--target claude`, or
-`--target all` independently selects the harnesses involved.
+Bare scoped commands operate globally. `--target <registered-id>` or
+`--target all` independently selects the harnesses involved. Registration and
+enablement do not imply mutation support; plans report component- and
+scope-specific authority for the installed version.
 
 Each resource has a stable logical ID and one concrete global or project scope.
 Together they form its exact resource key. Equal logical IDs in global scope
@@ -245,8 +256,8 @@ skilltap plan --all-scopes --json
 ```
 
 Plans classify operations as native, faithful equivalent, managed
-materialization, partial, unsupported, conflicting, or no-op. Every native
-project file that may change appears in the plan.
+materialization, declaration-managed, partial, unsupported, conflicting, or
+no-op. Every native project file that may change appears in the plan.
 
 Logical resource and component selectors are resolved only across the scopes
 selected by the command. Each resulting operation carries the exact scoped
@@ -264,20 +275,25 @@ skilltap sync
 ```
 
 Safe independent operations may proceed even when another resource needs a
-decision. A partial or lossy foreground operation requires explicit `--yes`.
-That acknowledgment never overrides invalid configuration, missing required
-components, drift, or native harness policy.
+decision. A partial, lossy, or declaration-managed foreground operation
+requires explicit `--yes`. For declaration-managed work, the acknowledgment
+accepts that skilltap can verify owned file bytes but not harness loading or
+activation. It never overrides invalid configuration, unsupported components or
+scopes, unknown versions, authentication, trust, drift, conflicts, or native
+harness policy.
 
-After mutation, skilltap observes the targets again. Repeating the same sync
-against unchanged inputs produces no changes.
+After verified mutation, skilltap observes the targets again. Declaration-
+managed mutation reports the declaration as owned and healthy while effective
+state remains unverified. Repeating the same sync against unchanged inputs
+produces no changes.
 
 ## Delegate the workflow, not the decision
 
 Humans can ask an agent for a high-level outcome instead of assembling a
 command sequence. For example:
 
-> Use skilltap to make this project's Codex and Claude plugin setup match, but
-> show me anything partial or incompatible before you proceed.
+> Use skilltap to align this project's enabled harnesses, but show me anything
+> declaration-managed, partial, or incompatible before you proceed.
 
 The agent should inspect status, produce a plan, apply only authorized work,
 and explain any next action skilltap reports. A request to use skilltap does
@@ -355,9 +371,10 @@ skilltap daemon disable
 ```
 
 The daemon uses the same application services as foreground commands. It may
-check for updates or apply operations classified as safe by policy. It never
-acknowledges partial compatibility, overwrites drift, edits conflicted
-instructions, or installs newly observed resources. Items that need judgment
+check for updates or apply operations classified as fully safe by policy. It
+never acknowledges partial compatibility or declaration-managed effective-
+unverified work, overwrites drift, edits conflicted instructions, authenticates,
+approves trust, or installs newly observed resources. Items that need judgment
 remain pending for a foreground plan.
 
 ---
@@ -386,7 +403,7 @@ The public command families are:
 
 | Family | Purpose | Start with |
 | --- | --- | --- |
-| Harness | Enable, disable, and inspect Codex/Claude policy | `skilltap harness --help` |
+| Harness | Enable, disable, and inspect registered target policy and support tiers | `skilltap harness --help` |
 | Adopt | Import native resources into desired state | `skilltap adopt --help` |
 | Status | Inspect desired, observed, and managed health | `skilltap status --help` |
 | Plan | Preview operations without mutating native state | `skilltap plan --help` |
@@ -408,13 +425,13 @@ configuration directory when necessary.
 
 | Flag | Meaning |
 | --- | --- |
-| `--target <codex\|claude\|all>` | Select harnesses independently of scope. |
+| `--target <registered-id\|all>` | Select harnesses independently of scope; use `harness list` for current ids. |
 | no scope flag | Operate globally. |
 | `--project` | Use the project containing the current directory. |
 | `--project <path>` | Use the project containing the supplied path. |
 | `--all-scopes` | Use global scope and every managed project. |
 | `--json` | Render the same result as a stable JSON envelope. |
-| `--yes` | Acknowledge every eligible partial or lossy consequence in this operation; blocked work remains blocked. |
+| `--yes` | Acknowledge every eligible partial, lossy, or effective-unverified declaration consequence; blocked work remains blocked. |
 | `--include <selector>` | Include matching resources or components; repeatable. |
 | `--exclude <selector>` | Exclude matches; repeatable and wins over inclusion. |
 
@@ -431,8 +448,24 @@ uses the exact resource key—the logical ID plus concrete global or project
 scope—and rejects any selector whose scope disagrees with the operation.
 
 When `config.toml` is missing, no harness is enabled. Read-only `status` remains
-available and creates nothing; a mutating command creates owned configuration
-only when that command requires it.
+available and creates nothing; file-only observe-only targets require no guessed
+binary. A mutating command creates owned configuration only when that command
+requires it.
+
+## Target support tiers
+
+`harness list`, `status`, and `plan` derive target behavior from the typed
+registry and exact observed profile:
+
+- **Verified** capabilities may execute normally.
+- **Declaration-managed** components require foreground `--yes`; skilltap
+  verifies its owned bytes while effective state remains unverified.
+- **Observe-only** targets expose safe documented reads and no mutation ports.
+- **Unsupported** components or scopes remain blocked without affecting safe
+  siblings.
+
+Native commands always require verified `Supported` authority. Unknown versions
+never mutate, and the daemon never supplies declaration acknowledgment.
 
 ## Results and exit codes
 
@@ -487,6 +520,75 @@ and structured `next_actions` for the recovery command an agent should run.
 
 ---
 
+<!-- Source: https://skilltap.dev/reference/harnesses -->
+
+# Harness Support
+
+skilltap registers targets independently from the authority to mutate them.
+Support is evaluated for the installed version, component, and concrete global
+or project scope. Use `skilltap harness list`, `skilltap status`, and
+`skilltap plan` for the machine-specific result.
+
+## Support tiers
+
+- **Verified** — skilltap can safely perform the operation and verify the native
+  or managed result.
+- **Declaration-managed** — an exact-version documented file surface can be
+  owned, preserved, rolled back, removed, and repeated safely, but no safe native
+  observer proves that the harness loaded it. Foreground `--yes` is required and
+  status remains effective-unverified.
+- **Observe-only** — skilltap can inspect safe documented surfaces but exposes no
+  mutation authority.
+- **Unsupported** — the component or scope has no safe contract. It remains
+  blocked without preventing unrelated supported work.
+
+Unknown versions never mutate. Native commands always require verified support.
+The daemon never acknowledges declaration-managed operations.
+
+## Current target matrix
+
+| Target id | Harness | Current contract |
+| --- | --- | --- |
+| `codex` | Codex | Verified native and managed behavior for exact compiled profiles. |
+| `claude` | Claude Code | Verified native marketplace/plugin behavior and managed compatibility. |
+| `droid` | Factory Droid | Verified native/managed coexistence; project marketplace operations remain unsupported where the native lifecycle lacks them. |
+| `qwen` | Qwen Code | Verified native extension conversion and managed skill/MCP projection. |
+| `gemini` | Gemini CLI | Verified file-managed skills and MCP for the attested profile. |
+| `opencode` | OpenCode | Verified file-managed skills and MCP for the attested profile. |
+| `copilot` | GitHub Copilot CLI | Mixed: managed MCP has structured observation; complete skills are declaration-managed; incomplete native plugin lifecycle is unsupported. |
+| `kiro` | Kiro CLI | Complete skills and MCP declarations for the attested profile; plugin/MCP projection is declaration-managed and never invokes login. |
+| `kimi` | Kimi Code CLI | Global MCP declaration-managed; project MCP and unsupported auth/transports remain blocked. |
+| `vibe` | Mistral Vibe | Global/trusted-project static MCP declaration-managed through syntax-preserving TOML edits; OAuth and interactive effective observation are unsupported. |
+| `kilo` | Kilo Code | Valid global/project JSON/JSONC declarations are declaration-managed; side-effectful debug/list/auth probes are never invoked. |
+| `junie` | Junie | Complete skills and MCP are declaration-managed; ambiguous cross-scope MCP names block and interactive `/mcp` is never invoked. |
+| `amp` | Amp | Complete skills and MCP are declaration-managed; doctor, OAuth, login, browser, and trust approval are never invoked. |
+| `pi` | Pi | Observe-only compound profile for the attested Pi, MCP companion, and hook companion tuple. |
+| `cursor` | Cursor | Observe-only using documented `agent` detection and safe skill/MCP read surfaces; no mutation profile. |
+| `zoo` | Zoo Code | File-only observe-only target; editor storage, installed identity, and effective reload remain unresolved. |
+| `zcode` | ZCode | File-only observe-only target for documented global skill and MCP files; project skills and effective reload remain unresolved. |
+
+Codex and Claude Code remain the only first-party bootstrap plugin targets.
+Other registered harnesses participate through ordinary enablement, status,
+planning, synchronization, and update behavior according to the matrix above.
+
+## Declaration-managed safety
+
+An acknowledged declaration-managed operation does **not** mean the harness
+loaded or activated the resource. skilltap still guarantees:
+
+- exact-version authority;
+- explicit files and consequences in the plan;
+- no overwrite of unmanaged or ambiguous same-name entries;
+- preservation of unrelated documented fields and credential references;
+- root-confined no-follow writes;
+- lock-time executable and file revalidation;
+- rollback and target-local ownership;
+- immediate-repeat no change;
+- no daemon execution, browser, authentication, trust approval, TUI, editor
+  automation, or side-effectful status probe.
+
+---
+
 <!-- Source: https://skilltap.dev/reference/state -->
 
 # State and Configuration
@@ -508,9 +610,9 @@ No skilltap metadata is written into managed projects.
 Policy includes enabled harnesses, binary overrides, instruction bridge mode,
 and update behavior. It does not list installed resources.
 
-If this file is missing, neither harness is enabled. Read-only inspection does
-not create it and does not infer enabled harnesses from binaries found on the
-machine.
+If this file is missing, no harness is enabled. Read-only inspection does not
+create it and does not infer enabled harnesses from binaries or documented
+file-only surfaces found on the machine.
 
 ```toml
 schema = 1
@@ -522,6 +624,10 @@ binary = "codex"
 [harnesses.claude]
 enabled = true
 binary = "claude"
+
+# File-only observe-only targets have no binary field.
+[harnesses.zoo]
+enabled = false
 
 [instructions]
 claude_mode = "symlink"
@@ -549,8 +655,10 @@ configuration.
 
 Fresh declared/effective observations, capability-profile evidence, and health
 findings are ephemeral. `status` and `adopt` do not persist their snapshots to
-`state.json`. A successful mutation may update provenance, fingerprints,
-revisions, versions, timestamps, and apply results after re-observation.
+`state.json`. Declaration-managed results persist owned declaration provenance
+and fingerprints, not a claim that the harness loaded them. A successful
+mutation may update revisions, versions, timestamps, and apply results after the
+applicable disk or native re-observation.
 
 ## `managed/`
 

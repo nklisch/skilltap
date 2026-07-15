@@ -36,7 +36,8 @@ skilltap daemon disable
 ```
 
 The daemon uses the same application services as foreground commands. It may
-check for updates or apply operations classified as safe by policy. It never
-acknowledges partial compatibility, overwrites drift, edits conflicted
-instructions, or installs newly observed resources. Items that need judgment
+check for updates or apply operations classified as fully safe by policy. It
+never acknowledges partial compatibility or declaration-managed effective-
+unverified work, overwrites drift, edits conflicted instructions, authenticates,
+approves trust, or installs newly observed resources. Items that need judgment
 remain pending for a foreground plan.

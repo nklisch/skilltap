@@ -11,6 +11,7 @@ const pages = [
   ["guide/instructions.md", `${siteUrl}/guide/instructions`],
   ["guide/updates.md", `${siteUrl}/guide/updates`],
   ["reference/cli.md", `${siteUrl}/reference/cli`],
+  ["reference/harnesses.md", `${siteUrl}/reference/harnesses`],
   ["reference/state.md", `${siteUrl}/reference/state`],
 ];
 

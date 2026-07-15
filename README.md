@@ -1,14 +1,14 @@
 # skilltap
 
-A personal control plane for Codex and Claude Code.
+A personal control plane for local agent harnesses.
 
-skilltap manages the marketplaces, plugins, skills, and instruction files used by your local agent harnesses. It adopts existing configuration, keeps a normalized machine-wide inventory, and reconciles that inventory through each harness's native mechanisms.
+skilltap manages the marketplaces, plugins, skills, MCP declarations, and instruction files used by your local agent harnesses. It adopts existing configuration, keeps a normalized machine-wide inventory, and reconciles each target through its native lifecycle or documented managed surfaces.
 
 It does not search for skills or recommend plugins. You tell skilltap what you want; skilltap helps install it correctly, keep it updated, and show whether your environment is healthy.
 
 ## What It Manages
 
-- Codex and Claude Code harness configuration.
+- A typed registry spanning Codex, Claude Code, Factory Droid, Qwen Code, GitHub Copilot CLI, Gemini CLI, Junie, Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, Amp, Pi, Cursor, Zoo Code, and ZCode.
 - Native plugin marketplaces.
 - Native and materialized plugins.
 - Complete standalone skill directories.
@@ -25,8 +25,10 @@ skilltap uses native harness commands whenever they exist.
 A Claude plugin stays a Claude plugin. A Codex plugin stays a Codex plugin. When the same plugin exists natively for both harnesses, skilltap installs both native distributions.
 
 When no native target exists, skilltap can materialize compatible components
-into the target harness through documented load paths. Partial or lossy
-results are reported and require explicit approval.
+into documented load paths. Support is admitted per component and scope.
+Effectively verified changes apply normally; declaration-managed changes require
+foreground `--yes` and remain explicitly effective-unverified. Partial or lossy
+results are also reported and require explicit approval.
 
 ## Agent Forward
 
@@ -37,19 +39,19 @@ Human-readable output is concise enough for an agent transcript. Inspection and 
 There is no TUI, setup wizard, or separate agent mode.
 
 Read-only `status` works before configuration exists and creates nothing. A
-missing `config.toml` means neither harness is enabled; skilltap never infers
-management policy merely because a Codex or Claude executable is installed.
+missing `config.toml` means no harness is enabled; skilltap never infers
+management policy merely because a registered executable or file surface is present.
 
 For normal human use, ask your agent for the outcome instead of translating it
 into flags yourself. For example:
 
-> Use skilltap to check the health of my Codex and Claude environment.
+> Use skilltap to check the health of my enabled agent harnesses.
 
 > Use skilltap to sync my global plugins and shared instructions. Show me the
 > plan first, and ask before accepting any partial result.
 
 > Use skilltap to install `formatter@example-plugins` in this project and tell
-> me if any part will not work in both harnesses.
+> me which selected targets are verified, declaration-managed, or unsupported.
 
 The agent can learn exact syntax from `skilltap --help`, run read-only status
 and planning commands, and convey any required decision before mutation.
@@ -251,7 +253,7 @@ skilltap plugin install deploy@claude-tools --target codex --yes
 
 Optional `--include` and `--exclude` selectors control individual components.
 
-`--yes` acknowledges the reported partial result. It does not override missing required components, local drift, or invalid configuration.
+`--yes` acknowledges the exact reported partial or effective-unverified result. It does not claim the harness loaded a declaration and does not override unsupported components or scopes, unknown versions, authentication, trust, local drift, conflicts, or invalid configuration.
 
 Mutation support comes only from capability profiles compiled into skilltap
 and matched to the exact observed harness executable and version. Runtime
@@ -280,14 +282,16 @@ skilltap daemon enable --interval 6h
 skilltap daemon status
 ```
 
-The daemon updates managed plugins and skills across all scopes. It never approves partial updates, overwrites local drift, or resolves conflicts.
+The daemon updates only operations classified as fully safe across managed scopes. It never approves partial or declaration-managed updates, overwrites local drift, or resolves conflicts.
 
 ## Supported Harnesses
 
-- Codex
-- Claude Code
+- **Verified native/managed:** Codex, Claude Code, Factory Droid, Qwen Code, Gemini CLI, and OpenCode.
+- **Mixed:** GitHub Copilot CLI uses managed MCP plus declaration-managed skills; its incomplete native plugin lifecycle remains unsupported.
+- **Declaration-managed:** Kiro CLI, Kimi Code CLI, Mistral Vibe, Kilo Code, Junie, and Amp expose only their attested components and scopes. Foreground acknowledgment is required and effective state remains unverified.
+- **Observe-only:** Pi, Cursor, Zoo Code, and ZCode expose safe documented observations without mutation authority.
 
-Additional harnesses belong only when skilltap can observe and operate their native systems faithfully. Filesystem copying alone does not count as support.
+Registration does not imply identical capabilities. Run `skilltap harness list`, `skilltap status`, and `skilltap plan` for the installed versions and selected scopes. Unknown versions never gain mutation authority.
 
 ## Documentation
 

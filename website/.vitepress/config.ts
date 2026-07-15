@@ -1,9 +1,9 @@
 import { defineConfig, type HeadConfig } from "vitepress";
 
 const SITE_URL = "https://skilltap.dev";
-const OG_TITLE = "skilltap — Manage Codex and Claude Code environments";
+const OG_TITLE = "skilltap — Manage local agent harness environments";
 const OG_DESC =
-  "A personal control plane for marketplaces, plugins, skills, and shared instructions.";
+  "A personal control plane for plugins, skills, MCP declarations, and shared instructions across local agent harnesses.";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
 
 export default defineConfig({
@@ -139,6 +139,7 @@ gtag('config', 'G-B0D0L2YB0N');`],
           text: "Reference",
           items: [
             { text: "CLI Commands", link: "/reference/cli" },
+            { text: "Harness Support", link: "/reference/harnesses" },
             { text: "State and Configuration", link: "/reference/state" },
           ],
         },

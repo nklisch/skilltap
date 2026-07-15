@@ -4,7 +4,7 @@ layout: home
 hero:
   name: skilltap
   text: Keep your agent tools in step
-  tagline: Give agents one friendly way to help you manage Codex and Claude Code plugins, skills, marketplaces, and shared instructions.
+  tagline: Give agents one safe way to manage plugins, skills, MCP declarations, and shared instructions across your local agent harnesses.
   actions:
     - theme: brand
       text: Get started
@@ -18,8 +18,8 @@ features:
     details: Works with each harness's own marketplace and plugin lifecycle whenever possible.
   - title: Agent forward
     details: Clear commands, useful plans, and optional JSON output make it easy for people and agents to work together.
-  - title: Bring plugins with you
-    details: Use compatible pieces from a Claude or Codex marketplace in the other harness, with clear warnings when behavior cannot carry over.
+  - title: Precise support
+    details: Each target reports verified, declaration-managed, observe-only, and unsupported components without overstating what loaded.
   - title: One machine-wide model
     details: Bring existing resources together, keep enabled harnesses aligned, and see drift from one place.
 ---
@@ -61,16 +61,16 @@ skilltap bootstrap
 You do not need to memorize the CLI. Once the plugin is installed, describe
 the outcome to your Codex or Claude agent and let it use skilltap for you:
 
-> Use skilltap to check whether my Codex and Claude setup is healthy.
+> Use skilltap to check whether my enabled agent harnesses are healthy.
 
-> Use skilltap to sync my global plugins and shared instructions across Codex
-> and Claude. Show me the plan first.
+> Use skilltap to sync my global plugins and shared instructions across the
+> targets that support them. Show me verified and declaration-managed work first.
 
 > Use skilltap to install `formatter@example-plugins` in this project. If
 > anything cannot carry over faithfully, explain it and ask before proceeding.
 
-> Use skilltap to adopt my current Claude setup, then tell me what would change
-> in Codex.
+> Use skilltap to adopt my current Claude setup, then tell me what can move to
+> my other enabled targets and which results would remain effective-unverified.
 
 The agent can discover exact commands through `skilltap --help`, inspect with
 `status` and `plan`, and bring incompatibilities, drift, or partial operations

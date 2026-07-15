@@ -1,13 +1,13 @@
 ---
-description: A personal control plane for Codex and Claude Code environments.
+description: A personal control plane for local agent harness environments.
 ---
 
 # What is skilltap?
 
 skilltap gives agents an easy way to help you look after the tooling on your
 computer. It adopts, reconciles, and updates native marketplaces, plugins,
-complete skill directories, and shared instruction files across Codex and
-Claude Code.
+complete skill directories, MCP declarations, and shared instruction files
+across a typed registry of local agent harnesses.
 
 The harnesses remain authoritative for their own formats. skilltap uses native
 lifecycle commands when they exist, records desired state separately from
@@ -38,10 +38,17 @@ Callers provide explicit marketplace, plugin, skill, and project identities.
 
 ## The operating loop
 
-1. Enable the Codex and Claude adapters you use.
+1. Enable the registered harness adapters you want skilltap to manage.
 2. Adopt existing native configuration into skilltap's inventory.
 3. Review a clear plan.
 4. Synchronize safe, faithful changes.
-5. Use status to inspect health, drift, updates, and required decisions.
+5. Use status to inspect verified health, declared-but-unverified state, drift,
+   updates, and required decisions.
 
-Start with [Getting Started](./getting-started).
+Support is component- and scope-specific. Verified capabilities reconcile
+normally. Declaration-managed file surfaces require explicit foreground
+acknowledgment and remain effective-unverified. Observe-only targets never gain
+mutation authority.
+
+See the [Harness Support Matrix](../reference/harnesses) and start with
+[Getting Started](./getting-started).

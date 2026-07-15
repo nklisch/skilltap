@@ -1,6 +1,6 @@
 # skilltap
 
-> An easy way for agents to help you manage Codex and Claude Code marketplaces, plugins, skills, and shared instructions.
+> An easy way for agents to manage plugins, skills, MCP declarations, and shared instructions across local agent harnesses.
 
 ## Guide
 
@@ -13,6 +13,7 @@
 ## Reference
 
 - [CLI Reference](https://skilltap.dev/reference/cli): Commands, selectors, output, and exit codes
+- [Harness Support](https://skilltap.dev/reference/harnesses): Registered targets, support tiers, scopes, and verification boundaries
 - [State and Configuration](https://skilltap.dev/reference/state): Policy, scoped inventory, provenance, and managed artifacts
 
 ## Optional

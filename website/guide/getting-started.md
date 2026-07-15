@@ -1,5 +1,5 @@
 ---
-description: Install skilltap and adopt an existing Codex or Claude environment.
+description: Install skilltap and adopt existing local harness environments.
 ---
 
 # Getting Started
@@ -57,8 +57,8 @@ The easiest human workflow is to describe the result you want. Your Codex or
 Claude agent can inspect the CLI, plan the work, and use skilltap on your
 behalf. Try prompts such as:
 
-> Use skilltap to check whether this computer's Codex and Claude environments
-> are healthy.
+> Use skilltap to check whether this computer's enabled harness environments
+> are healthy, and distinguish verified from effective-unverified state.
 
 > Use skilltap to adopt my existing Claude configuration and show what would
 > change before syncing it to Codex.
@@ -67,8 +67,8 @@ behalf. Try prompts such as:
 > Explain any drift or incompatibility and ask before accepting a partial
 > result.
 
-> Use skilltap to install `formatter@example-plugins` for this project in both
-> harnesses.
+> Use skilltap to install `formatter@example-plugins` for this project in every
+> selected target that can represent it safely.
 
 Agents should use `skilltap --help` and leaf-command help for exact syntax,
 start with `status` or `plan` when appropriate, and bring judgment calls back
@@ -84,18 +84,20 @@ machine:
 skilltap status
 ```
 
-When `config.toml` is absent, neither Codex nor Claude is considered enabled.
-`status` may report what is installed, but it does not infer management policy,
-create the skilltap configuration directory, or write any harness file.
+When `config.toml` is absent, no harness is considered enabled. `status` may
+report installed or file-only observe-only targets, but it does not infer
+management policy, create the skilltap configuration directory, or write any
+harness file.
 
 ## Enable native harnesses
 
 Enable only the harnesses you want skilltap to manage:
 
 ```bash
+skilltap harness list
 skilltap harness enable codex
 skilltap harness enable claude
-skilltap harness list
+# Other registered ids appear in `harness list` with their exact support tier.
 ```
 
 Enabling an adapter records policy. It does not adopt or modify native
@@ -123,8 +125,10 @@ skilltap adopt --project ~/src/example
 skilltap plan --project ~/src/example
 ```
 
-Bare scoped commands operate globally. `--target codex`, `--target claude`, or
-`--target all` independently selects the harnesses involved.
+Bare scoped commands operate globally. `--target <registered-id>` or
+`--target all` independently selects the harnesses involved. Registration and
+enablement do not imply mutation support; plans report component- and
+scope-specific authority for the installed version.
 
 Each resource has a stable logical ID and one concrete global or project scope.
 Together they form its exact resource key. Equal logical IDs in global scope

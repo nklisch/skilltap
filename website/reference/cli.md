@@ -24,7 +24,7 @@ The public command families are:
 
 | Family | Purpose | Start with |
 | --- | --- | --- |
-| Harness | Enable, disable, and inspect Codex/Claude policy | `skilltap harness --help` |
+| Harness | Enable, disable, and inspect registered target policy and support tiers | `skilltap harness --help` |
 | Adopt | Import native resources into desired state | `skilltap adopt --help` |
 | Status | Inspect desired, observed, and managed health | `skilltap status --help` |
 | Plan | Preview operations without mutating native state | `skilltap plan --help` |
@@ -46,13 +46,13 @@ configuration directory when necessary.
 
 | Flag | Meaning |
 | --- | --- |
-| `--target <codex\|claude\|all>` | Select harnesses independently of scope. |
+| `--target <registered-id\|all>` | Select harnesses independently of scope; use `harness list` for current ids. |
 | no scope flag | Operate globally. |
 | `--project` | Use the project containing the current directory. |
 | `--project <path>` | Use the project containing the supplied path. |
 | `--all-scopes` | Use global scope and every managed project. |
 | `--json` | Render the same result as a stable JSON envelope. |
-| `--yes` | Acknowledge every eligible partial or lossy consequence in this operation; blocked work remains blocked. |
+| `--yes` | Acknowledge every eligible partial, lossy, or effective-unverified declaration consequence; blocked work remains blocked. |
 | `--include <selector>` | Include matching resources or components; repeatable. |
 | `--exclude <selector>` | Exclude matches; repeatable and wins over inclusion. |
 
@@ -69,8 +69,24 @@ uses the exact resource key—the logical ID plus concrete global or project
 scope—and rejects any selector whose scope disagrees with the operation.
 
 When `config.toml` is missing, no harness is enabled. Read-only `status` remains
-available and creates nothing; a mutating command creates owned configuration
-only when that command requires it.
+available and creates nothing; file-only observe-only targets require no guessed
+binary. A mutating command creates owned configuration only when that command
+requires it.
+
+## Target support tiers
+
+`harness list`, `status`, and `plan` derive target behavior from the typed
+registry and exact observed profile:
+
+- **Verified** capabilities may execute normally.
+- **Declaration-managed** components require foreground `--yes`; skilltap
+  verifies its owned bytes while effective state remains unverified.
+- **Observe-only** targets expose safe documented reads and no mutation ports.
+- **Unsupported** components or scopes remain blocked without affecting safe
+  siblings.
+
+Native commands always require verified `Supported` authority. Unknown versions
+never mutate, and the daemon never supplies declaration acknowledgment.
 
 ## Results and exit codes
 
