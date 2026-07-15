@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-configuration-constrained
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-expanded-harness-support-registry, feature-managed-fallback-target-parity, epic-expanded-harness-support-project-skill-links, epic-expanded-harness-support-declaration-managed]
@@ -43,6 +43,20 @@ authentication, hooks, agents, or other optional components through the normal
 faithful/partial/blocked model. Each target ships with isolated validation and
 the common adapter acceptance evidence. This feature does not add target-local
 exceptions to the core planner.
+
+## Review result
+
+Direct integrated review of the committed adapter and acceptance boundary found
+no material blockers. The compiled test exercises Kimi, Vibe, and Kilo in both
+scopes with no-ack/`--yes`, daemon pending, unknown-version no-write, repeat,
+removal, conflict, and invocation sentinels; strict Clippy and the full
+workspace suite are green. The relaxed amendment is preserved in the foundation
+contract and this feature's durable handoff.
+
+The requested nested-agent/peer paths were unavailable and prohibited by the
+caller, so this was a high-effort host-context review rather than an independent
+fresh-context pass. Residual unsupported surfaces are explicit below and are
+not approval gaps.
 
 ## Epic context
 
