@@ -443,23 +443,42 @@ Lossless JSONC boundary:
   not comment/format preservation. This boundary is proven, but the unsafe
   effective-state probe still blocks target authorization.
 
+## Host Z.ai verification
+
+The host completed the required Z.ai search-and-fetch pass after the delegated
+validation returned. Current official sources confirm rather than disconfirm the
+release-specific evidence:
+
+- Kimi's official MCP page documents `kimi mcp list|test` and only the global
+  `~/.kimi/mcp.json`, plus explicit temporary `--mcp-config-file` / inline
+  overrides; it does not establish an ambient project MCP location or
+  precedence: <https://moonshotai.github.io/kimi-cli/en/customization/mcp.html>.
+- Mistral's official configuration page confirms trusted project
+  `./.vibe/config.toml` precedence over user `~/.vibe/config.toml`, but exposes
+  no deterministic non-TTY MCP status surface:
+  <https://docs.mistral.ai/vibe/code/cli/configuration>.
+- Kilo's official CLI MCP page confirms global/project config families,
+  project-over-global precedence, and human `kilo mcp list`, but does not provide
+  a side-effect-free JSON effective-state contract:
+  <https://kilo.ai/docs/automate/mcp/using-in-cli>.
+
+The earlier research-channel limitation is therefore resolved and is no longer
+a blocker. The substantive native-contract gaps below remain.
+
 ## Blocker
 
 This checkpoint remains at `stage: implementing`; no target profile may gain
 mutation authority from this run.
 
-1. **Required research channel unavailable.** The delegated harness exposed no
-   Z.ai search/fetch/repository tools. The evidence above is source-direct and
-   current, but the operator-required Z.ai pass is unfulfilled.
-2. **Kimi Code CLI 1.48.0:** current official docs and release source provide
+1. **Kimi Code CLI 1.48.0:** current official docs and release source provide
    only global `~/.kimi/mcp.json`. There is no ambient project MCP file,
    user/project precedence, project trust outcome, or project reload contract.
-3. **Mistral Vibe 2.19.1:** no deterministic non-TTY command reports effective
+2. **Mistral Vibe 2.19.1:** no deterministic non-TTY command reports effective
    MCP servers/connections; `/mcp` is TUI-only and programmatic mode requires an
    LLM turn. Current web docs reject OAuth while the exact release implements
    it. Native TOML writes are lexically lossy, and no non-TTY post-write probe
    closes that boundary.
-4. **Kilo Code CLI 7.4.7:** `debug config`, `mcp list`, and auth listing expose
+3. **Kilo Code CLI 7.4.7:** `debug config`, `mcp list`, and auth listing expose
    the needed effective/status states, but invoking the CLI creates native and
    project files, including `.kilo/.gitignore`; `mcp list` is also unstructured
    human output. No side-effect-free isolation grammar has been proven against
