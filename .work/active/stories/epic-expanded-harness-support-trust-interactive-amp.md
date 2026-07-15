@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-trust-interactive-amp
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-trust-interactive
 depends_on: [epic-expanded-harness-support-trust-interactive-contract-lock]
@@ -13,16 +13,17 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Implement the Amp Adapter
 
 ## Checkpoint
 
-Implement Unit 3 from the parent feature: one distinct Amp adapter with exact
-version-bounded managed skills/MCP, declared-versus-effective workspace trust,
-and faithful preservation of behavior-bearing skill-local MCP.
+Implement Unit 3 from the parent feature: one distinct Amp declaration-managed
+adapter with exact version-bounded managed skills/MCP, explicit
+declared-versus-effective workspace-trust limits, and faithful preservation of
+behavior-bearing skill-local MCP.
 
 ## Units
 
@@ -45,8 +46,10 @@ and faithful preservation of behavior-bearing skill-local MCP.
 - Keep a skill-owned `mcp.json` inside its complete skill tree when relative
   paths or lazy activation are behavior-bearing; never duplicate it into scoped
   settings. Record exact skill and server fingerprints for drift/removal.
-- `amp mcp doctor`, workspace trust, and auth state are read-only evidence.
-  They never mutate trust, enter persistent policy, or widen compiled authority.
+- `amp mcp doctor`, workspace trust, OAuth, and login are not invoked. The
+  optional `mcp list --json` argument vector is finite declaration-only metadata;
+  its bounded decoder never produces effective health, mutates trust, enters
+  persistent policy, or widens compiled authority.
 - Untrusted correct config stays declared/owned and attention-required, not
   drifted or repeatedly rewritten.
 
@@ -57,8 +60,8 @@ and faithful preservation of behavior-bearing skill-local MCP.
   lifecycle.
 - User/workspace settings precedence, preserving merge/remove, same-name
   conflict, drift, target isolation, rollback, and repeat idempotency.
-- Trusted healthy effective observations and untrusted/auth/failed declared-only
-  outcomes with stable secret-safe findings.
+- Declared-only and effective-unobserved outcomes with stable secret-safe
+  findings; no doctor/OAuth/login path is present.
 - Skill-local relative-path/lazy MCP update and removal without a duplicate
   settings entry.
 - Optional omissions require acknowledgment; required unsupported behavior
@@ -66,6 +69,9 @@ and faithful preservation of behavior-bearing skill-local MCP.
 
 ## Ordering
 
-Consumes the locked native contract. The final acceptance story waits for this
-and the Junie checkpoint; child verification advances directly to done without
-a separate review pass.
+Consumes the locked native contract. Verified on both scopes with exact
+identity, source/config preservation, precedence/conflict, ownership/drift,
+removal, repeatability, unknown version, bounded declaration decoding, and
+explicit version-only native invocation assertions. The final acceptance story
+waits for this and the Junie checkpoint; child verification advances directly
+to done without a separate review pass.
