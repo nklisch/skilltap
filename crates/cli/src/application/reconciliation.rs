@@ -206,6 +206,54 @@ impl StatusApplication<'_> {
         // This keeps locking, revalidation, native process bounds, journaling,
         // and post-mutation observation identical to explicit commands.
         for (resource, target_id) in selected.iter().copied() {
+            // Instruction reconciliation has no native lifecycle child to
+            // perform the conditional-profile check. Guard it here before
+            // `execute_instruction_setup_for_target` can create a bridge or
+            // journal target state. Other resource kinds retain their own
+            // established guards below.
+            if command == "sync"
+                && resource.kind() == ResourceKind::InstructionLocation
+                && self
+                    .registry
+                    .adapter(target_id)
+                    .is_some_and(|adapter| adapter.conditional_profile().is_some())
+            {
+                let paths = match self.lifecycle_platform_paths() {
+                    Ok(paths) => paths,
+                    Err(_) => {
+                        outcome.result = ResultClass::AttentionRequired;
+                        outcome = outcome.with_warning(Warning::new(
+                            "conditional_profile_unavailable",
+                            "The conditional harness profile could not be resolved safely; its mutation remains blocked.",
+                        ));
+                        continue;
+                    }
+                };
+                let target_set = HarnessSet::new([target_id.clone()])
+                    .expect("one reconciliation target is unique");
+                let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+                    .expect("bounded conditional profile process limits are valid");
+                let json_limits = JsonLimits::new(256 * 1024, 64)
+                    .expect("bounded conditional profile JSON limits are valid");
+                let (authorized, next_outcome) =
+                    super::conditional_profile::filter_targets_for_capability(
+                        self.registry,
+                        &documents.config,
+                        &target_set,
+                        resource.scope(),
+                        &paths,
+                        process_limits,
+                        json_limits,
+                        &SystemFileSystem,
+                        &CapabilityId::new("managed.projection")
+                            .expect("static reconciliation capability is valid"),
+                        outcome,
+                    );
+                outcome = next_outcome;
+                if authorized.is_none() {
+                    continue;
+                }
+            }
             let child_scope = scope_args_for_scope(resource.scope());
             let (source, name) = reconciliation_source_and_name(resource);
             let child_target = TargetArgs {

@@ -334,6 +334,14 @@ fn observe_component(
             }
         }
     };
+    if activation == ProfileComponentActivation::TrustRequired {
+        findings.push(component_finding(
+            target,
+            ObservationFindingCode::TrustRequired,
+            ObservationSeverity::Warning,
+            spec.package,
+        ));
+    }
 
     ProfileComponentObservation::new(
         native(spec.package),
@@ -547,6 +555,7 @@ fn component_finding(
 
 fn summary_for(code: ObservationFindingCode) -> ObservationSummary {
     match code {
+        ObservationFindingCode::TrustRequired => ObservationSummary::TrustRequired,
         ObservationFindingCode::NativeStateUnreadable => ObservationSummary::NativeStateUnreadable,
         ObservationFindingCode::NativeShapeUnsupported => {
             ObservationSummary::NativeShapeUnsupported
@@ -576,12 +585,14 @@ fn native(value: &str) -> NativeId {
 mod tests {
     use super::*;
     use skilltap_core::{
-        domain::{CapabilityScope, ObservationFieldCode, Scope},
+        domain::{CapabilityScope, ObservationFieldCode, ObservationFindingCode, Scope},
         runtime::{
             Environment, EnvironmentVariable, PlatformPaths, SupportedPlatform, SystemFileSystem,
         },
     };
-    use skilltap_test_support::TempRoot;
+    use skilltap_test_support::{
+        ConditionalFixtureCase, ConditionalTargetFixture, IsolatedMachine, TempRoot,
+    };
     use std::{collections::BTreeMap, ffi::OsString, fs};
 
     #[derive(Default)]
@@ -608,6 +619,15 @@ mod tests {
         environment.0.insert(
             EnvironmentVariable::Home.as_str(),
             OsString::from(root.join("home").to_string_lossy().as_ref()),
+        );
+        PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap()
+    }
+
+    fn isolated_paths(machine: &IsolatedMachine) -> PlatformPaths {
+        let mut environment = TestEnvironment::default();
+        environment.0.insert(
+            EnvironmentVariable::Home.as_str(),
+            OsString::from(machine.home().to_string_lossy().as_ref()),
         );
         PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap()
     }
@@ -646,6 +666,93 @@ mod tests {
             HOOK_ENTRYPOINT,
         );
         paths
+    }
+
+    #[test]
+    fn conditional_fixture_matrix_keeps_component_facts_separate_and_stable() {
+        for case in ConditionalFixtureCase::ALL {
+            let machine = IsolatedMachine::new("pi-profile-matrix").unwrap();
+            let fixture = ConditionalTargetFixture::pi(case);
+            let roots = fixture.install(&machine).unwrap();
+            let paths = isolated_paths(&machine);
+            let project = AbsolutePath::new(roots.project().to_string_lossy()).unwrap();
+            let scope = if case == ConditionalFixtureCase::ProjectTrust {
+                Scope::Project(project)
+            } else {
+                Scope::Global
+            };
+            let report = PiConditionalProfile
+                .inspect_components(&context(&scope, &paths))
+                .unwrap();
+            let mcp = report.components().get(&native(MCP_PACKAGE)).unwrap();
+            let hooks = report.components().get(&native(HOOK_PACKAGE)).unwrap();
+            assert_eq!(report.components().len(), 2, "case {case:?}");
+            assert_eq!(mcp.package, native(MCP_PACKAGE));
+            assert_eq!(hooks.package, native(HOOK_PACKAGE));
+            match case {
+                ConditionalFixtureCase::Exact => {
+                    assert_eq!(hooks.activation, ProfileComponentActivation::Inert);
+                    assert_eq!(mcp.compatibility, ProfileComponentCompatibility::Compatible);
+                }
+                ConditionalFixtureCase::HooksConfigured => assert_eq!(
+                    hooks.activation,
+                    ProfileComponentActivation::ConfiguredUnverified
+                ),
+                ConditionalFixtureCase::MissingMcp => {
+                    assert_eq!(mcp.presence, ProfileComponentPresence::Missing);
+                    assert_eq!(hooks.presence, ProfileComponentPresence::Present);
+                }
+                ConditionalFixtureCase::MissingHooks => {
+                    assert_eq!(mcp.presence, ProfileComponentPresence::Present);
+                    assert_eq!(hooks.presence, ProfileComponentPresence::Missing);
+                }
+                ConditionalFixtureCase::MismatchedPackage => assert_eq!(
+                    mcp.compatibility,
+                    ProfileComponentCompatibility::Incompatible
+                ),
+                ConditionalFixtureCase::UnknownMcpVersion => {
+                    assert_eq!(mcp.compatibility, ProfileComponentCompatibility::Unverified)
+                }
+                ConditionalFixtureCase::UnknownHookVersion => assert_eq!(
+                    hooks.compatibility,
+                    ProfileComponentCompatibility::Unverified
+                ),
+                ConditionalFixtureCase::MalformedSettings => assert!(report.findings().iter().any(
+                    |finding| finding.code() == ObservationFindingCode::NativeShapeUnsupported
+                )),
+                ConditionalFixtureCase::MalformedManifest => {
+                    assert!(
+                        report.findings().iter().any(|finding| finding.code()
+                            == ObservationFindingCode::NativeEntryMalformed)
+                    )
+                }
+                ConditionalFixtureCase::ProjectTrust => {
+                    assert_eq!(hooks.declared_scope, Some(CapabilityScope::Project));
+                    assert_eq!(hooks.activation, ProfileComponentActivation::TrustRequired);
+                    assert!(
+                        report
+                            .findings()
+                            .iter()
+                            .any(|finding| finding.code() == ObservationFindingCode::TrustRequired)
+                    );
+                }
+            }
+            let profile = PiConditionalProfile.select_compiled_profile(
+                &NativeVersion::new(CORE_VERSION).unwrap(),
+                report.components(),
+            );
+            if matches!(
+                case,
+                ConditionalFixtureCase::Exact
+                    | ConditionalFixtureCase::HooksConfigured
+                    | ConditionalFixtureCase::ProjectTrust
+            ) {
+                assert_eq!(profile.profile_id().unwrap().as_str(), COMPOUND_PROFILE_ID);
+            } else {
+                assert!(profile.profile_id().is_none(), "case {case:?}");
+            }
+            assert!(profile.mutation_capabilities().is_none());
+        }
     }
 
     #[test]

@@ -9,7 +9,10 @@ use std::{
 };
 
 use skilltap_core::{
-    domain::{AbsolutePath, HarnessId, RelativeArtifactPath, ResolvedRevision},
+    domain::{
+        AbsolutePath, CapabilityId, CapabilitySupport, ConditionalProfileObservation, HarnessId,
+        NativeVersion, RelativeArtifactPath, ResolvedRevision, Scope,
+    },
     runtime::{
         ConfinedFileSystem, DirectoryIdentity, DirectoryPublishOutcome, DirectoryTreeFileSystem,
         Environment, EnvironmentVariable, ExternalTreeLimits, FileMetadata, FileSystem,
@@ -22,9 +25,10 @@ use skilltap_core::{
     },
 };
 use skilltap_test_support::{
-    FakeHarnessProfile, FakeNativeMode, FakeNativeProcess, ManagedAcceptanceCheck,
-    ManagedAcceptanceEvidence, ManagedAcceptanceScenario, ManagedProjectionProfile, TempRoot,
-    managed_acceptance_matrix, snapshot_tree,
+    ConditionalFixtureCase, ConditionalTargetFixture, FakeHarnessProfile, FakeNativeMode,
+    FakeNativeProcess, IsolatedMachine, ManagedAcceptanceCheck, ManagedAcceptanceEvidence,
+    ManagedAcceptanceScenario, ManagedProjectionProfile, TempRoot, managed_acceptance_matrix,
+    snapshot_tree,
 };
 
 use super::*;
@@ -1135,6 +1139,66 @@ fn fake_managed_projection_uses_the_exact_global_and_project_scopes() {
     );
     assert_eq!(repeated.result, ResultClass::Completed, "{repeated:?}");
     assert_changed(&repeated, false);
+}
+
+#[test]
+fn conditional_profile_application_guard_blocks_every_fixture_case_without_widening() {
+    for case in ConditionalFixtureCase::ALL {
+        let machine = IsolatedMachine::new("pi-application-matrix").unwrap();
+        let fixture = ConditionalTargetFixture::pi(case);
+        let roots = fixture.install(&machine).unwrap();
+        let paths = PlatformPaths::resolve_for(
+            SupportedPlatform::Linux,
+            &FixtureEnvironment {
+                home: machine.home().as_os_str().to_owned(),
+                config: machine.configuration_home().as_os_str().to_owned(),
+                cache: machine.cache_home().as_os_str().to_owned(),
+            },
+        )
+        .unwrap();
+        let project = AbsolutePath::new(roots.project().to_string_lossy()).unwrap();
+        let scope = if case == ConditionalFixtureCase::ProjectTrust {
+            Scope::Project(project)
+        } else {
+            Scope::Global
+        };
+        let profile = skilltap_harnesses::PiConditionalProfile::static_ref();
+        let report = profile
+            .inspect_components(&skilltap_harnesses::ConditionalProfileContext {
+                scope: &scope,
+                paths: &paths,
+                filesystem: &SystemFileSystem,
+                json_limits: skilltap_core::runtime::JsonLimits::new(64 * 1024, 32).unwrap(),
+                maximum_manifest_bytes: 64 * 1024,
+            })
+            .unwrap();
+        let compiled = profile
+            .select_compiled_profile(&NativeVersion::new("0.80.6").unwrap(), report.components());
+        let observation = ConditionalProfileObservation::compose(compiled, report).unwrap();
+        assert_eq!(
+            observation.mutation_support(&scope, &CapabilityId::new("skill.install").unwrap()),
+            CapabilitySupport::Unsupported,
+            "case {case:?} must remain observe-only"
+        );
+        assert_eq!(
+            observation
+                .profile()
+                .observation_capabilities()
+                .for_scope(&scope)
+                .support(&CapabilityId::new("component.mcp").unwrap()),
+            Some(CapabilitySupport::Unverified),
+            "case {case:?} must retain MCP narrowing"
+        );
+        assert_eq!(
+            observation
+                .profile()
+                .observation_capabilities()
+                .for_scope(&scope)
+                .support(&CapabilityId::new("component.hook").unwrap()),
+            Some(CapabilitySupport::Unsupported),
+            "case {case:?} must retain hook narrowing"
+        );
+    }
 }
 
 #[test]

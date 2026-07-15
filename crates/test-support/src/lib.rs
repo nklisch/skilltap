@@ -3,6 +3,7 @@
 #[cfg(unix)]
 mod barrier;
 mod candidate_admission;
+mod conditional_profile;
 #[cfg(unix)]
 mod external_tree;
 #[cfg(unix)]
@@ -17,6 +18,10 @@ pub use candidate_admission::{
     BLOCKED_CANDIDATES, CandidateAdmissionCheck, CandidateAdmissionEvidence,
     CandidateAdmissionReport, CandidateDisposition, blocked_candidate_admission_reports,
     candidate_admission_gate,
+};
+pub use conditional_profile::{
+    ConditionalFixtureCase, ConditionalFixtureRoots, ConditionalTargetFixture,
+    ConditionalTargetProfile,
 };
 #[cfg(unix)]
 pub use external_tree::{ExternalTreeFixture, InjectedIoFault, ReplacementRace};
@@ -111,6 +116,8 @@ pub struct IsolatedMachine {
     codex_home: PathBuf,
     claude_home: PathBuf,
     kiro_home: PathBuf,
+    pi_home: PathBuf,
+    pi_package_dir: PathBuf,
     working_directory: PathBuf,
 }
 
@@ -123,6 +130,8 @@ impl IsolatedMachine {
         let codex_home = home.join(".codex");
         let claude_home = home.join(".claude");
         let kiro_home = home.join(".kiro");
+        let pi_home = home.join(".pi/agent");
+        let pi_package_dir = pi_home.join("npm");
         let working_directory = root.join("work");
         fs::create_dir_all(&home)?;
         fs::create_dir_all(&configuration_home)?;
@@ -130,6 +139,8 @@ impl IsolatedMachine {
         fs::create_dir_all(&codex_home)?;
         fs::create_dir_all(&claude_home)?;
         fs::create_dir_all(&kiro_home)?;
+        fs::create_dir_all(&pi_home)?;
+        fs::create_dir_all(&pi_package_dir)?;
         fs::create_dir_all(&working_directory)?;
         Ok(Self {
             _root: root,
@@ -139,6 +150,8 @@ impl IsolatedMachine {
             codex_home,
             claude_home,
             kiro_home,
+            pi_home,
+            pi_package_dir,
             working_directory,
         })
     }
@@ -165,6 +178,14 @@ impl IsolatedMachine {
 
     pub fn kiro_home(&self) -> &Path {
         &self.kiro_home
+    }
+
+    pub fn pi_home(&self) -> &Path {
+        &self.pi_home
+    }
+
+    pub fn pi_package_dir(&self) -> &Path {
+        &self.pi_package_dir
     }
 
     pub fn working_directory(&self) -> &Path {
@@ -291,6 +312,8 @@ mod tests {
         assert!(machine.cache_home().is_dir());
         assert!(machine.codex_home().is_dir());
         assert!(machine.claude_home().is_dir());
+        assert!(machine.pi_home().is_dir());
+        assert!(machine.pi_package_dir().is_dir());
         assert!(machine.working_directory().is_dir());
         assert_ne!(machine.home(), machine.configuration_home());
         assert_ne!(machine.home(), machine.working_directory());

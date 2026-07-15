@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    FakeNativeBuilder, FakeNativeMode, FakeNativeProcess, IsolatedMachine,
-    ManagedProjectionProfile, snapshot_tree,
+    ConditionalTargetProfile, FakeNativeBuilder, FakeNativeMode, FakeNativeProcess,
+    IsolatedMachine, ManagedProjectionProfile, snapshot_tree,
 };
 
 /// How a fake harness responds to its version probe.
@@ -72,6 +72,7 @@ pub struct FakeHarnessProfile {
     version_response: VersionResponse,
     lifecycle_dialect: LifecycleDialect,
     managed_projection: Option<ManagedProjectionProfile>,
+    conditional_profile: Option<ConditionalTargetProfile>,
     layout: AcceptanceLayoutSpec,
 }
 
@@ -85,6 +86,7 @@ impl FakeHarnessProfile {
             },
             lifecycle_dialect: LifecycleDialect::Codex,
             managed_projection: Some(ManagedProjectionProfile::codex()),
+            conditional_profile: None,
             layout: AcceptanceLayoutSpec {
                 global_skill_base: LayoutBase::Home,
                 global_mcp_base: LayoutBase::Codex,
@@ -99,14 +101,21 @@ impl FakeHarnessProfile {
     }
 
     pub const fn pi() -> Self {
+        Self::pi_with_version("0.80.6")
+    }
+
+    /// Build the same isolated Pi layout with a deliberately non-attested core
+    /// version for unknown-version detection tests.
+    pub const fn pi_with_version(version: &'static str) -> Self {
         Self {
             id: "pi",
             version_response: VersionResponse::TextSuffix {
-                version: "0.80.6",
+                version,
                 suffix: "",
             },
             lifecycle_dialect: LifecycleDialect::None,
             managed_projection: None,
+            conditional_profile: Some(ConditionalTargetProfile::pi()),
             layout: AcceptanceLayoutSpec {
                 global_skill_base: LayoutBase::Home,
                 global_mcp_base: LayoutBase::Home,
@@ -129,6 +138,7 @@ impl FakeHarnessProfile {
             },
             lifecycle_dialect: LifecycleDialect::Claude,
             managed_projection: None,
+            conditional_profile: None,
             layout: AcceptanceLayoutSpec {
                 global_skill_base: LayoutBase::Claude,
                 global_mcp_base: LayoutBase::Claude,
@@ -159,6 +169,12 @@ impl FakeHarnessProfile {
     /// Managed fallback acceptance contract, when this harness opts in.
     pub const fn managed_projection(&self) -> Option<&ManagedProjectionProfile> {
         self.managed_projection.as_ref()
+    }
+
+    /// Conditional-target layout data, when this harness has separately
+    /// observed companion evidence.
+    pub const fn conditional_profile(&self) -> Option<&ConditionalTargetProfile> {
+        self.conditional_profile.as_ref()
     }
 
     /// Compose this harness identity with an orthogonal process behavior.

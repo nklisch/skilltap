@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-pi-acceptance
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-pi
 depends_on: [epic-expanded-harness-support-pi-integration]
@@ -79,10 +79,26 @@ conditional-target matrix proves:
   ownership, profile, warnings, next actions, and result class.
 - Immediate status/profile repeats are identical and side-effect-free.
 
+## Implementation evidence
+
+- Added dependency-neutral conditional-target fixtures carrying the exact Pi
+  version/layout data and isolated global/project settings, package, skill, and
+  sibling roots. The matrix covers exact, configured hooks, missing companions,
+  mismatched identity, unknown versions, malformed boundaries, and project trust.
+- Added focused adapter, detection, application, and compiled tests for
+  component separation, narrowing-only authority, companion non-adoption,
+  plain/JSON parity, repeated read-only observation, and byte-preserving
+  mutation denial.
+- Kept `plan` and empty `sync` as attention/no-op outcomes with zero operations;
+  they are read-only or have no selected mutation. Added a reconciliation guard
+  for conditional-target instruction sync so a real adopted-resource sync cannot
+  write before profile authorization. Daemon bookkeeping is asserted separately
+  from Pi native bytes and Pi target state.
+- The mutable managed-adapter matrix remains intentionally inapplicable; no
+  mutable Pi acceptance claim is made.
+
 ## Verification
 
-Run focused contract/compiled tests, then
-`cargo test --workspace --all-targets`, all-feature Clippy with warnings denied,
-`cargo fmt --all -- --check`, and `git diff --check`. After green verification,
-advance this child directly to `done`; the parent feature then enters its one
-standard independent review pass.
+Focused tests, `cargo test --workspace --all-targets`, strict all-feature
+Clippy, `cargo fmt --all -- --check`, and `git diff --check` pass. The child is
+done; the parent feature remains untouched for its independent review pass.

@@ -117,7 +117,7 @@ fn previously_attempted(
 }
 
 impl StatusApplication<'_> {
-    fn lifecycle_platform_paths(
+    pub(super) fn lifecycle_platform_paths(
         &self,
     ) -> Result<PlatformPaths, skilltap_core::runtime::RuntimeError> {
         #[cfg(test)]

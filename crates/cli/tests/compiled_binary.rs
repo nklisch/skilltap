@@ -8,8 +8,9 @@ use std::{
 use serde_json::Value;
 use skilltap_core::VERSION;
 use skilltap_test_support::{
-    FakeHarnessProfile, FakeLifecycleAction, FakeNativeMode, FakeNativeProcess, IsolatedMachine,
-    blocked_candidate_admission_reports, captured_stderr, captured_stdout, compiled_binary,
+    ConditionalFixtureCase, ConditionalTargetFixture, FakeHarnessProfile, FakeLifecycleAction,
+    FakeNativeMode, FakeNativeProcess, IsolatedMachine, blocked_candidate_admission_reports,
+    captured_stderr, captured_stdout, compiled_binary,
 };
 
 const ENABLED_CONFIG: &str = r#"schema = 1
@@ -65,6 +66,26 @@ fn fake_harness(machine: &IsolatedMachine, profile: &FakeHarnessProfile) -> Inst
         _fixture: fixture,
         executable,
     }
+}
+
+fn conditional_pi(
+    machine: &IsolatedMachine,
+    case: ConditionalFixtureCase,
+) -> (
+    InstalledFakeHarness,
+    skilltap_test_support::ConditionalFixtureRoots,
+) {
+    let profile = FakeHarnessProfile::pi();
+    let pi = fake_harness(machine, &profile);
+    let roots = ConditionalTargetFixture::pi(case)
+        .install(machine)
+        .expect("install isolated conditional Pi fixture");
+    write_owned(
+        machine,
+        "config.toml",
+        &native_config_with_pi(pi.executable()),
+    );
+    (pi, roots)
 }
 
 fn binary() -> std::path::PathBuf {
@@ -574,6 +595,188 @@ fn compiled_invalid_invocations_use_safe_channels_and_boundaries() {
 }
 
 #[test]
+fn pi_status_fixture_matrix_is_component_separated_repeatable_and_side_effect_free() {
+    for case in ConditionalFixtureCase::ALL {
+        let machine = machine();
+        let (_pi, roots) = conditional_pi(&machine, case);
+        let before = (
+            skilltap_test_support::snapshot_tree(roots.pi_home()).unwrap(),
+            skilltap_test_support::snapshot_tree(roots.project()).unwrap(),
+            skilltap_test_support::snapshot_tree(&config_root(&machine)).unwrap(),
+        );
+        let mut arguments = vec!["status", "--target", "pi", "--json"];
+        let project = roots.project().to_str().unwrap();
+        if case == ConditionalFixtureCase::ProjectTrust {
+            arguments = vec!["status", "--target", "pi", "--project", project, "--json"];
+        }
+        let first = run(&machine, &arguments);
+        assert_code(&first, 2);
+        let second = run(&machine, &arguments);
+        assert_code(&second, 2);
+        assert_eq!(
+            first.stdout, second.stdout,
+            "status repeat changed for {case:?}"
+        );
+        let plain_arguments = arguments
+            .iter()
+            .copied()
+            .filter(|argument| *argument != "--json")
+            .collect::<Vec<_>>();
+        let plain = run(&machine, &plain_arguments);
+        assert_code(&plain, 2);
+        let plain_output = captured_stdout(&plain).unwrap();
+        assert!(plain_output.contains("Result: attention required"));
+        let value = json(&first);
+        let rows = value["resources"].as_array().unwrap();
+        let components = rows
+            .iter()
+            .filter_map(|row| row["fields"]["component"].as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            components,
+            [
+                "core",
+                "@hsingjui/pi-hooks",
+                "pi-mcp-adapter",
+                "compound_profile"
+            ],
+            "case {case:?}"
+        );
+        for row in rows {
+            if row["fields"]["harness"] == "pi" && row["fields"]["component"].is_string() {
+                assert_eq!(row["fields"]["adoptable"], false, "row: {row}");
+                assert_eq!(row["fields"]["mutation_authorized"], false, "row: {row}");
+                assert!(plain_output.contains(row["id"].as_str().unwrap()));
+                assert!(plain_output.contains(row["status"].as_str().unwrap()));
+                for (name, field) in row["fields"].as_object().unwrap() {
+                    let rendered = field
+                        .as_str()
+                        .map_or_else(|| field.to_string(), ToOwned::to_owned);
+                    assert!(
+                        plain_output.contains(name) && plain_output.contains(&rendered),
+                        "plain output omitted {name}={rendered} for {}: {plain_output}",
+                        row["id"]
+                    );
+                }
+            }
+        }
+        for warning in value["warnings"].as_array().unwrap() {
+            assert!(plain_output.contains(warning["code"].as_str().unwrap()));
+        }
+        for action in value["next_actions"].as_array().unwrap() {
+            assert!(plain_output.contains(action["code"].as_str().unwrap()));
+        }
+        let row_for = |component: &str| {
+            rows.iter()
+                .find(|row| row["fields"]["component"] == component)
+                .unwrap()
+        };
+        assert_eq!(row_for("core")["fields"]["version"], "0.80.6");
+        assert_eq!(
+            row_for("compound_profile")["fields"]["mutation_authorized"],
+            false
+        );
+        match case {
+            ConditionalFixtureCase::Exact => {
+                assert_eq!(row_for("pi-mcp-adapter")["fields"]["version"], "2.11.0");
+                assert_eq!(
+                    row_for("@hsingjui/pi-hooks")["fields"]["activation"],
+                    "inert"
+                );
+            }
+            ConditionalFixtureCase::HooksConfigured => assert_eq!(
+                row_for("@hsingjui/pi-hooks")["fields"]["activation"],
+                "configured_unverified"
+            ),
+            ConditionalFixtureCase::MissingMcp => {
+                assert_eq!(row_for("pi-mcp-adapter")["status"], "missing")
+            }
+            ConditionalFixtureCase::MissingHooks => {
+                assert_eq!(row_for("@hsingjui/pi-hooks")["status"], "missing")
+            }
+            ConditionalFixtureCase::MismatchedPackage => assert_eq!(
+                row_for("pi-mcp-adapter")["fields"]["compatibility"],
+                "incompatible"
+            ),
+            ConditionalFixtureCase::UnknownMcpVersion => assert_eq!(
+                row_for("pi-mcp-adapter")["fields"]["compatibility"],
+                "unverified"
+            ),
+            ConditionalFixtureCase::UnknownHookVersion => assert_eq!(
+                row_for("@hsingjui/pi-hooks")["fields"]["compatibility"],
+                "unverified"
+            ),
+            ConditionalFixtureCase::MalformedSettings
+            | ConditionalFixtureCase::MalformedManifest
+            | ConditionalFixtureCase::ProjectTrust => {}
+        }
+        let expected_warning = match case {
+            ConditionalFixtureCase::MissingMcp | ConditionalFixtureCase::MissingHooks => {
+                Some("profile.component.missing")
+            }
+            ConditionalFixtureCase::MismatchedPackage => Some("profile.component.incompatible"),
+            ConditionalFixtureCase::UnknownMcpVersion
+            | ConditionalFixtureCase::UnknownHookVersion => {
+                Some("profile.component.version-unverified")
+            }
+            ConditionalFixtureCase::MalformedSettings => Some("native.shape.unsupported"),
+            ConditionalFixtureCase::MalformedManifest => Some("native.entry.malformed"),
+            ConditionalFixtureCase::ProjectTrust => Some("trust.required"),
+            ConditionalFixtureCase::Exact | ConditionalFixtureCase::HooksConfigured => None,
+        };
+        if let Some(code) = expected_warning {
+            assert!(
+                value["warnings"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|warning| warning["code"] == code),
+                "missing {code} for {case:?}: {value}"
+            );
+        }
+        let after = (
+            skilltap_test_support::snapshot_tree(roots.pi_home()).unwrap(),
+            skilltap_test_support::snapshot_tree(roots.project()).unwrap(),
+            skilltap_test_support::snapshot_tree(&config_root(&machine)).unwrap(),
+        );
+        assert_eq!(before, after, "status mutated fixture for {case:?}");
+    }
+}
+
+#[test]
+fn pi_unknown_core_version_never_gains_a_compiled_compound_profile() {
+    let machine = machine();
+    let profile = FakeHarnessProfile::pi_with_version("0.80.7");
+    let pi = fake_harness(&machine, &profile);
+    ConditionalTargetFixture::pi(ConditionalFixtureCase::Exact)
+        .install(&machine)
+        .unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config_with_pi(pi.executable()),
+    );
+    let status = run(&machine, &["status", "--target", "pi", "--json"]);
+    assert_code(&status, 2);
+    let value = json(&status);
+    let core = value["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["fields"]["component"] == "core")
+        .unwrap();
+    let compound = value["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["fields"]["component"] == "compound_profile")
+        .unwrap();
+    assert_eq!(core["fields"]["version"], "0.80.7");
+    assert_eq!(compound["fields"]["profile_id"], "unknown");
+    assert_eq!(compound["fields"]["mutation_authorized"], false);
+}
+
+#[test]
 fn pi_status_separates_core_companions_and_compound_profile_without_adoption_resources() {
     let machine = machine();
     let pi = fake_harness(&machine, &FakeHarnessProfile::pi());
@@ -736,6 +939,228 @@ fn pi_skill_and_plugin_mutations_block_before_inventory_or_native_projection() {
     assert_eq!(plugin.status.code(), Some(2));
     assert!(!config_root(&machine).join("inventory.toml").exists());
     assert!(!config_root(&machine).join("state.json").exists());
+}
+
+#[test]
+fn pi_mutation_matrix_denies_before_execution_and_preserves_bytes_and_journal() {
+    let machine = machine();
+    let (_pi, roots) = conditional_pi(&machine, ConditionalFixtureCase::Exact);
+    fs::create_dir_all(roots.native_project_skills()).unwrap();
+    fs::write(roots.native_project_skills().join("user-owned"), b"keep").unwrap();
+    let source = machine.working_directory().join("pi-mutation-source");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: pi-mutation\ndescription: guard fixture\n---\nbody\n",
+    )
+    .unwrap();
+    let project = roots.project().to_str().unwrap();
+    let source = source.to_str().unwrap();
+    let commands: Vec<Vec<&str>> = vec![
+        vec!["skill", "install", source, "--target", "pi", "--json"],
+        vec![
+            "skill",
+            "install",
+            source,
+            "--project",
+            project,
+            "--target",
+            "pi",
+            "--yes",
+            "--json",
+        ],
+        vec![
+            "plugin",
+            "install",
+            "formatter@example",
+            "--target",
+            "pi",
+            "--json",
+        ],
+        vec![
+            "plugin",
+            "update",
+            "formatter@example",
+            "--target",
+            "pi",
+            "--json",
+        ],
+        vec![
+            "plugin",
+            "remove",
+            "formatter@example",
+            "--target",
+            "pi",
+            "--json",
+        ],
+        vec![
+            "marketplace",
+            "add",
+            "fixture-source",
+            "--target",
+            "pi",
+            "--json",
+        ],
+        vec![
+            "marketplace",
+            "update",
+            "example",
+            "--target",
+            "pi",
+            "--json",
+        ],
+        vec![
+            "marketplace",
+            "remove",
+            "example",
+            "--target",
+            "pi",
+            "--json",
+        ],
+    ];
+    let before = (
+        skilltap_test_support::snapshot_tree(roots.pi_home()).unwrap(),
+        skilltap_test_support::snapshot_tree(roots.project()).unwrap(),
+        skilltap_test_support::snapshot_tree(&config_root(&machine)).unwrap(),
+    );
+    for command in commands {
+        let output = run(&machine, &command);
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "Pi mutation command {:?} was not denied: {}",
+            command,
+            String::from_utf8_lossy(&output.stdout)
+        );
+        let value = json(&output);
+        assert!(
+            value["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(
+                    |error| error["code"] == "conditional_profile_mutation_unauthorized"
+                        || error["code"] == "conditional_profile_unavailable"
+                ),
+            "Pi mutation command {:?} lacked a conditional denial: {value}",
+            command
+        );
+        let after = (
+            skilltap_test_support::snapshot_tree(roots.pi_home()).unwrap(),
+            skilltap_test_support::snapshot_tree(roots.project()).unwrap(),
+            skilltap_test_support::snapshot_tree(&config_root(&machine)).unwrap(),
+        );
+        assert_eq!(
+            before, after,
+            "Pi mutation command changed bytes: {command:?}"
+        );
+    }
+    let plan = run(&machine, &["plan", "--target", "pi", "--json"]);
+    assert_code(&plan, 2);
+    let plan_value = json(&plan);
+    assert!(plan_value["errors"].as_array().unwrap().is_empty());
+    assert_eq!(plan_value["summary"]["operations"], 0);
+    assert!(
+        plan_value["next_actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|action| action["code"] == "inspect_conditional_profile")
+    );
+    let sync = run(&machine, &["sync", "--target", "pi", "--json"]);
+    assert_code(&sync, 2);
+    let sync_value = json(&sync);
+    assert!(sync_value["errors"].as_array().unwrap().is_empty());
+    assert!(sync_value["operations"].as_array().unwrap().is_empty());
+    let before_daemon = (
+        skilltap_test_support::snapshot_tree(roots.pi_home()).unwrap(),
+        skilltap_test_support::snapshot_tree(roots.project()).unwrap(),
+    );
+    let daemon = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&daemon, 2);
+    let daemon_value = json(&daemon);
+    assert!(daemon_value["operations"].as_array().unwrap().is_empty());
+    let after_daemon = (
+        skilltap_test_support::snapshot_tree(roots.pi_home()).unwrap(),
+        skilltap_test_support::snapshot_tree(roots.project()).unwrap(),
+    );
+    assert_eq!(
+        before_daemon, after_daemon,
+        "daemon changed Pi native bytes"
+    );
+    let state = fs::read(config_root(&machine).join("state.json")).unwrap();
+    let state_value: Value = serde_json::from_slice(&state).unwrap();
+    assert!(state_value["resources"].as_array().unwrap().is_empty());
+    assert!(state_value["harnesses"].as_array().unwrap().is_empty());
+    assert_eq!(state_value["daemon_run"]["safe_operations"], 0);
+    assert_eq!(state_value["daemon_run"]["pending_operations"], 0);
+    assert!(!String::from_utf8_lossy(&state).contains("pi"));
+    assert!(!roots.canonical_project_skills().exists());
+    assert_eq!(
+        fs::read(roots.native_project_skills().join("user-owned")).unwrap(),
+        b"keep"
+    );
+}
+
+#[test]
+fn pi_sync_with_an_adopted_skill_denies_before_target_state_write() {
+    let machine = machine();
+    let (_pi, roots) = conditional_pi(&machine, ConditionalFixtureCase::Exact);
+    let skill = machine.home().join(".agents/skills/adopted-pi-skill");
+    fs::create_dir_all(&skill).unwrap();
+    fs::write(
+        skill.join("SKILL.md"),
+        "---\nname: adopted-pi-skill\ndescription: sync guard fixture\n---\nbody\n",
+    )
+    .unwrap();
+    let adoption = run(&machine, &["adopt", "--from", "pi", "--json"]);
+    assert!(matches!(adoption.status.code(), Some(0) | Some(2)));
+    let inventory_before = fs::read(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(
+        String::from_utf8_lossy(&inventory_before).contains("kind = \"standalone_skill\""),
+        "adoption: {} inventory: {}",
+        stdout(&adoption),
+        String::from_utf8_lossy(&inventory_before)
+    );
+    assert!(!String::from_utf8_lossy(&inventory_before).contains("pi-mcp-adapter"));
+    assert!(!String::from_utf8_lossy(&inventory_before).contains("pi-hooks"));
+    let state_before = config_root(&machine).join("state.json");
+    let state_before = state_before
+        .exists()
+        .then(|| fs::read(state_before).unwrap());
+    let native_before = (
+        skilltap_test_support::snapshot_tree(roots.pi_home()).unwrap(),
+        skilltap_test_support::snapshot_tree(roots.project()).unwrap(),
+    );
+
+    let sync = run(&machine, &["sync", "--target", "pi", "--json"]);
+    assert_code(&sync, 2);
+    let value = json(&sync);
+    assert!(
+        value["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| error["code"] == "conditional_profile_mutation_unauthorized"),
+        "sync output: {value}"
+    );
+    assert!(value["operations"].as_array().unwrap().is_empty());
+    assert_eq!(
+        fs::read(config_root(&machine).join("inventory.toml")).unwrap(),
+        inventory_before
+    );
+    let state_after = config_root(&machine).join("state.json");
+    assert_eq!(
+        state_before,
+        state_after.exists().then(|| fs::read(state_after).unwrap())
+    );
+    assert_eq!(
+        native_before,
+        (
+            skilltap_test_support::snapshot_tree(roots.pi_home()).unwrap(),
+            skilltap_test_support::snapshot_tree(roots.project()).unwrap(),
+        )
+    );
 }
 
 #[test]

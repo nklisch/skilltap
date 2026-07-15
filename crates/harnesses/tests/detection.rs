@@ -12,8 +12,8 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    ClaudeAdapter, CodexAdapter, CodexConfigError, DetectionError, HarnessAdapter, ProbeError,
-    TargetRegistry,
+    ClaudeAdapter, CodexAdapter, CodexConfigError, DetectionError, HarnessAdapter, PiAdapter,
+    ProbeError, TargetRegistry,
     detect_configured_installation as detect_configured_installation_with_environment,
     detect_installation as detect_installation_with_environment, observe_codex_canonical_resources,
     observe_codex_config, probe_profile, unreachable_installation,
@@ -225,6 +225,46 @@ fn exact_real_versions_are_reachable_and_select_exact_profiles() {
                 .mutation_capabilities()
                 .is_some()
         );
+    }
+}
+
+#[test]
+fn pi_profiles_preserve_exact_bytes_and_unknown_versions_remain_observe_only() {
+    for (profile, expected_version, mutation_authorized) in [
+        (FakeHarnessProfile::pi(), "0.80.6", false),
+        (
+            FakeHarnessProfile::pi_with_version("0.80.7"),
+            "0.80.7",
+            false,
+        ),
+    ] {
+        let (root, fixture) = install_profile(&profile, "pi");
+        let (process_limits, json_limits) = limits();
+        let installation = detect_installation(
+            PiAdapter::static_ref(),
+            root.path().as_os_str().to_os_string(),
+            process_limits,
+            json_limits,
+        )
+        .unwrap();
+        let HarnessReachability::Reachable { native_version, .. } = installation.reachability()
+        else {
+            panic!("Pi fixture must remain reachable");
+        };
+        assert_eq!(native_version.as_str(), expected_version);
+        assert_eq!(
+            fixture.captured_invocation().unwrap().arguments(),
+            &[b"--version".to_vec()]
+        );
+        assert_eq!(
+            PiAdapter::static_ref()
+                .select_profile(native_version)
+                .mutation_capabilities()
+                .is_some(),
+            mutation_authorized
+        );
+        assert!(PiAdapter::static_ref().conditional_profile().is_some());
+        assert!(PiAdapter::static_ref().native_lifecycle().is_none());
     }
 }
 
