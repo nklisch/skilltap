@@ -1,5 +1,23 @@
 # Changelog
 
+## v3.1.0
+
+### Features
+
+- Register the expanded target set with per-component support tiers: verified
+  Codex, Claude Code, Factory Droid, Qwen Code, Gemini CLI, and OpenCode
+  profiles; mixed GitHub Copilot CLI support; declaration-managed Kiro, Kimi,
+  Mistral Vibe, Kilo Code, Junie, and Amp surfaces; and observe-only Pi,
+  Cursor, Zoo Code, and ZCode profiles.
+- Project managed plugin projection is target-agnostic for adapters with a safe
+  complete-skill or MCP surface, while ownership, drift checks, rollback, and
+  status remain bound to the exact selected target.
+- Project skills use one canonical `.agents/skills/<name>/` tree and
+  registry-derived target links or no-link projections where each harness
+  requires them.
+- Daemon update runs refresh registered marketplaces before resolving managed
+  plugin versions and Git-backed skill revisions.
+
 ## v3.0.3
 
 ### Fixes

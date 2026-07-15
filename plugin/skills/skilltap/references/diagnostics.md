@@ -2,8 +2,10 @@
 
 Use `status` to observe and `plan` to understand proposed mutations. Explain
 the result in plain language, preserve the command's next actions, and use
-`--json` when another agent needs stable fields. JSON and plain output have the
-same semantics; executable help is authoritative for exact field names.
+`--json` when another agent needs stable fields. Use `skilltap harness list` to
+confirm registered target ids before narrowing with `--target <id>` or selecting
+every enabled harness with `--target all`. JSON and plain output have the same
+semantics; executable help is authoritative for exact field names.
 
 ## Result meanings
 
@@ -31,10 +33,10 @@ missing. Report each resource and harness result separately.
 
 `bootstrap` verifies a supported release artifact, checksum, platform, file
 permissions, and installed binary identity. It reports the binary separately
-from Claude and Codex setup. Codex's unsupported native plugin path is an
-actionable attention result, not permission to write a cache. A failed download,
-wrong version, non-executable artifact, or post-publish identity failure keeps
-the previous binary intact.
+from first-party Codex and Claude plugin setup. Codex's unsupported native
+plugin path is an actionable attention result, not permission to write a cache.
+A failed download, wrong version, non-executable artifact, or post-publish
+identity failure keeps the previous binary intact.
 
 The binary update policy is latest-compatible: same-major updates may be
 applied safely, `off` disables checks, and a major-version update needs an

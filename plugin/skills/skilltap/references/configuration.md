@@ -1,7 +1,7 @@
 # Configuration and state layout
 
 skilltap describes one person's managed computer. It does not create a
-repository manifest for collaborators and it does not replace Codex or Claude
+repository manifest for collaborators and it does not replace native harness
 configuration formats.
 
 ## Machine-wide state
@@ -40,9 +40,10 @@ the current directory; `--project <path>` selects the project containing that
 path. `--all-scopes` includes global plus every project already recorded in
 inventory. `--project` and `--all-scopes` cannot be combined.
 
-`--target codex`, `--target claude`, and `--target all` select harnesses
-independently of scope. Omitted targets use the enabled harness policy. An
-installed binary is not enabled until `harness enable` records that policy.
+Use `skilltap harness list` for registered target ids. `--target <id>` selects
+one harness and `--target all` selects every enabled harness independently of
+scope. Omitted targets use the enabled harness policy. An installed binary is
+not enabled until `harness enable` records that policy.
 
 Skills are complete directories with a top-level `SKILL.md`; references,
 scripts, and assets remain siblings in the same managed tree. Compatible

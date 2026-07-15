@@ -1,7 +1,7 @@
 ---
 id: gate-docs-self-hosted-skill-registry
 kind: story
-stage: implementing
+stage: done
 tags: [documentation]
 parent: null
 depends_on: []
@@ -28,3 +28,7 @@ The canonical registry contains seventeen targets, and the root, foundation, and
 
 ## Required edit
 Replace the overall Codex/Claude-only framing with supported-agent-harness language. Point target selection to `skilltap harness list` and retain `--target all` as the stable all-target example. Update the same stale assertions in `plugin/skills/skilltap/references/configuration.md` and `diagnostics.md` without adding historical prose.
+
+## Verification
+
+Updated the self-hosted skill and configuration/diagnostics references; verified target-selection language against the canonical registry and preserved Codex/Claude-only instruction-bridge claims. `git diff --check` passes.

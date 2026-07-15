@@ -1,12 +1,12 @@
 ---
 name: skilltap
-description: Use skilltap when setting up, inspecting, reconciling, or troubleshooting the local Codex and Claude Code environment.
+description: Use skilltap when setting up, inspecting, reconciling, or troubleshooting supported local agent harnesses.
 ---
 
 # Operate the local agent environment
 
-skilltap is a non-interactive control plane for one person's local Codex and
-Claude Code setup. It manages explicitly selected resources, shared
+skilltap is a non-interactive control plane for one person's supported local
+agent harnesses. It manages explicitly selected resources, shared
 instructions, native marketplaces/plugins, complete skill directories, and
 drift between desired and observed state. It does not search, rank, browse, or
 recommend skills, plugins, or marketplaces.
@@ -18,16 +18,18 @@ recommend skills, plugins, or marketplaces.
   verified installer from `https://skilltap.dev/install.sh` (or Homebrew) only
   with the user's authorization. After the binary exists, run `skilltap
   bootstrap --help`, then `skilltap bootstrap`. Treat the binary result and
-  each harness result as separate facts; Codex may report an unsupported
-  native plugin-install path.
+  each first-party plugin target result as separate facts; Codex may report an
+  unsupported native plugin-install path.
 - “What is wrong?” or a health check: run `skilltap status --help`, then
   `skilltap status --json` when structured output is useful.
 - Existing native resources should become managed: use `skilltap adopt` after
   reviewing status. Adoption observes and records; it does not push changes.
 - “What would change?”: run `skilltap plan` and explain its operations,
   compatibility, ownership, and next actions before mutating anything.
-- Apply an accepted plan: run `skilltap sync`. Use `--target` to narrow
-  Codex/Claude and the scope flags to choose global or a project.
+- Apply an accepted plan: run `skilltap sync`. Use `skilltap harness list` to
+  inspect target ids, `--target <id>` to narrow to one harness, `--target all`
+  to select every enabled harness, and scope flags to choose global or a
+  project.
 - Explicit marketplace/plugin/skill lifecycle work: use the matching
   `marketplace`, `plugin`, or `skill` command family. Instructions use
   `instructions`; automatic safe updates use the optional `daemon`.
@@ -41,9 +43,10 @@ table into this skill.
 
 Commands are global by default. `--project` selects the current project,
 `--project <path>` selects another project, and `--all-scopes` covers global
-plus managed projects. `--target codex`, `--target claude`, or `--target all`
-select harnesses independently of scope. Use `--json` when passing a stable
-result to another agent or script.
+plus managed projects. Use `skilltap harness list` for registered target ids;
+`--target <id>` selects one harness and `--target all` selects every enabled
+harness independently of scope. Use `--json` when passing a stable result to
+another agent or script.
 
 Plans disclose partial or destructive consequences. `--yes` acknowledges a
 reported partial foreground operation; it does not bypass invalid input,

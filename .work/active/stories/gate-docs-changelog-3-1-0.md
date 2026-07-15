@@ -1,7 +1,7 @@
 ---
 id: gate-docs-changelog-3-1-0
 kind: story
-stage: implementing
+stage: done
 tags: [documentation]
 parent: null
 depends_on: []
@@ -30,3 +30,7 @@ Release `3.1.0` is at quality-gate with the expanded harness support epic, targe
 
 ## Required edit
 Add `## v3.1.0` above `v3.0.3`. Summarize the expanded registry and its verified, mixed, declaration-managed, and observe-only tiers; target-agnostic managed projection; canonical project skill links; and marketplace refresh at the start of daemon updates. State active truth without historical transition prose.
+
+## Verification
+
+Added the `v3.1.0` entry with the expanded support tiers, managed projection, canonical project skill tree, and daemon marketplace refresh. `git diff --check` passes.
