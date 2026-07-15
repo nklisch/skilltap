@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-trust-interactive-junie
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-trust-interactive
 depends_on: [epic-expanded-harness-support-trust-interactive-contract-lock]
@@ -15,7 +15,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-14
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 # Implement the Junie Adapter
@@ -47,8 +47,9 @@ interactive extension/cache state as read-only native evidence.
 - Observe native extension declarations as `Declared`. Do not expose native
   extension mutation, write extension caches/state as an API, drive
   `/extensions`, or infer effective load from cache presence.
-- MCP files are `Declared`; only the locked deterministic probe may emit
-  `Effective`. Interactive-only evidence keeps this story blocked.
+- MCP files are declaration-managed and remain `Unverified`; no deterministic
+  effective probe is exposed. Interactive-only evidence is preserved as an
+  explicit boundary.
 - Unknown profiles and narrowed capabilities perform no writes.
 
 ## Acceptance evidence
@@ -58,12 +59,14 @@ interactive extension/cache state as read-only native evidence.
   including repair, removal, complete siblings, and immediate-repeat no-op.
 - Global/project MCP merge, precedence, unknown preservation, owned drift,
   conflict, removal, rollback, and repeat behavior.
-- Declared/effective inactive, disabled, failed, and auth-required status with
-  stable findings and no raw payload channels.
+- Declared-only status, effective-unobserved/interactive attention, and
+  auth-required boundaries have stable findings with no raw payload channels.
 - Native extension declarations/caches remain byte-for-byte unchanged.
 
 ## Ordering
 
-Consumes the locked native contract. The final acceptance story waits for this
-and the Amp checkpoint; child verification advances directly to done without a
-separate review pass.
+Consumes the locked native contract. Verified on both scopes with exact
+identity, preservation, ownership/drift, removal, repeatability, unknown
+version, and no-native-lifecycle/effective-probe assertions. The final
+acceptance story waits for this and the Amp checkpoint; child verification
+advances directly to done without a separate review pass.
