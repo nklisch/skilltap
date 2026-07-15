@@ -11,7 +11,7 @@ use skilltap_core::{
 
 use crate::{
     CanonicalObservation, DetectionError,
-    adapters::{ClaudeAdapter, CodexAdapter},
+    adapters::{ClaudeAdapter, CodexAdapter, GeminiAdapter},
     lifecycle::{NativeLifecycleError, NativeLifecycleRequest},
     managed_projection::ManagedProjectionPort,
 };
@@ -232,7 +232,11 @@ impl TargetRegistry {
     }
 
     pub fn canonical() -> Self {
-        Self::new([CodexAdapter::static_ref(), ClaudeAdapter::static_ref()])
+        Self::new([
+            CodexAdapter::static_ref(),
+            ClaudeAdapter::static_ref(),
+            GeminiAdapter::static_ref(),
+        ])
     }
 
     pub fn contains(&self, id: &HarnessId) -> bool {
@@ -390,14 +394,14 @@ mod tests {
 
         assert_eq!(
             registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
-            ["codex", "claude"]
+            ["codex", "claude", "gemini"]
         );
-        assert_eq!(registry.iter().count(), 2);
+        assert_eq!(registry.iter().count(), 3);
         assert_eq!(registry.first_party_targets().count(), 2);
         assert!(
             registry
                 .adapter(&HarnessId::new("gemini").unwrap())
-                .is_none()
+                .is_some()
         );
     }
 

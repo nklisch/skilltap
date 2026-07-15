@@ -63,7 +63,7 @@ impl HarnessAdapter for ClaudeAdapter {
             version,
             "2.1.201",
             "claude-2-1-201",
-            adapter_helpers::compiled_capabilities(true, true),
+            adapter_helpers::compiled_capabilities(true, true, false),
         )
     }
 

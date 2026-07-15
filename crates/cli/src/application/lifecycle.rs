@@ -416,7 +416,7 @@ impl StatusApplication<'_> {
         };
         let native_port = NativeLifecyclePort::new_bound_with_environment(
             builder.native_bindings,
-            native_environment,
+            native_environment.clone(),
         )
         .with_foreign_operations(builder.foreign_operations.iter().cloned());
         let port = HybridLifecyclePort {
@@ -424,6 +424,12 @@ impl StatusApplication<'_> {
             managed: ManagedProjectLifecyclePort {
                 filesystem: self.managed_project_filesystem(),
                 entries: builder.managed_entries,
+                registry: self.registry,
+                config: &documents.config,
+                environment: &native_environment,
+                search_path: std::env::var_os("PATH"),
+                process_limits,
+                json_limits,
             },
         };
         let journal = StateExecutionJournal {
@@ -566,6 +572,40 @@ impl StatusApplication<'_> {
                 resource.scope(),
             ))
         }) {
+            let managed_profile = configured_adapter_profile(
+                self.registry,
+                &documents.config,
+                target,
+                NativeProfileRequest {
+                    scope: resource.scope(),
+                    environment: native_environment,
+                    process_limits,
+                    json_limits,
+                    search_path: std::env::var_os("PATH"),
+                    capability_name: "managed.projection",
+                },
+            );
+            let managed_profile = match managed_profile {
+                Ok(Some(profile)) if profile.capability == CapabilitySupport::Supported => profile,
+                Ok(Some(_)) | Ok(None) | Err(_) => {
+                    *outcome = outcome.clone().with_warning(
+                        Warning::new(
+                            "daemon_managed_projection_unavailable",
+                            "The selected managed projection is not mutation-authorized for this target and scope.",
+                        )
+                        .with_context("target", target.as_str())
+                        .with_context("scope", scope_label(resource.scope())),
+                    );
+                    return self.add_daemon_blocked_operation(
+                        builder,
+                        resource,
+                        target,
+                        operation_id,
+                        dependencies,
+                        outcome,
+                    );
+                }
+            };
             let observed_at = timestamp;
             match plan_managed_lifecycle(
                 self.registry,
@@ -573,6 +613,7 @@ impl StatusApplication<'_> {
                 kind,
                 &request,
                 resource,
+                managed_profile,
                 ManagedProjectPlanContext {
                     scope: resource.scope(),
                     documents,
@@ -628,6 +669,7 @@ impl StatusApplication<'_> {
             target,
             NativeProfileRequest {
                 scope: resource.scope(),
+                environment: native_environment,
                 process_limits,
                 json_limits,
                 search_path: std::env::var_os("PATH"),
@@ -1146,6 +1188,53 @@ impl StatusApplication<'_> {
                         if removal && !desired_here && !owned_here {
                             continue;
                         }
+                        let managed_profile = configured_adapter_profile(
+                            self.registry,
+                            &documents.config,
+                            target_id,
+                            NativeProfileRequest {
+                                scope: concrete_scope,
+                                environment: &native_environment,
+                                process_limits,
+                                json_limits,
+                                search_path: search_path.clone(),
+                                capability_name: "managed.projection",
+                            },
+                        );
+                        let managed_profile = match managed_profile {
+                            Ok(Some(profile))
+                                if profile.capability == CapabilitySupport::Supported =>
+                            {
+                                profile
+                            }
+                            Ok(Some(_)) | Ok(None) => {
+                                outcome.result = ResultClass::AttentionRequired;
+                                outcome = outcome.with_warning(
+                                    Warning::new(
+                                        "native_capability_unverified",
+                                        "The selected managed projection is not verified for mutation.",
+                                    )
+                                    .with_context("harness", target_id.as_str())
+                                    .with_context("scope", scope_label(concrete_scope)),
+                                );
+                                continue;
+                            }
+                            Err(error) => {
+                                outcome.result = ResultClass::AttentionRequired;
+                                let binary = documents
+                                    .config
+                                    .harnesses()
+                                    .get(target_id)
+                                    .map(|policy| policy.binary.as_str())
+                                    .unwrap_or_else(|| target_id.as_str());
+                                let diagnostic =
+                                    detection_diagnostic(&error, target_id.as_str(), binary);
+                                outcome = outcome
+                                    .with_warning(diagnostic.warning)
+                                    .with_next_action(diagnostic.next_action);
+                                continue;
+                            }
+                        };
                         let observed_at = match timestamp {
                             Ok(timestamp) => timestamp,
                             Err(()) => {
@@ -1162,6 +1251,7 @@ impl StatusApplication<'_> {
                             kind,
                             &request,
                             &resource,
+                            managed_profile,
                             ManagedProjectPlanContext {
                                 scope: concrete_scope,
                                 documents: &documents,
@@ -1196,6 +1286,7 @@ impl StatusApplication<'_> {
                         target_id,
                         NativeProfileRequest {
                             scope: concrete_scope,
+                            environment: &native_environment,
                             process_limits,
                             json_limits,
                             search_path: search_path.clone(),
@@ -1602,14 +1693,22 @@ impl StatusApplication<'_> {
             }
         };
         let foreign_operations = managed_entries.keys().cloned().collect::<Vec<_>>();
-        let native_port =
-            NativeLifecyclePort::new_per_operation_with_environment(requests, native_environment)
-                .with_foreign_operations(foreign_operations);
+        let native_port = NativeLifecyclePort::new_per_operation_with_environment(
+            requests,
+            native_environment.clone(),
+        )
+        .with_foreign_operations(foreign_operations);
         let port = HybridLifecyclePort {
             native: native_port,
             managed: ManagedProjectLifecyclePort {
                 filesystem: self.managed_project_filesystem(),
                 entries: managed_entries,
+                registry: self.registry,
+                config: &documents.config,
+                environment: &native_environment,
+                search_path: search_path.clone(),
+                process_limits,
+                json_limits,
             },
         };
         let acknowledged_omissions = seeds

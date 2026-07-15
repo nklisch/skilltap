@@ -246,11 +246,18 @@ impl<T: FileSystem + DirectoryTreeFileSystem + skilltap_core::runtime::ConfinedF
 pub(super) struct ManagedProjectLifecyclePort<'a> {
     pub(super) filesystem: &'a dyn ManagedProjectFileSystem,
     pub(super) entries: BTreeMap<OperationId, ManagedProjectLifecycleEntry>,
+    pub(super) registry: &'a skilltap_harnesses::TargetRegistry,
+    pub(super) config: &'a ConfigDocument,
+    pub(super) environment: &'a BTreeMap<OsString, OsString>,
+    pub(super) search_path: Option<OsString>,
+    pub(super) process_limits: ProcessLimits,
+    pub(super) json_limits: JsonLimits,
 }
 
 pub(super) struct ManagedProjectLifecycleEntry {
     pub(super) files: Vec<ManagedProjectFileWrite>,
     pub(super) trees: Vec<ManagedProjectPluginWrite>,
+    pub(super) profile: ConfiguredAdapterProfile,
 }
 
 pub(super) struct ManagedProjectFileWrite {
@@ -297,6 +304,22 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                     "A managed project lifecycle request no longer belongs to the plan.",
                 )
             })?;
+            if operation.target() != &entry.profile.target
+                || operation.scope() != &entry.profile.scope
+                || !managed_profile_matches(
+                    self.registry,
+                    self.config,
+                    self.environment,
+                    self.search_path.clone(),
+                    self.process_limits,
+                    self.json_limits,
+                    &entry.profile,
+                )
+            {
+                return Err(managed_project_apply_failure(
+                    "The managed projection executable, version, or scoped compiled profile changed after planning.",
+                ));
+            }
             for file in &entry.files {
                 if !operation
                     .affected_surfaces()

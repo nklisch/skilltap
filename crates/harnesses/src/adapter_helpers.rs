@@ -80,6 +80,7 @@ pub(crate) fn select_profile(
 pub(crate) fn compiled_capabilities(
     plugin_update: bool,
     project_lifecycle: bool,
+    managed_projection: bool,
 ) -> ScopedCapabilitySets {
     let support = |capability: &str, supported: bool| {
         (
@@ -93,6 +94,7 @@ pub(crate) fn compiled_capabilities(
     };
     let global = CapabilitySet::new([
         support("harness.observe", true),
+        support("managed.projection", managed_projection),
         support("plugin.install", true),
         support("plugin.remove", true),
         support("plugin.update", plugin_update),
@@ -102,6 +104,7 @@ pub(crate) fn compiled_capabilities(
     ]);
     let project = CapabilitySet::new([
         support("harness.observe", true),
+        support("managed.projection", managed_projection),
         support("plugin.install", project_lifecycle),
         support("plugin.remove", project_lifecycle),
         support("plugin.update", project_lifecycle),

@@ -18,13 +18,13 @@ use skilltap_core::{
     },
     storage::{
         ConfigDocument, ConfigRepository, FileConfigRepository, FileInventoryRepository,
-        FileStateRepository, StateRepository,
+        FileStateRepository, HarnessBinary, StateRepository,
     },
 };
 use skilltap_test_support::{
-    FakeHarnessProfile, ManagedAcceptanceCheck, ManagedAcceptanceEvidence,
-    ManagedAcceptanceScenario, ManagedProjectionProfile, TempRoot, managed_acceptance_matrix,
-    snapshot_tree,
+    FakeHarnessProfile, FakeNativeMode, FakeNativeProcess, ManagedAcceptanceCheck,
+    ManagedAcceptanceEvidence, ManagedAcceptanceScenario, ManagedProjectionProfile, TempRoot,
+    managed_acceptance_matrix, snapshot_tree,
 };
 
 use super::*;
@@ -552,22 +552,43 @@ impl skilltap_harnesses::HarnessAdapter for FakeManagedAdapter {
 
     fn decode_version(
         &self,
-        _stdout: &[u8],
+        stdout: &[u8],
     ) -> Result<skilltap_core::domain::NativeVersion, DetectionError> {
-        skilltap_core::domain::NativeVersion::new("test")
+        let text = std::str::from_utf8(stdout)
+            .map_err(|_| DetectionError::InvalidVersion)?
+            .trim();
+        let version = text
+            .strip_prefix("codex-cli ")
+            .ok_or(DetectionError::InvalidVersion)?;
+        skilltap_core::domain::NativeVersion::new(version)
             .map_err(|_| DetectionError::InvalidVersion)
     }
 
     fn select_profile(
         &self,
-        _version: &skilltap_core::domain::NativeVersion,
+        version: &skilltap_core::domain::NativeVersion,
     ) -> skilltap_core::domain::CapabilityProfileSelection {
-        skilltap_core::domain::CapabilityProfileSelection::unknown_version(
-            skilltap_core::domain::ScopedCapabilitySets::new(
-                skilltap_core::domain::CapabilitySet::default(),
-                skilltap_core::domain::CapabilitySet::default(),
-            ),
-        )
+        let capability = skilltap_core::domain::CapabilityId::new("managed.projection")
+            .expect("test capability is valid");
+        let capabilities = skilltap_core::domain::ScopedCapabilitySets::new(
+            skilltap_core::domain::CapabilitySet::new([(
+                capability.clone(),
+                skilltap_core::domain::CapabilitySupport::Supported,
+            )]),
+            skilltap_core::domain::CapabilitySet::new([(
+                capability,
+                skilltap_core::domain::CapabilitySupport::Supported,
+            )]),
+        );
+        if version.as_str() == "0.144.1" {
+            skilltap_core::domain::CapabilityProfileSelection::verified(
+                skilltap_core::domain::CapabilityProfileId::new("fake-managed")
+                    .expect("test profile id is valid"),
+                capabilities,
+            )
+        } else {
+            skilltap_core::domain::CapabilityProfileSelection::unknown_version(capabilities)
+        }
     }
 
     fn observe(
@@ -858,14 +879,15 @@ fn fake_target() -> TargetArgs {
     }
 }
 
-fn enable_fake_managed_only(paths: &PlatformPaths) {
+fn enable_fake_managed_only(paths: &PlatformPaths, binary: &Path) {
     let filesystem = SystemFileSystem;
     let repository =
         FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let binary = HarnessBinary::new(binary.to_string_lossy().into_owned()).unwrap();
     repository
         .replace(
             &ConfigDocument::defaults()
-                .with_harness_enabled(&fake_target_id(), true)
+                .with_harness_policy(&fake_target_id(), true, Some(&binary))
                 .unwrap(),
         )
         .unwrap();
@@ -1150,6 +1172,7 @@ fn evidence(checks: impl IntoIterator<Item = ManagedAcceptanceCheck>) -> Managed
 
 struct FakeManagedFixture {
     _root: TempRoot,
+    _native: FakeNativeProcess,
     paths: PlatformPaths,
     project: PathBuf,
     source: PathBuf,
@@ -1159,7 +1182,14 @@ impl FakeManagedFixture {
     fn new(prefix: &str, markers: &[&str]) -> Self {
         let root = TempRoot::new(prefix).unwrap();
         let paths = isolated_platform_paths(&root);
-        enable_fake_managed_only(&paths);
+        let native = FakeHarnessProfile::codex()
+            .builder(FakeNativeMode::VersionKnown)
+            .build()
+            .unwrap();
+        let binary = native
+            .install_alias(&root.join("fake-bin"), "fake-managed")
+            .unwrap();
+        enable_fake_managed_only(&paths, &binary);
         let project = root.join("project");
         let source = root.join("marketplace");
         fs::create_dir_all(&project).unwrap();
@@ -1186,6 +1216,7 @@ impl FakeManagedFixture {
         }
         Self {
             _root: root,
+            _native: native,
             paths,
             project,
             source,

@@ -2,10 +2,14 @@ mod claude;
 mod codex;
 mod codex_managed;
 mod file_managed;
+mod gemini;
+mod gemini_managed;
 
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
 pub use codex_managed::CodexManagedProjection;
+pub use gemini::{GeminiAdapter, GeminiEffectiveStateProbe, GeminiSkillProjection};
+pub use gemini_managed::GeminiManagedProjection;
 
 #[cfg(test)]
 mod tests {
@@ -30,6 +34,13 @@ mod tests {
                 ClaudeAdapter::static_ref(),
                 "2.1.201",
                 "claude-2-1-201",
+                true,
+                true,
+            ),
+            (
+                GeminiAdapter::static_ref(),
+                "0.50.0",
+                "gemini-0-50-0",
                 true,
                 true,
             ),
@@ -128,9 +139,13 @@ mod tests {
         let claude = registry
             .adapter(&HarnessId::new("claude").unwrap())
             .unwrap();
+        let gemini = registry
+            .adapter(&HarnessId::new("gemini").unwrap())
+            .unwrap();
 
         assert_eq!(codex.identity(), CodexAdapter::static_ref().identity());
         assert_eq!(claude.identity(), ClaudeAdapter::static_ref().identity());
+        assert_eq!(gemini.identity(), GeminiAdapter::static_ref().identity());
         assert!(codex.native_lifecycle().is_some());
         assert!(codex.instruction_bridge().is_some());
         assert!(codex.skill_projection().is_some());
@@ -139,6 +154,11 @@ mod tests {
         assert!(claude.native_lifecycle().is_some());
         assert!(claude.instruction_bridge().is_some());
         assert!(claude.skill_projection().is_some());
+        assert!(gemini.native_lifecycle().is_none());
+        assert!(gemini.instruction_bridge().is_none());
+        assert!(gemini.skill_projection().is_some());
+        assert!(gemini.managed_projection().is_some());
+        assert!(gemini.effective_state_probe().is_some());
     }
 
     fn support(value: bool) -> CapabilitySupport {

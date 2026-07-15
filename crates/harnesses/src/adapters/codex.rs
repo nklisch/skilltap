@@ -66,7 +66,7 @@ impl HarnessAdapter for CodexAdapter {
             version,
             "0.144.1",
             "codex-0-144-1",
-            adapter_helpers::compiled_capabilities(false, false),
+            adapter_helpers::compiled_capabilities(false, false, true),
         )
     }
 

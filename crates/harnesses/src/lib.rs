@@ -20,6 +20,7 @@ pub mod adapters;
 pub use adapters::{
     ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection, CodexAdapter,
     CodexInstructionBridge, CodexLifecycle, CodexManagedProjection, CodexSkillProjection,
+    GeminiAdapter, GeminiEffectiveStateProbe, GeminiManagedProjection, GeminiSkillProjection,
 };
 
 mod plugin_graph;

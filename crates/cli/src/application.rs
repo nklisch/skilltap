@@ -10,17 +10,17 @@ use skilltap_core::{
         apply_adoption, plan_adoption,
     },
     domain::{
-        AbsolutePath, ArtifactFile, CapabilityId, CapabilitySupport, CommandArgument,
-        CompatibilityClass, ComponentGraph, ConfiguredBinary, DesiredOrigin, DesiredResource,
-        EvidenceCode, EvidenceDetail, Fingerprint, GitCommit, HarnessId, HarnessObservation,
-        HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
-        ObservationAdapterError, ObservationBatch, ObservationEvidence, ObservationFields,
-        ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
-        ObservationRequest, ObservationSeverity, ObservationSubject, ObservationSummary,
-        ObservationTarget, ObservedResource, OperationAction, OperationDependency, OperationId,
-        OperationOutcome, OperationResult, OperationSelector, Ownership, Plan, ProfileAuthority,
-        Provenance, ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope, Source,
-        SourceKind, SourceLocator, UpdateIntent,
+        AbsolutePath, ArtifactFile, CapabilityId, CapabilityProfileSelection, CapabilitySupport,
+        CommandArgument, CompatibilityClass, ComponentGraph, ConfiguredBinary, DesiredOrigin,
+        DesiredResource, EvidenceCode, EvidenceDetail, ExecutableIdentity, Fingerprint, GitCommit,
+        HarnessId, HarnessObservation, HarnessObservationOutcome, HarnessReachability, HarnessSet,
+        NativeId, NativeVersion, ObservationAdapterError, ObservationBatch, ObservationEvidence,
+        ObservationFields, ObservationFinding, ObservationFindingCode, ObservationKey,
+        ObservationLayer, ObservationRequest, ObservationSeverity, ObservationSubject,
+        ObservationSummary, ObservationTarget, ObservedResource, OperationAction,
+        OperationDependency, OperationId, OperationOutcome, OperationResult, OperationSelector,
+        Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth, ResourceId, ResourceKey,
+        ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
     },
     executor::{ExecutionError, ExecutionJournal, ExecutionPort, execute_plan},
     foreground_update::{
@@ -1237,10 +1237,22 @@ fn derive_skill_name(
 
 struct NativeProfileRequest<'a> {
     scope: &'a Scope,
+    environment: &'a BTreeMap<OsString, OsString>,
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
-    search_path: Option<std::ffi::OsString>,
+    search_path: Option<OsString>,
     capability_name: &'a str,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ConfiguredAdapterProfile {
+    target: HarnessId,
+    scope: Scope,
+    configured: ConfiguredBinary,
+    executable: ExecutableIdentity,
+    native_version: NativeVersion,
+    profile: CapabilityProfileSelection,
+    capability: CapabilitySupport,
 }
 
 struct ConfiguredNativeProfile {
@@ -1251,16 +1263,13 @@ struct ConfiguredNativeProfile {
     capability: CapabilitySupport,
 }
 
-fn configured_native_profile(
+fn configured_adapter_profile(
     registry: &skilltap_harnesses::TargetRegistry,
     config: &ConfigDocument,
     target: &HarnessId,
     request: NativeProfileRequest<'_>,
-) -> Result<Option<ConfiguredNativeProfile>, DetectionError> {
+) -> Result<Option<ConfiguredAdapterProfile>, DetectionError> {
     let Some(adapter) = registry.adapter(target) else {
-        return Ok(None);
-    };
-    let Some(lifecycle) = adapter.native_lifecycle() else {
         return Ok(None);
     };
     let Some(policy) = config.harnesses().get(target) else {
@@ -1270,28 +1279,19 @@ fn configured_native_profile(
     let Some(configured) = configured_binary(binary).ok() else {
         return Ok(None);
     };
-    let Some(executable) = NativeId::new(binary).ok() else {
-        return Ok(None);
-    };
-    let Some(environment) = PlatformPaths::resolve(&ProcessEnvironment)
-        .ok()
-        .and_then(|paths| {
-            paths
-                .native_process_environment(request.search_path.clone())
-                .ok()
-        })
-    else {
-        return Ok(None);
-    };
     let installation = detect_configured_installation(
         adapter,
         configured.clone(),
         request.search_path,
-        &environment,
+        request.environment,
         request.process_limits,
         request.json_limits,
     )?;
-    let HarnessReachability::Reachable { native_version, .. } = installation.reachability() else {
+    let HarnessReachability::Reachable {
+        executable,
+        native_version,
+    } = installation.reachability()
+    else {
         return Ok(None);
     };
     let profile = adapter.select_profile(native_version);
@@ -1306,13 +1306,72 @@ fn configured_native_profile(
                 .support(&capability_id)
         })
         .unwrap_or(CapabilitySupport::Unverified);
-    Ok(Some(ConfiguredNativeProfile {
+    Ok(Some(ConfiguredAdapterProfile {
         target: target.clone(),
-        lifecycle,
+        scope: request.scope.clone(),
         configured,
-        executable,
+        executable: executable.clone(),
+        native_version: native_version.clone(),
+        profile,
         capability,
     }))
+}
+
+fn configured_native_profile(
+    registry: &skilltap_harnesses::TargetRegistry,
+    config: &ConfigDocument,
+    target: &HarnessId,
+    request: NativeProfileRequest<'_>,
+) -> Result<Option<ConfiguredNativeProfile>, DetectionError> {
+    let Some(runtime) = configured_adapter_profile(registry, config, target, request)? else {
+        return Ok(None);
+    };
+    let Some(lifecycle) = registry
+        .adapter(target)
+        .and_then(|adapter| adapter.native_lifecycle())
+    else {
+        return Ok(None);
+    };
+    let Some(policy) = config.harnesses().get(target) else {
+        return Ok(None);
+    };
+    let Some(executable) = NativeId::new(policy.binary.as_str()).ok() else {
+        return Ok(None);
+    };
+    Ok(Some(ConfiguredNativeProfile {
+        target: runtime.target,
+        lifecycle,
+        configured: runtime.configured,
+        executable,
+        capability: runtime.capability,
+    }))
+}
+
+fn managed_profile_matches(
+    registry: &skilltap_harnesses::TargetRegistry,
+    config: &ConfigDocument,
+    environment: &BTreeMap<OsString, OsString>,
+    search_path: Option<OsString>,
+    process_limits: ProcessLimits,
+    json_limits: JsonLimits,
+    expected: &ConfiguredAdapterProfile,
+) -> bool {
+    configured_adapter_profile(
+        registry,
+        config,
+        &expected.target,
+        NativeProfileRequest {
+            scope: &expected.scope,
+            environment,
+            process_limits,
+            json_limits,
+            search_path,
+            capability_name: "managed.projection",
+        },
+    )
+    .ok()
+    .flatten()
+    .is_some_and(|actual| actual == *expected)
 }
 
 fn command_arguments(arguments: Vec<std::ffi::OsString>) -> Result<Vec<CommandArgument>, ()> {
@@ -1365,6 +1424,7 @@ fn plan_managed_lifecycle(
     kind: NativeLifecycleKind,
     request: &NativeLifecycleSpec,
     resource: &DesiredResource,
+    profile: ConfiguredAdapterProfile,
     context: ManagedProjectPlanContext<'_>,
 ) -> Result<PlannedManagedProjectLifecycle, ErrorDetail> {
     let adapter = registry.adapter(target).ok_or_else(|| {
@@ -1632,7 +1692,11 @@ fn plan_managed_lifecycle(
     };
     Ok(PlannedManagedProjectLifecycle {
         operation,
-        entry: ManagedProjectLifecycleEntry { files, trees },
+        entry: ManagedProjectLifecycleEntry {
+            files,
+            trees,
+            profile,
+        },
         seed,
     })
 }
