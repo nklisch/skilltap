@@ -12,27 +12,36 @@ Combining per-projection current and desired byte parts into `ManagedProjectionP
 
 ### Assemble trees, files, manifests, and dual fingerprints
 
-**File**: `crates/harnesses/src/adapters/gemini_managed.rs:77`
+**File**: `crates/harnesses/src/adapters/agy.rs:233`
 
 ```rust
 fn plan_plugin(
     context: &ManagedProjectionContext<'_>,
 ) -> Result<ManagedProjectionPlan, ManagedProjectionError> {
     let plugin = match &context.input {
-        ManagedProjectionInput::Apply { checkout } => {
-            Some(read_selected_plugin(context, checkout)?)
-        }
+        ManagedProjectionInput::Apply { checkout } => Some(load_selected_plugin(
+            context,
+            checkout,
+            MARKETPLACE_DOCUMENTS,
+        )?),
         ManagedProjectionInput::Remove => None,
     };
-    let (skill_root, config_root) = destination_paths(context)?;
-    let (trees, mut current_parts, mut desired_parts, skill_manifest) =
-        plan_skills_with_policy(&skill_root, context, plugin.as_ref(), SKILL_POLICY)?;
+    let skill_root = AbsolutePath::new(match context.scope {
+        Scope::Global => format!("{}/.gemini/config/skills", context.paths.home().as_str()),
+        Scope::Project(project) => format!("{}/.agents/skills", project.as_str()),
+    })
+    .map_err(|_| destination_error())?;
+    let (trees, mut current_parts, mut desired_parts, mut manifest) =
+        plan_skills(&skill_root, context, plugin.as_ref())?;
     let (mcp_write, mcp_manifest) = plan_mcp(
-        &config_root,
         context,
         plugin.as_ref(),
         (&mut current_parts, &mut desired_parts),
     )?;
+    manifest.extend(mcp_manifest);
+    // Sort and deduplicate the manifest, reject empty projections, and clear
+    // the manifest when the plan removes the owned projection.
+    let removal = matches!(context.input, ManagedProjectionInput::Remove);
 
     Ok(ManagedProjectionPlan {
         trees,
@@ -48,7 +57,7 @@ fn plan_plugin(
 
 ### Reject a replaced owned skill tree
 
-**File**: `crates/harnesses/src/adapters/configuration_constrained/common.rs:341`
+**File**: `crates/harnesses/src/adapters/configuration_constrained/common.rs:336`
 
 ```rust
 fn verify_prior_skill(

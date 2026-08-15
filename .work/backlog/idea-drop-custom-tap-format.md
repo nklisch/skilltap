@@ -6,7 +6,7 @@ tags: [refactor, infra]
 
 Remove all skilltap-only custom `.json` / `tap.json` shapes and align installs
 exclusively to the standard formats published by major providers (Claude Code
-plugin manifests, Codex plugin format, Gemini agent format, generic SKILL.md,
+plugin manifests, Codex plugin format, Antigravity plugin format, generic SKILL.md,
 MCP server specs, raw agent files, etc.). The thesis: skilltap should not be
 in the business of inventing or promoting its own popular plugin/skill format
 — it tracks and multi-installs whatever the upstream ecosystems publish.

@@ -499,3 +499,21 @@ candidate review. Numbers are append-only within this corpus.
 - **Ingested:** 2026-07-12
 - **Themes:** pi, mcp, packages, configuration, scopes
 - **Covers:** Optional package-provided MCP, global/project files, precedence, and status behavior.
+
+### 56. Antigravity customizations 1.1.13 — `antigravity-customizations-1-1-13`
+
+- **Source class:** installed product documentation
+- **Author:** Google
+- **Source path:** `/home/nathan/.gemini/antigravity-cli/builtin/skills/agy-customizations`
+- **Ingested:** 2026-08-15
+- **Themes:** antigravity, skills, plugins, rules, hooks, mcp, configuration
+- **Covers:** AGY customization roots, formats, discovery, precedence, and documented component schemas.
+
+### 57. Antigravity CLI lifecycle 1.1.13 — `antigravity-cli-lifecycle-1-1-13`
+
+- **Source class:** isolated installed-binary attestation
+- **Author:** Google
+- **Source path:** `/home/nathan/.local/bin/agy`
+- **Ingested:** 2026-08-15
+- **Themes:** antigravity, plugins, lifecycle, configuration
+- **Covers:** Exact version output and isolated local plugin validation, installation, listing, enablement, and removal behavior.

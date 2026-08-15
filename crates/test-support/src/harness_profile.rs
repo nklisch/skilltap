@@ -235,34 +235,6 @@ impl FakeHarnessProfile {
         }
     }
 
-    pub const fn gemini() -> Self {
-        Self {
-            id: "gemini",
-            version_response: VersionResponse::TextSuffix {
-                version: "0.50.0",
-                suffix: "",
-            },
-            lifecycle_dialect: LifecycleDialect::None,
-            managed_projection: Some(ManagedProjectionProfile::new(
-                "gemini",
-                &[],
-                Some(".gemini/settings.json"),
-                ".agents/skills",
-            )),
-            conditional_profile: None,
-            layout: AcceptanceLayoutSpec {
-                global_skill_base: LayoutBase::Home,
-                global_mcp_base: LayoutBase::Home,
-                global_skill: ".agents/skills/contract-skill",
-                global_mcp: ".gemini/settings.json",
-                project_skill: ".agents/skills/contract-skill",
-                project_mcp: ".gemini/settings.json",
-                mcp_initial: br#"{"mcpServers":{"contract":{"command":"contract-server"}}}"#,
-                mcp_reloaded: br#"{"mcpServers":{"contract":{"command":"contract-server-v2"}}}"#,
-            },
-        }
-    }
-
     pub const fn opencode() -> Self {
         Self {
             id: "opencode",
@@ -746,7 +718,6 @@ mod tests {
             FakeHarnessProfile::droid(),
             FakeHarnessProfile::qwen(),
             FakeHarnessProfile::copilot(),
-            FakeHarnessProfile::gemini(),
             FakeHarnessProfile::opencode(),
             FakeHarnessProfile::kiro(),
             FakeHarnessProfile::junie(),
@@ -786,7 +757,6 @@ mod tests {
             Some("copilot")
         );
         for profile in [
-            FakeHarnessProfile::gemini(),
             FakeHarnessProfile::opencode(),
             FakeHarnessProfile::kiro(),
             FakeHarnessProfile::junie(),

@@ -1,5 +1,23 @@
 # Changelog
 
+## v4.0.0
+
+### Breaking changes
+
+- Replace the deprecated `gemini` target with `agy` for Antigravity CLI. Existing
+  `gemini` configuration and inventory must be retargeted explicitly; this
+  release provides no alias or automatic migration.
+
+### Features
+
+- Add an exact Antigravity CLI 1.1.13 profile with complete global and project
+  skill publication.
+- Add declaration-managed global MCP projection through
+  `~/.gemini/config/mcp_config.json`, with preservation, drift detection,
+  rollback, and repeat-idempotence guarantees.
+- Keep project MCP, native plugin lifecycle, and unverified transports blocked
+  until Antigravity documents contracts skilltap can bind and observe safely.
+
 ## v3.1.0
 
 ### Features

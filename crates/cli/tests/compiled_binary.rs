@@ -133,11 +133,11 @@ allow_major = false
     )
 }
 
-fn native_config_with_gemini(codex: &Path, claude: &Path, gemini: &Path) -> String {
+fn native_config_with_agy(codex: &Path, claude: &Path, agy: &Path) -> String {
     format!(
-        "{}\n[harnesses.gemini]\nenabled = true\nbinary = {}\n",
+        "{}\n[harnesses.agy]\nenabled = true\nbinary = {}\n",
         native_config(codex, claude),
-        toml_string(gemini),
+        toml_string(agy),
     )
 }
 
@@ -218,29 +218,6 @@ allow_major = false
 "#,
         toml_string(pi),
     )
-}
-
-fn write_gemini_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
-    let executable = machine.working_directory().join("gemini");
-    fs::write(
-        &executable,
-        format!(
-            "#!/bin/sh\nprintf '%s\\n' {}\n",
-            toml_string(Path::new(version))
-        ),
-    )
-    .expect("write Gemini version fixture");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = fs::metadata(&executable)
-            .expect("read Gemini version fixture")
-            .permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&executable, permissions)
-            .expect("make Gemini version fixture executable");
-    }
-    executable
 }
 
 fn write_opencode_harness(machine: &IsolatedMachine, version: &str) -> PathBuf {
@@ -350,8 +327,8 @@ fn assert_fake_harness_version_only(harness: &InstalledFakeHarness, target: &str
     );
 }
 
-fn write_gemini_marketplace(machine: &IsolatedMachine) -> PathBuf {
-    let source = machine.home().join("gemini-marketplace");
+fn write_demo_marketplace(machine: &IsolatedMachine) -> PathBuf {
+    let source = machine.home().join("demo-marketplace");
     fs::create_dir_all(source.join(".agents/plugins")).unwrap();
     fs::create_dir_all(source.join("plugins/demo/.codex-plugin")).unwrap();
     fs::create_dir_all(source.join("plugins/demo/skills/demo/scripts")).unwrap();
@@ -372,7 +349,7 @@ fn write_gemini_marketplace(machine: &IsolatedMachine) -> PathBuf {
     .unwrap();
     fs::write(
         source.join("plugins/demo/skills/demo/SKILL.md"),
-        "---\nname: demo\ndescription: Gemini compiled fixture\n---\nbody\n",
+        "---\nname: demo\ndescription: Demo compiled fixture\n---\nbody\n",
     )
     .unwrap();
     fs::write(
@@ -395,6 +372,7 @@ fn declaration_target_roots(machine: &IsolatedMachine, target: &str) -> Vec<Path
         machine.home().join(".claude-plugin"),
     ];
     match target {
+        "agy" => roots.push(machine.home().join(".gemini")),
         "kimi" => roots.push(machine.home().join(".kimi")),
         "vibe" => roots.push(machine.home().join(".vibe")),
         "kilo" => roots.push(machine.configuration_home().join("kilo")),
@@ -409,6 +387,14 @@ fn prepare_declaration_target(machine: &IsolatedMachine, target: &str) {
     fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
     fs::create_dir_all(machine.home().join(".claude-plugin")).unwrap();
     match target {
+        "agy" => {
+            fs::create_dir_all(machine.home().join(".gemini/config")).unwrap();
+            fs::write(
+                machine.home().join(".gemini/config/mcp_config.json"),
+                b"{}" as &[u8],
+            )
+            .unwrap();
+        }
         "kimi" => {
             fs::create_dir_all(machine.home().join(".kimi")).unwrap();
             fs::write(machine.home().join(".kimi/mcp.json"), b"{}" as &[u8]).unwrap();
@@ -450,6 +436,7 @@ fn declaration_snapshots(machine: &IsolatedMachine, target: &str) -> Vec<Vec<Nat
 
 fn declaration_skill_candidates(machine: &IsolatedMachine, target: &str) -> Vec<PathBuf> {
     match target {
+        "agy" => vec![machine.home().join(".gemini/config/skills/demo/SKILL.md")],
         "junie" => vec![machine.home().join(".junie/skills/demo/SKILL.md")],
         _ => vec![machine.home().join(".agents/skills/demo/SKILL.md")],
     }
@@ -1695,7 +1682,7 @@ fn observe_only_candidates_have_registry_help_and_zero_native_write_surface() {
         );
     }
 
-    for target in ["gemini", "opencode"] {
+    for target in ["agy", "opencode"] {
         let bootstrap = run(&machine, &["bootstrap", "--target", target, "--json"]);
         assert_code(&bootstrap, 1);
         assert_eq!(
@@ -1793,7 +1780,7 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
     assert!(list_plain.stderr.is_empty());
     assert!(stdout(&list_plain).contains("codex  enabled"));
     assert!(stdout(&list_plain).contains("claude  disabled"));
-    assert!(stdout(&list_plain).contains("gemini  disabled"));
+    assert!(stdout(&list_plain).contains("agy  disabled"));
     assert!(stdout(&list_plain).contains("junie  disabled"));
     assert!(stdout(&list_plain).contains("amp  disabled"));
     assert!(stdout(&list_plain).contains("Result: attention required"));
@@ -2568,7 +2555,7 @@ fn relaxed_junie_and_amp_profiles_project_both_scopes_without_native_processes()
                     "[harnesses.claude]\nenabled = false",
                 );
             write_owned(&machine, "config.toml", &config);
-            let source = write_gemini_marketplace(&machine);
+            let source = write_demo_marketplace(&machine);
             let project = machine.home().join("relaxed-project");
             fs::create_dir_all(&project).unwrap();
             let mcp_document = if target == "junie" {
@@ -2680,9 +2667,10 @@ fn relaxed_junie_and_amp_profiles_project_both_scopes_without_native_processes()
 
 #[test]
 fn declaration_managed_profiles_require_exact_foreground_acknowledgment_and_daemon_skips() {
-    for target in ["kimi", "vibe", "kilo", "junie", "amp"] {
+    for target in ["agy", "kimi", "vibe", "kilo", "junie", "amp"] {
         let machine = machine();
         let (executable, fake_harness) = match target {
+            "agy" => (write_constrained_harness(&machine, "agy", "1.1.13"), None),
             "kimi" => (
                 write_constrained_harness(&machine, "kimi", "kimi, version 1.48.0"),
                 None,
@@ -2708,7 +2696,7 @@ fn declaration_managed_profiles_require_exact_foreground_acknowledgment_and_daem
             &constrained_config(target, &executable),
         );
         prepare_declaration_target(&machine, target);
-        let source = write_gemini_marketplace(&machine);
+        let source = write_demo_marketplace(&machine);
         let add = run(
             &machine,
             &[
@@ -2874,7 +2862,7 @@ fn relaxed_unknown_versions_never_write_or_touch_native_state() {
                 "[harnesses.claude]\nenabled = false",
             );
         write_owned(&machine, "config.toml", &config);
-        let source = write_gemini_marketplace(&machine);
+        let source = write_demo_marketplace(&machine);
         let before = [
             machine.home().join(".junie"),
             machine.home().join(".agents"),
@@ -2938,7 +2926,7 @@ fn opencode_exact_profile_manages_scoped_plugins_and_unknown_versions_do_not_wri
             "[harnesses.claude]\nenabled = false",
         );
     write_owned(&machine, "config.toml", &config);
-    let source = write_gemini_marketplace(&machine);
+    let source = write_demo_marketplace(&machine);
     let project = machine.home().join("opencode-project");
     fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
     fs::create_dir_all(project.join(".agents/skills")).unwrap();
@@ -3017,7 +3005,7 @@ fn opencode_exact_profile_manages_scoped_plugins_and_unknown_versions_do_not_wri
                 "[harnesses.claude]\nenabled = false",
             );
         write_owned(&machine, "config.toml", &config);
-        let source = write_gemini_marketplace(&machine);
+        let source = write_demo_marketplace(&machine);
         let project = machine.home().join("opencode-unknown-project");
         fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
         fs::create_dir_all(project.join(".agents/skills")).unwrap();
@@ -3081,6 +3069,7 @@ fn opencode_exact_profile_manages_scoped_plugins_and_unknown_versions_do_not_wri
 #[test]
 fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_checks() {
     for (target, binary_name, version_output) in [
+        ("agy", "agy", "1.1.13"),
         ("kimi", "kimi", "kimi, version 1.48.0"),
         ("vibe", "vibe", "vibe 2.19.1"),
         ("kilo", "kilo", "7.4.7"),
@@ -3092,9 +3081,10 @@ fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_ch
             "config.toml",
             &constrained_config(target, &executable),
         );
-        let source = write_gemini_marketplace(&machine);
+        let source = write_demo_marketplace(&machine);
         fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
         match target {
+            "agy" => fs::create_dir_all(machine.home().join(".gemini/config")).unwrap(),
             "kimi" => fs::create_dir_all(machine.home().join(".kimi")).unwrap(),
             "vibe" => fs::create_dir_all(machine.home().join(".vibe")).unwrap(),
             "kilo" => fs::create_dir_all(machine.configuration_home().join("kilo")).unwrap(),
@@ -3220,8 +3210,18 @@ fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_ch
             "config.toml",
             &constrained_config(target, &conflict_executable),
         );
-        let conflict_source = write_gemini_marketplace(&conflict_machine);
+        let conflict_source = write_demo_marketplace(&conflict_machine);
         match target {
+            "agy" => {
+                fs::create_dir_all(conflict_machine.home().join(".gemini/config")).unwrap();
+                fs::write(
+                    conflict_machine
+                        .home()
+                        .join(".gemini/config/mcp_config.json"),
+                    br#"{"mcpServers":{"demo-docs":{"command":"foreign"}}}"#,
+                )
+                .unwrap();
+            }
             "kimi" => {
                 fs::create_dir_all(conflict_machine.home().join(".kimi")).unwrap();
                 fs::write(
@@ -3288,6 +3288,7 @@ fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_ch
         let unknown_machine = IsolatedMachine::new("skilltap-compiled-constrained-unknown")
             .expect("create constrained unknown machine");
         let unknown_version = match target {
+            "agy" => "1.1.14",
             "kimi" => "kimi, version 1.48.1",
             "vibe" => "vibe 2.19.2",
             "kilo" => "7.4.8",
@@ -3300,9 +3301,10 @@ fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_ch
             "config.toml",
             &constrained_config(target, &unknown_executable),
         );
-        let unknown_source = write_gemini_marketplace(&unknown_machine);
+        let unknown_source = write_demo_marketplace(&unknown_machine);
         fs::create_dir_all(unknown_machine.home().join(".agents/skills")).unwrap();
         let unknown_native_root = match target {
+            "agy" => unknown_machine.home().join(".gemini/config"),
             "kimi" => unknown_machine.home().join(".kimi"),
             "vibe" => unknown_machine.home().join(".vibe"),
             "kilo" => unknown_machine.configuration_home().join("kilo"),
@@ -3349,8 +3351,8 @@ fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_ch
         );
         assert_version_only_invocations(&unknown_executable, &format!("unknown {target}"));
 
-        // Kimi, Vibe, and Kilo have no production probe surface. Their fake
-        // binaries fail every argv except exact version detection, so this
+        // AGY, Kimi, Vibe, and Kilo have no production probe surface. Their
+        // fake binaries fail every argv except exact version detection, so this
         // assertion covers every compiled operation above for each target.
         assert_version_only_invocations(&executable, target);
     }
@@ -3362,7 +3364,7 @@ fn vibe_compiled_cwd_is_explicitly_partial_and_never_emitted() {
     let vibe = write_constrained_harness(&machine, "vibe", "vibe 2.19.1");
     write_owned(&machine, "config.toml", &constrained_config("vibe", &vibe));
     fs::create_dir_all(machine.home().join(".vibe")).unwrap();
-    let source = write_gemini_marketplace(&machine);
+    let source = write_demo_marketplace(&machine);
     fs::write(
         source.join("plugins/demo/.codex-plugin/mcp.json"),
         br#"{"mcpServers":{"cwd-server":{"command":"demo-mcp","args":["serve"],"cwd":"/opt/demo"}}}"#,
@@ -3459,10 +3461,11 @@ fn vibe_compiled_cwd_is_explicitly_partial_and_never_emitted() {
 }
 
 #[test]
-fn gemini_exact_profile_manages_global_and_project_plugins_but_unknown_versions_only_observe() {
+fn agy_exact_profile_manages_global_declarations_and_project_skills_but_unknown_versions_only_observe()
+ {
     let machine = machine();
-    let gemini = write_gemini_harness(&machine, "0.50.0");
-    let config = native_config_with_gemini(&gemini, &gemini, &gemini)
+    let agy = write_constrained_harness(&machine, "agy", "1.1.13");
+    let config = native_config_with_agy(&agy, &agy, &agy)
         .replace(
             "[harnesses.codex]\nenabled = true",
             "[harnesses.codex]\nenabled = false",
@@ -3472,68 +3475,184 @@ fn gemini_exact_profile_manages_global_and_project_plugins_but_unknown_versions_
             "[harnesses.claude]\nenabled = false",
         );
     write_owned(&machine, "config.toml", &config);
-    let source = write_gemini_marketplace(&machine);
-    let project = machine.home().join("gemini-project");
-    fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+    let source = write_demo_marketplace(&machine);
+    let project = machine.home().join("agy-project");
+    fs::create_dir_all(machine.home().join(".gemini/config")).unwrap();
+    fs::write(
+        machine.home().join(".gemini/config/mcp_config.json"),
+        br#"{"future":{"keep":true},"mcpServers":{"unmanaged":{"command":"keep"}}}"#,
+    )
+    .unwrap();
     fs::create_dir_all(project.join(".agents/skills")).unwrap();
 
-    for scope in [None, Some(project.as_path())] {
-        let mut add = vec![
+    let add = run(
+        &machine,
+        &[
             "marketplace",
             "add",
             source.to_str().unwrap(),
             "--name",
             "team",
-        ];
-        if let Some(project) = scope {
-            add.extend(["--project", project.to_str().unwrap()]);
-        }
-        add.extend(["--target", "gemini", "--json"]);
-        let output = run(&machine, &add);
-        assert_code(&output, 0);
-        assert_eq!(json(&output)["result"], "completed");
+            "--target",
+            "agy",
+            "--json",
+        ],
+    );
+    assert_code(&add, 0);
+    assert_eq!(json(&add)["result"], "completed");
 
-        let mut install = vec!["plugin", "install", "demo@team"];
-        if let Some(project) = scope {
-            install.extend(["--project", project.to_str().unwrap()]);
-        }
-        install.extend(["--target", "gemini", "--json"]);
-        let output = run(&machine, &install);
-        assert_code(&output, 0);
-        assert_eq!(json(&output)["result"], "completed");
-    }
+    let blocked = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--target",
+            "agy",
+            "--json",
+        ],
+    );
+    assert_code(&blocked, 2);
+    assert!(
+        json(&blocked)["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| error["code"] == "partial_operation_requires_acknowledgment")
+    );
+    assert!(!machine.home().join(".gemini/config/skills/demo").exists());
 
+    let install = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--yes",
+            "--target",
+            "agy",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    assert_eq!(json(&install)["result"], "completed");
     assert!(
         machine
             .home()
-            .join(".agents/skills/demo/SKILL.md")
+            .join(".gemini/config/skills/demo/SKILL.md")
             .is_file()
     );
-    assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
-    let global_settings: Value =
-        serde_json::from_slice(&fs::read(machine.home().join(".gemini/settings.json")).unwrap())
-            .unwrap();
-    let project_settings: Value =
-        serde_json::from_slice(&fs::read(project.join(".gemini/settings.json")).unwrap()).unwrap();
-    assert_eq!(
-        global_settings["mcpServers"]["demo-docs"]["command"],
-        "demo-mcp"
+    let global_mcp: Value = serde_json::from_slice(
+        &fs::read(machine.home().join(".gemini/config/mcp_config.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(global_mcp["future"]["keep"], true);
+    assert_eq!(global_mcp["mcpServers"]["unmanaged"]["command"], "keep");
+    assert_eq!(global_mcp["mcpServers"]["demo-docs"]["command"], "demo-mcp");
+    assert_eq!(global_mcp["mcpServers"]["demo-docs"]["args"][0], "serve");
+
+    let repeat = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--yes",
+            "--target",
+            "agy",
+            "--json",
+        ],
     );
-    assert_eq!(
-        project_settings["mcpServers"]["demo-docs"]["args"][0],
-        "serve"
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+    let add_project = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            source.to_str().unwrap(),
+            "--name",
+            "project-team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "agy",
+            "--json",
+        ],
     );
-    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert_code(&add_project, 0);
+    let install_project = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@project-team",
+            "--yes",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "agy",
+            "--json",
+        ],
+    );
+    assert_code(&install_project, 0);
+    let install_project_value = json(&install_project);
+    assert_eq!(install_project_value["result"], "completed");
     assert!(
-        state.contains("gemini"),
-        "Gemini target state was not recorded: {state}"
+        install_project_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|resource| resource["id"] == "omitted:mcp:demo-docs"),
+        "project AGY install did not report the unsupported MCP declaration: {install_project_value}"
+    );
+    assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
+    assert!(
+        !project.join(".gemini").exists(),
+        "project AGY install wrote an unsupported MCP surface"
     );
 
-    for version in ["0.50.1", "0.49.0"] {
-        let machine = IsolatedMachine::new("skilltap-compiled-gemini-unknown")
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(
+        state.contains("agy"),
+        "AGY target state was not recorded: {state}"
+    );
+
+    let drifted_mcp = br#"{"future":{"keep":true},"mcpServers":{"unmanaged":{"command":"keep"},"demo-docs":{"command":"externally-changed"}}}"#;
+    fs::write(
+        machine.home().join(".gemini/config/mcp_config.json"),
+        drifted_mcp,
+    )
+    .unwrap();
+    let drifted = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--yes",
+            "--target",
+            "agy",
+            "--json",
+        ],
+    );
+    assert_code(&drifted, 2);
+    assert_eq!(
+        json(&drifted)["errors"][0]["code"],
+        "managed_project_drifted"
+    );
+    assert_eq!(
+        fs::read(machine.home().join(".gemini/config/mcp_config.json")).unwrap(),
+        drifted_mcp
+    );
+    assert_version_only_invocations(&agy, "AGY exact profile");
+
+    for version in ["1.1.14", "1.1.12"] {
+        let machine = IsolatedMachine::new("skilltap-compiled-agy-unknown")
             .expect("create isolated unknown-version machine");
-        let gemini = write_gemini_harness(&machine, version);
-        let config = native_config_with_gemini(&gemini, &gemini, &gemini)
+        let agy = write_constrained_harness(&machine, "agy", version);
+        let config = native_config_with_agy(&agy, &agy, &agy)
             .replace(
                 "[harnesses.codex]\nenabled = true",
                 "[harnesses.codex]\nenabled = false",
@@ -3543,9 +3662,9 @@ fn gemini_exact_profile_manages_global_and_project_plugins_but_unknown_versions_
                 "[harnesses.claude]\nenabled = false",
             );
         write_owned(&machine, "config.toml", &config);
-        let source = write_gemini_marketplace(&machine);
-        let project = machine.home().join("gemini-unknown-project");
-        fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+        let source = write_demo_marketplace(&machine);
+        let project = machine.home().join("agy-unknown-project");
+        fs::create_dir_all(machine.home().join(".gemini/config")).unwrap();
         fs::create_dir_all(project.join(".agents/skills")).unwrap();
 
         for scope in [None, Some(project.as_path())] {
@@ -3559,7 +3678,7 @@ fn gemini_exact_profile_manages_global_and_project_plugins_but_unknown_versions_
             if let Some(project) = scope {
                 add.extend(["--project", project.to_str().unwrap()]);
             }
-            add.extend(["--target", "gemini", "--json"]);
+            add.extend(["--target", "agy", "--json"]);
             let output = run(&machine, &add);
             assert_code(&output, 2);
             let value = json(&output);
@@ -3574,8 +3693,8 @@ fn gemini_exact_profile_manages_global_and_project_plugins_but_unknown_versions_
         }
 
         let global_roots = [
-            machine.home().join(".agents/skills"),
             machine.home().join(".gemini"),
+            machine.home().join(".agents"),
         ];
         let project_roots = [project.join(".agents/skills"), project.join(".gemini")];
         let before = global_roots
@@ -3586,11 +3705,11 @@ fn gemini_exact_profile_manages_global_and_project_plugins_but_unknown_versions_
         assert!(!config_root(&machine).join("state.json").exists());
 
         for scope in [None, Some(project.as_path())] {
-            let mut install = vec!["plugin", "install", "demo@team"];
+            let mut install = vec!["plugin", "install", "demo@team", "--yes"];
             if let Some(project) = scope {
                 install.extend(["--project", project.to_str().unwrap()]);
             }
-            install.extend(["--target", "gemini", "--json"]);
+            install.extend(["--target", "agy", "--json"]);
             let output = run(&machine, &install);
             assert_code(&output, 2);
             let value = json(&output);
@@ -3612,10 +3731,79 @@ fn gemini_exact_profile_manages_global_and_project_plugins_but_unknown_versions_
             .collect::<Vec<_>>();
         assert_eq!(
             after, before,
-            "unknown Gemini {version} wrote a target surface"
+            "unknown AGY {version} wrote a target surface"
         );
         assert!(!config_root(&machine).join("state.json").exists());
+        assert_version_only_invocations(&agy, "unknown AGY profile");
     }
+}
+
+#[test]
+fn agy_omits_an_unmappable_optional_mcp_server_without_emitting_native_fields() {
+    let machine = machine();
+    let agy = write_constrained_harness(&machine, "agy", "1.1.13");
+    write_owned(&machine, "config.toml", &constrained_config("agy", &agy));
+    let source = write_demo_marketplace(&machine);
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"demo-docs":{"command":"demo-mcp","cwd":"/opt/demo"}}}"#,
+    )
+    .unwrap();
+    fs::create_dir_all(machine.home().join(".gemini/config")).unwrap();
+
+    let add = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            source.to_str().unwrap(),
+            "--name",
+            "team",
+            "--target",
+            "agy",
+            "--json",
+        ],
+    );
+    assert_code(&add, 0);
+    let install = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--yes",
+            "--target",
+            "agy",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    let value = json(&install);
+    assert_eq!(value["result"], "completed");
+    assert!(
+        value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|resource| {
+                resource["id"] == "omitted:mcp:demo-docs"
+                    && resource["fields"]["consequence"] == "unsupported_optional_component_omitted"
+            })
+    );
+    assert!(
+        machine
+            .home()
+            .join(".gemini/config/skills/demo/SKILL.md")
+            .is_file()
+    );
+    assert!(
+        !machine
+            .home()
+            .join(".gemini/config/mcp_config.json")
+            .exists(),
+        "AGY emitted an unmappable MCP declaration"
+    );
+    assert_version_only_invocations(&agy, "AGY optional MCP omission");
 }
 
 #[test]
@@ -3632,7 +3820,7 @@ fn kiro_declaration_managed_plugin_requires_acknowledgment_and_stays_unverified(
             "[harnesses.claude]\nenabled = false",
         );
     write_owned(&machine, "config.toml", &config);
-    let source = write_gemini_marketplace(&machine);
+    let source = write_demo_marketplace(&machine);
     let project = machine.working_directory().join("kiro-project");
     fs::create_dir_all(&project).unwrap();
 
@@ -3812,7 +4000,7 @@ fn kiro_unknown_adjacent_profiles_never_write_even_with_acknowledgment() {
                 "[harnesses.claude]\nenabled = false",
             );
         write_owned(&machine, "config.toml", &config);
-        let source = write_gemini_marketplace(&machine);
+        let source = write_demo_marketplace(&machine);
         let project = machine.working_directory().join("kiro-unknown-project");
         fs::create_dir_all(&project).unwrap();
         let add = run(
@@ -3853,10 +4041,10 @@ fn kiro_unknown_adjacent_profiles_never_write_even_with_acknowledgment() {
 }
 
 #[test]
-fn gemini_managed_revalidation_rejects_a_version_change_before_writing() {
+fn agy_managed_revalidation_rejects_a_version_change_before_writing() {
     let machine = machine();
-    let gemini = write_gemini_harness(&machine, "0.50.0");
-    let config = native_config_with_gemini(&gemini, &gemini, &gemini)
+    let agy = write_constrained_harness(&machine, "agy", "1.1.13");
+    let config = native_config_with_agy(&agy, &agy, &agy)
         .replace(
             "[harnesses.codex]\nenabled = true",
             "[harnesses.codex]\nenabled = false",
@@ -3866,8 +4054,8 @@ fn gemini_managed_revalidation_rejects_a_version_change_before_writing() {
             "[harnesses.claude]\nenabled = false",
         );
     write_owned(&machine, "config.toml", &config);
-    let source = write_gemini_marketplace(&machine);
-    fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+    let source = write_demo_marketplace(&machine);
+    fs::create_dir_all(machine.home().join(".gemini/config")).unwrap();
     let add = run(
         &machine,
         &[
@@ -3877,7 +4065,7 @@ fn gemini_managed_revalidation_rejects_a_version_change_before_writing() {
             "--name",
             "team",
             "--target",
-            "gemini",
+            "agy",
             "--json",
         ],
     );
@@ -3885,20 +4073,20 @@ fn gemini_managed_revalidation_rejects_a_version_change_before_writing() {
     let state_path = config_root(&machine).join("state.json");
     let state_before = fs::read(&state_path).expect("source registration state");
 
-    let marker = machine.working_directory().join("gemini-version-flipped");
+    let marker = machine.working_directory().join("agy-version-flipped");
     let marker_literal = marker.to_str().unwrap().replace('\'', "'\\''");
     fs::write(
-        &gemini,
+        &agy,
         format!(
-            "#!/bin/sh\nif [ -f '{marker}' ]; then printf '%s\\n' '0.50.1'; else : > '{marker}'; printf '%s\\n' '0.50.0'; fi\n",
+            "#!/bin/sh\nif [ -f '{marker}' ]; then printf '%s\\n' '1.1.14'; else : > '{marker}'; printf '%s\\n' '1.1.13'; fi\n",
             marker = marker_literal
         ),
     )
     .unwrap();
 
     let before = [
-        machine.home().join(".agents/skills"),
         machine.home().join(".gemini"),
+        machine.home().join(".agents"),
     ]
     .map(|root| snapshot_native_tree(&root));
     let install = run(
@@ -3907,8 +4095,9 @@ fn gemini_managed_revalidation_rejects_a_version_change_before_writing() {
             "plugin",
             "install",
             "demo@team",
+            "--yes",
             "--target",
-            "gemini",
+            "agy",
             "--json",
         ],
     );
@@ -3923,8 +4112,8 @@ fn gemini_managed_revalidation_rejects_a_version_change_before_writing() {
             .any(|error| error["code"] == "native_command_failed")
     );
     let after = [
-        machine.home().join(".agents/skills"),
         machine.home().join(".gemini"),
+        machine.home().join(".agents"),
     ]
     .map(|root| snapshot_native_tree(&root));
     assert_eq!(after, before);
@@ -4050,7 +4239,7 @@ fn copilot_compiled_managed_plugin_preserves_scopes_conflicts_and_repeats() {
         br#"{"mcpServers":{"demo-docs":{"command":"shadow"}}}"#,
     )
     .unwrap();
-    let source = write_gemini_marketplace(&machine);
+    let source = write_demo_marketplace(&machine);
     fs::write(
         source.join("plugins/demo/.codex-plugin/mcp.json"),
         br#"{"mcpServers":{"demo-docs":{"type":"stdio","command":"demo-mcp","args":["serve"],"env":{"TOKEN":"${MCP_TOKEN}"}}}}"#,

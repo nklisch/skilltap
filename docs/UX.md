@@ -80,7 +80,7 @@ Target and scope are independent.
 ```text
 --target codex
 --target claude
---target gemini
+--target agy
 --target all
 ```
 

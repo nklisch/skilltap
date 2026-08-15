@@ -566,7 +566,7 @@ fn observe_only_candidate_reports_match_registry_and_first_party_bootstrap_scope
     assert_eq!(
         registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
         [
-            "codex", "claude", "droid", "copilot", "gemini", "qwen", "opencode", "kiro", "kimi",
+            "codex", "claude", "droid", "copilot", "agy", "qwen", "opencode", "kiro", "kimi",
             "vibe", "kilo", "junie", "amp", "pi", "cursor", "zoo", "zcode"
         ]
     );

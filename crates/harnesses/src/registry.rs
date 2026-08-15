@@ -12,8 +12,8 @@ use skilltap_core::{
 use crate::{
     CanonicalObservation, DetectionError,
     adapters::{
-        AmpAdapter, ClaudeAdapter, CodexAdapter, CopilotAdapter, CursorAdapter, FactoryAdapter,
-        GeminiAdapter, JunieAdapter, KiloAdapter, KimiAdapter, KiroAdapter, OpenCodeAdapter,
+        AgyAdapter, AmpAdapter, ClaudeAdapter, CodexAdapter, CopilotAdapter, CursorAdapter,
+        FactoryAdapter, JunieAdapter, KiloAdapter, KimiAdapter, KiroAdapter, OpenCodeAdapter,
         PiAdapter, QwenAdapter, VibeAdapter, ZCodeAdapter, ZooAdapter,
     },
     conditional_profile::ConditionalProfilePort,
@@ -311,7 +311,7 @@ impl TargetRegistry {
             ClaudeAdapter::static_ref(),
             FactoryAdapter::static_ref(),
             CopilotAdapter::static_ref(),
-            GeminiAdapter::static_ref(),
+            AgyAdapter::static_ref(),
             QwenAdapter::static_ref(),
             OpenCodeAdapter::static_ref(),
             KiroAdapter::static_ref(),
@@ -486,17 +486,13 @@ mod tests {
         assert_eq!(
             registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
             [
-                "codex", "claude", "droid", "copilot", "gemini", "qwen", "opencode", "kiro",
-                "kimi", "vibe", "kilo", "junie", "amp", "pi", "cursor", "zoo", "zcode"
+                "codex", "claude", "droid", "copilot", "agy", "qwen", "opencode", "kiro", "kimi",
+                "vibe", "kilo", "junie", "amp", "pi", "cursor", "zoo", "zcode"
             ]
         );
         assert_eq!(registry.iter().count(), 17);
         assert_eq!(registry.first_party_targets().count(), 2);
-        assert!(
-            registry
-                .adapter(&HarnessId::new("gemini").unwrap())
-                .is_some()
-        );
+        assert!(registry.adapter(&HarnessId::new("agy").unwrap()).is_some());
         for id in ["cursor", "zoo", "zcode"] {
             let adapter = registry.adapter(&HarnessId::new(id).unwrap()).unwrap();
             assert!(adapter.native_lifecycle().is_none());

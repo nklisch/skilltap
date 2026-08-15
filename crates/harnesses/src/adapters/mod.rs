@@ -1,3 +1,4 @@
+mod agy;
 mod claude;
 mod codex;
 mod codex_managed;
@@ -8,8 +9,6 @@ mod cursor;
 mod factory;
 mod factory_managed;
 mod file_managed;
-mod gemini;
-mod gemini_managed;
 mod kilo;
 mod kimi;
 mod kiro;
@@ -26,6 +25,7 @@ mod vibe;
 mod zcode;
 mod zoo;
 
+pub use agy::{AgyAdapter, AgyManagedProjection, AgySkillProjection};
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
 pub use codex_managed::CodexManagedProjection;
@@ -40,8 +40,6 @@ pub use factory::{
     decode_factory_plugin_list,
 };
 pub use factory_managed::FactoryManagedProjection;
-pub use gemini::{GeminiAdapter, GeminiEffectiveStateProbe, GeminiSkillProjection};
-pub use gemini_managed::GeminiManagedProjection;
 pub use kilo::{KiloAdapter, KiloManagedProjection, KiloSkillProjection};
 pub use kimi::{KimiAdapter, KimiManagedProjection, KimiSkillProjection};
 pub use kiro::{KiroAdapter, KiroSkillProjection};
@@ -87,13 +85,6 @@ mod tests {
                 ClaudeAdapter::static_ref(),
                 "2.1.201",
                 "claude-2-1-201",
-                true,
-                true,
-            ),
-            (
-                GeminiAdapter::static_ref(),
-                "0.50.0",
-                "gemini-0-50-0",
                 true,
                 true,
             ),
@@ -210,9 +201,7 @@ mod tests {
         let copilot = registry
             .adapter(&HarnessId::new("copilot").unwrap())
             .unwrap();
-        let gemini = registry
-            .adapter(&HarnessId::new("gemini").unwrap())
-            .unwrap();
+        let agy = registry.adapter(&HarnessId::new("agy").unwrap()).unwrap();
         let opencode = registry
             .adapter(&HarnessId::new("opencode").unwrap())
             .unwrap();
@@ -226,7 +215,7 @@ mod tests {
         assert!(pi.skill_projection().is_some());
         assert_eq!(codex.identity(), CodexAdapter::static_ref().identity());
         assert_eq!(claude.identity(), ClaudeAdapter::static_ref().identity());
-        assert_eq!(gemini.identity(), GeminiAdapter::static_ref().identity());
+        assert_eq!(agy.identity(), AgyAdapter::static_ref().identity());
         assert_eq!(droid.identity(), FactoryAdapter::static_ref().identity());
         assert!(droid.native_lifecycle().is_some());
         assert_eq!(copilot.identity(), CopilotAdapter::static_ref().identity());
@@ -246,11 +235,15 @@ mod tests {
         assert!(claude.native_lifecycle().is_some());
         assert!(claude.instruction_bridge().is_some());
         assert!(claude.skill_projection().is_some());
-        assert!(gemini.native_lifecycle().is_none());
-        assert!(gemini.instruction_bridge().is_none());
-        assert!(gemini.skill_projection().is_some());
-        assert!(gemini.managed_projection().is_some());
-        assert!(gemini.effective_state_probe().is_some());
+        assert!(agy.native_lifecycle().is_none());
+        assert!(agy.instruction_bridge().is_none());
+        assert!(agy.skill_projection().is_some());
+        assert!(agy.managed_projection().is_some());
+        assert!(agy.effective_state_probe().is_none());
+        assert!(
+            agy.managed_declaration_contract(CapabilityScope::Global)
+                .is_some()
+        );
         assert_eq!(
             opencode.identity(),
             OpenCodeAdapter::static_ref().identity()

@@ -18,7 +18,7 @@ Release-relevant discovery, but unbound because removing it requires an explicit
 ## Location
 `crates/harnesses/src/effective_state.rs:70`
 
-`EffectiveStateProbePort` has implementations for Copilot, Gemini, OpenCode, and Qwen but no production caller. Removing it would also remove the typed boundary intended for bounded effective MCP status verification.
+`EffectiveStateProbePort` has implementations for Copilot, OpenCode, and Qwen but no production caller. Removing it would also remove the typed boundary intended for bounded effective MCP status verification.
 
 Decide whether to:
 

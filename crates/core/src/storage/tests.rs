@@ -341,7 +341,7 @@ fn harness_policy_map_updates_any_structurally_valid_target() {
     let config = ConfigDocument::defaults();
     let codex = HarnessId::new("codex").unwrap();
     let claude = HarnessId::new("claude").unwrap();
-    let gemini = HarnessId::new("gemini").unwrap();
+    let agy = HarnessId::new("agy").unwrap();
     let custom = HarnessBinary::new("/opt/bin/codex").unwrap();
 
     let updated = config
@@ -372,19 +372,19 @@ fn harness_policy_map_updates_any_structurally_valid_target() {
         "/opt/bin/codex"
     );
 
-    let expanded = disabled.with_harness_policy(&gemini, true, None).unwrap();
+    let expanded = disabled.with_harness_policy(&agy, true, None).unwrap();
     assert_eq!(expanded.harnesses().iter().len(), 3);
-    assert!(expanded.harnesses().get(&gemini).unwrap().enabled);
+    assert!(expanded.harnesses().get(&agy).unwrap().enabled);
     assert_eq!(
         expanded
             .harnesses()
-            .get(&gemini)
+            .get(&agy)
             .unwrap()
             .binary
             .as_ref()
             .unwrap()
             .as_str(),
-        "gemini"
+        "agy"
     );
 }
 

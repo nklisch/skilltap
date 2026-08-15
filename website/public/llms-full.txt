@@ -553,7 +553,7 @@ The daemon never acknowledges declaration-managed operations.
 | `claude` | Claude Code | Verified native marketplace/plugin behavior and managed compatibility. |
 | `droid` | Factory Droid | Verified native/managed coexistence; project marketplace operations remain unsupported where the native lifecycle lacks them. |
 | `qwen` | Qwen Code | Verified native extension conversion and managed skill/MCP projection. |
-| `gemini` | Gemini CLI | Verified file-managed skills and MCP for the attested profile. |
+| `agy` | Antigravity CLI | Complete global/project skills plus declaration-managed global MCP for exact version 1.1.13; project MCP and native plugin lifecycle are unsupported. |
 | `opencode` | OpenCode | Verified file-managed skills and MCP for the attested profile. |
 | `copilot` | GitHub Copilot CLI | Mixed: managed MCP has structured observation; complete skills are declaration-managed; incomplete native plugin lifecycle is unsupported. |
 | `kiro` | Kiro CLI | Complete skills and MCP declarations for the attested profile; plugin/MCP projection is declaration-managed and never invokes login. |

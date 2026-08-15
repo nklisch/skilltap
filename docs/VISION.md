@@ -152,9 +152,9 @@ skilltap does not:
   or write through undocumented caches.
 
 Codex and Claude Code are the first supported harnesses. The intended expanded
-set includes Factory Droid, Qwen Code, GitHub Copilot CLI, Gemini CLI, Junie,
-Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, Amp, Cursor, Zoo
-Code, ZCode, and a compound Pi profile with compatible MCP and Claude-hook
+set includes Factory Droid, Qwen Code, GitHub Copilot CLI, Antigravity CLI,
+Junie, Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, Amp, Cursor,
+Zoo Code, ZCode, and a compound Pi profile with compatible MCP and Claude-hook
 extensions. Every adapter is admitted per component and scope. Effectively
 verified components support ordinary reconciliation; version-known documented
 file surfaces without a deterministic load observer may support acknowledged

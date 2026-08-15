@@ -8,7 +8,7 @@ It does not search for skills or recommend plugins. You tell skilltap what you w
 
 ## What It Manages
 
-- A typed registry spanning Codex, Claude Code, Factory Droid, Qwen Code, GitHub Copilot CLI, Gemini CLI, Junie, Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, Amp, Pi, Cursor, Zoo Code, and ZCode.
+- A typed registry spanning Codex, Claude Code, Factory Droid, Qwen Code, GitHub Copilot CLI, Antigravity CLI, Junie, Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, Amp, Pi, Cursor, Zoo Code, and ZCode.
 - Native plugin marketplaces.
 - Native and materialized plugins.
 - Complete standalone skill directories.
@@ -286,9 +286,9 @@ The daemon updates only operations classified as fully safe across managed scope
 
 ## Supported Harnesses
 
-- **Verified native/managed:** Codex, Claude Code, Factory Droid, Qwen Code, Gemini CLI, and OpenCode.
+- **Verified native/managed:** Codex, Claude Code, Factory Droid, Qwen Code, and OpenCode.
 - **Mixed:** GitHub Copilot CLI uses managed MCP plus declaration-managed skills; its incomplete native plugin lifecycle remains unsupported.
-- **Declaration-managed:** Kiro CLI, Kimi Code CLI, Mistral Vibe, Kilo Code, Junie, and Amp expose only their attested components and scopes. Foreground acknowledgment is required and effective state remains unverified.
+- **Declaration-managed:** Antigravity CLI, Kiro CLI, Kimi Code CLI, Mistral Vibe, Kilo Code, Junie, and Amp expose only their attested components and scopes. Foreground acknowledgment is required and effective state remains unverified.
 - **Observe-only:** Pi, Cursor, Zoo Code, and ZCode expose safe documented observations without mutation authority.
 
 Registration does not imply identical capabilities. Run `skilltap harness list`, `skilltap status`, and `skilltap plan` for the installed versions and selected scopes. Unknown versions never gain mutation authority.

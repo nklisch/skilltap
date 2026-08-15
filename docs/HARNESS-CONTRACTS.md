@@ -147,7 +147,7 @@ The intended direct adapter set, in addition to Codex and Claude Code, is:
 Factory Droid
 Qwen Code
 GitHub Copilot CLI
-Gemini CLI
+Antigravity CLI
 Junie
 Kimi Code CLI
 OpenCode
@@ -172,6 +172,7 @@ grant authority to an exact release.
 
 | Target/profile | Complete skills | MCP declarations | Native/effective commands |
 |---|---|---|---|
+| Antigravity CLI `1.1.13` | Global `~/.gemini/config/skills` and project `.agents/skills` complete trees | Global `~/.gemini/config/mcp_config.json` may be declaration-managed and remains effective-unverified; standalone project MCP is `Unsupported` | No native plugin command, UI, session, or effective-state probe is invoked by skilltap |
 | Kimi Code CLI `1.48.0` | Official complete skill roots only; `.agents/skills` is the canonical managed root at global and project scope | Global `~/.kimi/mcp.json`, relocated by `KIMI_SHARE_DIR`, may be declaration-managed and remains effective-unverified; project MCP is `Unsupported` | No `mcp list`, `mcp test`, `mcp auth`, UI, or session probe is invoked by skilltap |
 | Mistral Vibe `2.19.1` | Official complete skill roots only; `.agents/skills` is the canonical managed root at global and trusted-project scope | User/project `config.toml` declarations may be declaration-managed through lossless token/syntax patches; only static credentials and references are admitted; OAuth is `Unsupported` because official sources contradict the release implementation | No `/mcp`, TUI, LLM, trust-approval, or effective-state probe is invoked by skilltap; project effective state remains unverified |
 | Kilo Code `7.4.7` | Official complete skill roots only; `.agents/skills` is the canonical managed root at global and project scope | Global and effective project `kilo.json`/`kilo.jsonc` declarations may be declaration-managed through targeted valid-document edits; project precedence and shadow conflicts are enforced | No `debug config`, `mcp list`, or `mcp auth` is invoked by skilltap; no database, cache, `.kilo`, or `.gitignore` is created by observation |
@@ -190,6 +191,50 @@ Documented read surfaces may be observe-only; documented version-known file
 surfaces may be declaration-managed; missing project roots, editor-storage
 locations, executable identity, or preservation contracts remain unsupported
 rather than blocking unrelated target capabilities.
+
+## Antigravity CLI Contract
+
+### Detection and authority
+
+Antigravity CLI is registered as target `agy` for the exact compiled profile
+`1.1.13`. Its executable is `agy`, and `agy --version` returns the bare version
+token. Adjacent and unknown versions remain observe-only.
+
+The exact profile supports complete skill publication at global and project
+scope. Managed plugin projection is `Unverified` because Antigravity exposes no
+non-interactive effective-state observer. The adapter authorizes only its
+explicit declaration contract for managed documents and complete skill trees.
+Foreground `--yes` is required for managed plugin projection, and the daemon
+never acknowledges or applies it.
+
+### Native paths and scope
+
+Global Antigravity configuration is rooted at `~/.gemini/config`. Global skills
+use `~/.gemini/config/skills`, and global MCP declarations use
+`~/.gemini/config/mcp_config.json`. Project skills use
+`<project>/.agents/skills`. The installed detailed MCP contract documents global
+and plugin-bundled MCP files but no standalone project MCP file, so project MCP
+is `Unsupported`.
+
+The adapter edits only owned entries in the global `mcpServers` object. It
+preserves unrelated document fields and unowned servers, detects conflicts and
+drift, and uses the shared rollback and repeat-idempotence contracts. It maps
+documented stdio servers and SSE servers that use `serverUrl`. Unattested HTTP,
+authentication, header, tool-filter, timeout, working-directory, and disabled
+shapes remain unsupported.
+
+### Native lifecycle and effective state
+
+Antigravity 1.1.13 exposes plugin validation, install, uninstall, list,
+enablement, import, and marketplace-link commands. The observed install command
+accepts a plugin directory, while skilltap's native lifecycle port binds
+marketplace identity rather than a resolved checkout path. Marketplace update,
+revision, and project-scope semantics are also not attested. skilltap therefore
+invokes no Antigravity plugin lifecycle command in this profile.
+
+File presence proves only the owned declaration. skilltap does not invoke the
+Antigravity UI, start a session, approve trust, authenticate, or report a skill
+or MCP server as loaded or healthy without native effective evidence.
 
 ## Junie Declaration Contract
 

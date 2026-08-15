@@ -139,12 +139,15 @@ impl ManagedProjectionProfile {
         )
     }
 
-    pub const fn gemini() -> Self {
-        Self::new(
-            "gemini",
-            &[],
-            Some(".gemini/settings.json"),
-            ".agents/skills",
+    pub const fn agy() -> Self {
+        Self::declaration(
+            "agy",
+            &[
+                ".agents/plugins/marketplace.json",
+                ".claude-plugin/marketplace.json",
+            ],
+            Some(".gemini/config/mcp_config.json"),
+            ".gemini/config/skills",
         )
     }
 
@@ -437,6 +440,22 @@ mod tests {
         assert_eq!(
             ManagedProjectionProfile::kilo().mcp_destination(),
             Some("kilo/kilo.jsonc")
+        );
+        for profile in [
+            ManagedProjectionProfile::kimi(),
+            ManagedProjectionProfile::vibe(),
+            ManagedProjectionProfile::kilo(),
+            ManagedProjectionProfile::agy(),
+        ] {
+            assert!(profile.declaration_managed());
+        }
+        assert_eq!(
+            ManagedProjectionProfile::agy().mcp_destination(),
+            Some(".gemini/config/mcp_config.json")
+        );
+        assert_eq!(
+            ManagedProjectionProfile::agy().skill_destination(),
+            ".gemini/config/skills"
         );
         for profile in [
             ManagedProjectionProfile::kimi(),

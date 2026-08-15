@@ -86,9 +86,9 @@ stable document derived from the same outcome as plain output.
 **Harness**
 
 A supported agent runtime selected from skilltap's typed target registry. The
-intended identifiers are `codex`, `claude`, `droid`, `qwen`, `copilot`,
-`gemini`, `junie`, `kimi`, `opencode`, `kilo`, `vibe`, `kiro`, `amp`, `pi`,
-`cursor`, `zoo`, and `zcode`. Registration does not imply uniform capability:
+intended identifiers are `codex`, `claude`, `droid`, `qwen`, `copilot`, `agy`,
+`junie`, `kimi`, `opencode`, `kilo`, `vibe`, `kiro`, `amp`, `pi`, `cursor`,
+`zoo`, and `zcode`. Registration does not imply uniform capability:
 each target reports support independently by component, concrete scope, and
 verification level. `all` is a selector, not a harness identifier.
 
