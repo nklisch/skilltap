@@ -1,17 +1,17 @@
 ---
-id: release-4.0.0
+id: release-3.2.0
 kind: release
 stage: released
 tags: []
 parent: null
 depends_on: []
-release_binding: 4.0.0
+release_binding: 3.2.0
 gate_origin: null
 created: 2026-08-15
 updated: 2026-08-15
 ---
 
-# Release 4.0.0
+# Release 3.2.0
 
 ## Summary
 
@@ -27,7 +27,7 @@ updated: 2026-08-15
 
 ## Compatibility
 
-This major release removes target id `gemini`. Existing configuration and
+This minor release removes the already-deprecated target id `gemini`. Existing configuration and
 inventory must be retargeted explicitly to `agy`. Unknown AGY versions remain
 observe-only, and managed plugin projection requires foreground `--yes` because
 no non-interactive effective-state observer is available.
@@ -61,7 +61,7 @@ no non-interactive effective-state observer is available.
 ## Shipment
 
 - **Date shipped:** 2026-08-15
-- **Mapping:** tag-based (`v4.0.0`)
+- **Mapping:** tag-based (`v3.2.0`)
 - **Implementation commit:** `428c1325`
 - **Items shipped:** 2
 

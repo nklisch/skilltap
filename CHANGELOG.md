@@ -1,12 +1,12 @@
 # Changelog
 
-## v4.0.0
+## v3.2.0
 
-### Breaking changes
+### Changes
 
-- Replace the deprecated `gemini` target with `agy` for Antigravity CLI. Existing
-  `gemini` configuration and inventory must be retargeted explicitly; this
-  release provides no alias or automatic migration.
+- Replace the already-deprecated `gemini` target with `agy` for Antigravity CLI.
+  Existing `gemini` configuration and inventory must be retargeted explicitly;
+  this release provides no alias or automatic migration.
 
 ### Features
 

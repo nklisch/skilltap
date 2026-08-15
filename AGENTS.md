@@ -67,6 +67,10 @@ The previous TypeScript implementation does not constrain the Rust architecture 
 
 Validate all external boundaries. Preserve unknown documented native fields when editing harness configuration. Keep reconciliation idempotent and test every mutating workflow by immediately repeating it and expecting no changes.
 
+## Versioning
+
+Never propose, infer, or publish a new major version unless the user explicitly requests that major-version change. Breaking-change analysis does not grant authority to increment the major version. When the user has not explicitly requested a major release, preserve the current major version and choose only an appropriate minor or patch increment.
+
 Use concise imperative Git commit messages with no trailers.
 
 <!-- agile-workflow:start -->
