@@ -1,0 +1,10 @@
+{
+  "name": "skilltap",
+  "version": "3.2.0",
+  "description": "A personal control plane for managing agent environments.",
+  "author": {
+    "name": "nklisch"
+  },
+  "repository": "https://github.com/nklisch/skilltap",
+  "license": "MIT"
+}
