@@ -4,7 +4,7 @@ This document defines the native capabilities skilltap relies on for every
 supported target harness, along with the mappings skilltap considers faithful.
 
 A harness contract describes current supported behavior per component and
-concrete scope. Verified compiled profiles grant version-bounded authority.
+concrete scope. Compiled profiles define supported commands and schemas independently of version numbers.
 `Supported` capabilities may authorize effectively verified behavior;
 `Unverified` capabilities may authorize only acknowledged foreground management
 of documented file declarations. Runtime detection binds the profile to one
@@ -17,8 +17,8 @@ executable and may narrow support before skilltap mutates anything.
 3. Harness caches are observed but never used as undocumented write APIs.
 4. Project scope is personal to the skilltap user unless the native artifact is inherently project-shared.
 5. A native file changed by skilltap appears explicitly in the reconciliation plan.
-6. Unknown harness versions are observe-only and never gain mutation authority
-   from runtime probing.
+6. Harness versions are diagnostic information, not mutation allowlists. Runtime
+   validation of commands, schemas, components, and scopes still applies.
 7. Unsupported or absent native lifecycle behavior may be materialized only
    through documented load paths with explicit skilltap ownership.
 8. Every cross-harness mapping has an explicit compatibility classification.
@@ -27,7 +27,7 @@ executable and may narrow support before skilltap mutates anything.
    the adapter boundary.
 10. Admission is per component and concrete scope; one unsupported scope or
     native lifecycle does not erase independently safe surfaces.
-11. A declaration-managed operation requires exact-version authority, a
+11. A declaration-managed operation requires a supported capability contract, a
     documented file schema, lossless unrelated-field preservation, explicit
     skilltap ownership, conflict detection, rollback, and disk-level idempotence.
 12. Declaration-managed operations require foreground acknowledgment, never run
@@ -160,13 +160,13 @@ Amp
 Each direct adapter reports independently established capabilities by component
 and concrete scope. A target may be registered with unsupported scopes or
 components; registration never implies that every listed surface is mutable.
-Mutation still requires a verified exact version profile plus either effective
+Mutation still requires a compiled capability profile plus either effective
 verification or a declaration-managed file contract with ownership-safe
 update/removal and the applicable acceptance matrix.
 
 ### Configuration-constrained profiles
 
-The following exact profiles are admitted only on the surfaces listed here.
+The following capability profiles are admitted only on the surfaces listed here.
 Source attestations that describe a broader or older product surface do not
 grant authority to an exact release.
 
@@ -187,7 +187,7 @@ fields. These constraints apply in foreground and daemon flows: foreground
 daemon leaves declaration-managed work pending.
 
 Cursor, Zoo Code, and ZCode participate through the same per-component model.
-Documented read surfaces may be observe-only; documented version-known file
+Documented read surfaces may be observe-only; documented file
 surfaces may be declaration-managed; missing project roots, editor-storage
 locations, executable identity, or preservation contracts remain unsupported
 rather than blocking unrelated target capabilities.
@@ -196,11 +196,11 @@ rather than blocking unrelated target capabilities.
 
 ### Detection and authority
 
-Antigravity CLI is registered as target `agy` for the exact compiled profile
-`1.1.13`. Its executable is `agy`, and `agy --version` returns the bare version
-token. Adjacent and unknown versions remain observe-only.
+Antigravity CLI is registered as target `agy`. The contract was attested against
+`1.1.13`; that baseline does not restrict other versions. Its executable is
+`agy`, and `agy --version` returns the bare version token.
 
-The exact profile supports complete skill publication at global and project
+The capability profile supports complete skill publication at global and project
 scope. Managed plugin projection is `Unverified` because Antigravity exposes no
 non-interactive effective-state observer. The adapter authorizes only its
 explicit declaration contract for managed documents and complete skill trees.
@@ -238,7 +238,7 @@ or MCP server as loaded or healthy without native effective evidence.
 
 ## Junie Declaration Contract
 
-Junie is version-pinned by both marketing and build identity. Complete skills
+Junie records both marketing and build identity for diagnostics. Complete skills
 load from project then user `.junie/skills` roots. MCP declarations use
 `mcpServers` in project and user `.junie/mcp/mcp.json`. The current CLI exposes
 no finite non-interactive effective MCP observer, and same-name user/project MCP
@@ -248,7 +248,7 @@ invoked, and status remains effective-unverified.
 
 ## Amp Declaration Contract
 
-Amp is version-pinned by release identity and timestamp. It consumes complete
+Amp records release identity and timestamp for diagnostics. It consumes complete
 skills from its documented ordered roots and scoped MCP declarations from the
 selected JSON or JSONC settings file under `amp.mcpServers`; competing JSON and
 JSONC files are conflicts. The nearest project settings file wins over user
@@ -263,14 +263,14 @@ rewritten.
 
 ### Detection and authority
 
-Kiro CLI is registered only for the exact compiled profile `2.12.2`, whose
-version command is `kiro-cli --version` and whose default executable is
-`kiro-cli`. Adjacent and unknown versions remain observe-only. Kiro has no
+Kiro CLI uses a capability contract attested against `2.12.2`, without a version
+whitelist. Its version command is `kiro-cli --version` and its default executable
+is `kiro-cli`. Kiro has no
 native marketplace or plugin lifecycle in skilltap, and its Powers, IDE state,
 authentication, trust approval, and runtime caches are outside the adapter
 contract.
 
-The exact profile exposes documented global and project skill/MCP declaration
+The capability profile exposes documented global and project skill/MCP declaration
 surfaces. Managed plugin projection is `Unverified` in both scopes and is
 authorized only by the adapter's explicit declaration contract covering
 `ManagedDocument` and `CompleteSkillTree`. Foreground `--yes` is required for
@@ -318,9 +318,9 @@ excluded because it is retired.
 
 The Codex adapter locates the configured `codex` binary and reads its version.
 
-The adapter selects a verified compiled profile for exact Codex version
-`0.144.1` and
-scope. Help and JSON probes may narrow that profile before use. Native plugin
+The adapter uses a scoped capability profile originally attested against Codex
+`0.144.1`, without restricting other versions. Help and JSON probes may narrow
+that profile before use. Native plugin
 installation is available only when the profile includes the operation and the
 installed CLI still exposes:
 
@@ -425,10 +425,9 @@ Direct TOML editing is used only for documented settings without a native lifecy
 
 The Claude adapter locates the configured `claude` binary and reads its version.
 
-Native plugin lifecycle is available only when the verified compiled profile
-for Claude Code `2.1.201` and
-the exact Claude version and scope includes the operation and runtime evidence
-has not narrowed it:
+Native plugin lifecycle is available when the scoped capability profile,
+originally attested against Claude Code `2.1.201`, includes the operation and
+runtime evidence has not narrowed it. Other versions use the same contract:
 
 ```text
 claude plugin install
@@ -599,21 +598,24 @@ A changed plugin manifest or skill tree is re-evaluated for compatibility before
 
 Unknown native version formats are preserved as opaque values and compared only through the owning adapter.
 
-## Unknown Harness Versions
+## Harness Version Policy
 
-An unknown harness version may be observed when its structured output and documented files remain parseable.
+Harness and companion versions are recorded for diagnostics. They are never
+compared against an exact-version whitelist before granting an adapter's
+supported capabilities. Version-bearing profile identifiers name the original
+contract baseline; they do not constrain the running version.
 
-Mutation requires a verified compiled capability profile for the exact version
-and scope. Runtime probes may narrow that authority but cannot create it.
-
-If verification fails, status remains available and mutation is blocked with a harness-contract error.
+Runtime checks still validate the actual command output, documented schemas,
+component identity, and supported scope. An incompatible shape or failed native
+command is reported as a failure. Observe-only adapters remain observe-only
+because they have no implemented mutation route, regardless of version.
 
 ## Adding Another Harness
 
 A target may enter the registry when its adapter can provide reliable target
 identity and at least one safe documented observation surface. Each mutable
-component then independently requires explicit scope behavior, an exact verified
-version profile, update identity, fixture-based contract tests, and clear
+component then independently requires explicit scope behavior, a supported
+capability contract, update identity, fixture-based contract tests, and clear
 unsupported-component reporting.
 
 Native marketplace, plugin lifecycle, hooks, instructions, agents, and other

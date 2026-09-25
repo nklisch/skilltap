@@ -162,6 +162,7 @@ mod instructions;
 mod lifecycle;
 mod project_skills;
 mod reconciliation;
+mod skill_observation;
 mod status;
 
 pub(super) use status::first_use_harness_report;

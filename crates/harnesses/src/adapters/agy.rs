@@ -32,7 +32,6 @@ use super::configuration_constrained::{
     load_selected_plugin,
 };
 
-const VERIFIED_VERSION: &str = "1.1.13";
 const PROFILE_ID: &str = "agy-1-1-13";
 const MARKETPLACE_DOCUMENTS: &[&str] = &[
     ".agents/plugins/marketplace.json",
@@ -135,8 +134,8 @@ impl HarnessAdapter for AgyAdapter {
         NativeVersion::new(text).map_err(|_| crate::DetectionError::InvalidVersion)
     }
 
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        adapter_helpers::select_profile(version, VERIFIED_VERSION, PROFILE_ID, capabilities())
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        adapter_helpers::capability_profile(PROFILE_ID, capabilities())
     }
 
     fn observe(
@@ -574,7 +573,7 @@ mod tests {
     use skilltap_core::domain::CapabilityScope;
 
     #[test]
-    fn exact_agy_contract_is_global_mcp_only_and_never_has_a_probe() {
+    fn agy_contract_is_global_mcp_only_across_versions_and_has_no_probe() {
         let adapter = AgyAdapter;
         assert_eq!(
             adapter.decode_version(b"1.1.13\n").unwrap().as_str(),
@@ -595,8 +594,11 @@ mod tests {
             Some(CapabilitySupport::Unsupported)
         );
         let adjacent = adapter.select_profile(&NativeVersion::new("1.1.14").unwrap());
-        assert!(adjacent.profile_id().is_none());
-        assert!(adjacent.mutation_capabilities().is_none());
+        assert_eq!(adjacent.profile_id(), profile.profile_id());
+        assert_eq!(
+            adjacent.mutation_capabilities(),
+            profile.mutation_capabilities()
+        );
         assert!(adapter.effective_state_probe().is_none());
         assert!(adapter.native_lifecycle().is_none());
     }

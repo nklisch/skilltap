@@ -85,8 +85,9 @@ registry and exact observed profile:
 - **Unsupported** components or scopes remain blocked without affecting safe
   siblings.
 
-Native commands always require verified `Supported` authority. Unknown versions
-never mutate, and the daemon never supplies declaration acknowledgment.
+Native commands require `Supported` capability contracts and valid runtime
+output. Version numbers do not gate operations. The daemon never supplies
+declaration acknowledgment.
 
 ## Results and exit codes
 

@@ -59,10 +59,8 @@ impl HarnessAdapter for ClaudeAdapter {
         adapter_helpers::decode_claude_version(stdout, limits)
     }
 
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        adapter_helpers::select_profile(
-            version,
-            "2.1.201",
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        adapter_helpers::capability_profile(
             "claude-2-1-201",
             adapter_helpers::compiled_capabilities(true, true, false),
         )

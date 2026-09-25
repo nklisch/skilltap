@@ -444,6 +444,7 @@ impl StatusProjection<'_> {
         for entry in update_entries {
             outcome = outcome.with_resource(entry);
         }
+        let update_check_failed = !update_warnings.is_empty();
         for warning in update_warnings {
             outcome = outcome.with_warning(warning);
         }
@@ -453,7 +454,11 @@ impl StatusProjection<'_> {
             }
         }
         if observation.failed_targets == 0 {
-            outcome.result = ResultClass::Completed;
+            outcome.result = if available_updates > 0 || update_check_failed {
+                ResultClass::AttentionRequired
+            } else {
+                ResultClass::Completed
+            };
         }
         let mut outcome = outcome
             .with_summary(
@@ -535,31 +540,73 @@ impl StatusProjection<'_> {
             .state
             .as_ref()
             .map_or(0, |value| value.resources().len());
-        let only_project_skills = self
+        let mut global_skills_compared = true;
+        let paths = PlatformPaths::resolve(&ProcessEnvironment).ok();
+        for resource in self
             .documents
             .inventory
             .as_ref()
-            .map(|inventory| {
-                inventory.resources().values().all(|resource| {
-                    resource.kind() == ResourceKind::StandaloneSkill
-                        && matches!(resource.scope(), Scope::Project(_))
-                })
+            .into_iter()
+            .flat_map(|inventory| inventory.resources().values())
+            .filter(|resource| {
+                resource.kind() == ResourceKind::StandaloneSkill
+                    && resource.scope() == &Scope::Global
+                    && self.scope.resolved.contains(resource.scope())
             })
-            .unwrap_or(true)
-            && self
-                .documents
-                .state
-                .as_ref()
-                .map(|state| {
-                    state.resources().values().all(|resource| {
-                        resource.key().id().as_str().starts_with("skill:")
-                            && matches!(resource.key().scope(), Scope::Project(_))
-                    })
-                })
-                .unwrap_or(true);
+        {
+            for target in resource
+                .targets()
+                .iter()
+                .filter(|target| self.targets.resolved.contains(target))
+            {
+                let Some(paths) = paths.as_ref() else {
+                    global_skills_compared = false;
+                    continue;
+                };
+                let state = self
+                    .documents
+                    .state
+                    .as_ref()
+                    .and_then(|state| state.resources().get(resource.key()));
+                let condition = super::skill_observation::compare_skill(
+                    self.registry,
+                    paths,
+                    resource,
+                    state,
+                    target,
+                );
+                outcome = outcome.with_resource(
+                    OutputEntry::new(format!("{target}:{}", resource.key()), condition.label())
+                        .with_field("target", target.as_str())
+                        .with_field("scope", "global"),
+                );
+                if condition != super::skill_observation::SkillCondition::Satisfied {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "skill.destination.attention",
+                            "The desired global skill is missing, drifted, invalid, or unrecorded.",
+                        )
+                        .with_context("resource", resource.key().to_string())
+                        .with_context("condition", condition.label()),
+                    );
+                }
+            }
+        }
+        let only_skills = self.documents.inventory.as_ref().is_none_or(|inventory| {
+            inventory
+                .resources()
+                .values()
+                .all(|resource| resource.kind() == ResourceKind::StandaloneSkill)
+        }) && self.documents.state.as_ref().is_none_or(|state| {
+            state
+                .resources()
+                .keys()
+                .all(|key| key.id().as_str().starts_with("skill:"))
+        });
         if observation.failed_targets == 0
             && (desired_resources > 0 || recorded_resources > 0)
-            && (!only_project_skills || !project_skill_comparison)
+            && (!only_skills || !project_skill_comparison || !global_skills_compared)
         {
             outcome.result = ResultClass::AttentionRequired;
             outcome = outcome.with_warning(Warning::new(

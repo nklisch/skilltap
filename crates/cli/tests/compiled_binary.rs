@@ -918,11 +918,11 @@ fn pi_status_fixture_matrix_is_component_separated_repeatable_and_side_effect_fr
             ),
             ConditionalFixtureCase::UnknownMcpVersion => assert_eq!(
                 row_for("pi-mcp-adapter")["fields"]["compatibility"],
-                "unverified"
+                "compatible"
             ),
             ConditionalFixtureCase::UnknownHookVersion => assert_eq!(
                 row_for("@hsingjui/pi-hooks")["fields"]["compatibility"],
-                "unverified"
+                "partial"
             ),
             ConditionalFixtureCase::MalformedSettings
             | ConditionalFixtureCase::MalformedManifest
@@ -934,9 +934,7 @@ fn pi_status_fixture_matrix_is_component_separated_repeatable_and_side_effect_fr
             }
             ConditionalFixtureCase::MismatchedPackage => Some("profile.component.incompatible"),
             ConditionalFixtureCase::UnknownMcpVersion
-            | ConditionalFixtureCase::UnknownHookVersion => {
-                Some("profile.component.version-unverified")
-            }
+            | ConditionalFixtureCase::UnknownHookVersion => None,
             ConditionalFixtureCase::MalformedSettings => Some("native.shape.unsupported"),
             ConditionalFixtureCase::MalformedManifest => Some("native.entry.malformed"),
             ConditionalFixtureCase::ProjectTrust => Some("trust.required"),
@@ -962,7 +960,7 @@ fn pi_status_fixture_matrix_is_component_separated_repeatable_and_side_effect_fr
 }
 
 #[test]
-fn pi_unknown_core_version_never_gains_a_compiled_compound_profile() {
+fn pi_newer_core_version_keeps_component_profile_observe_only() {
     let machine = machine();
     let profile = FakeHarnessProfile::pi_with_version("0.80.7");
     let pi = fake_harness(&machine, &profile);
@@ -990,7 +988,10 @@ fn pi_unknown_core_version_never_gains_a_compiled_compound_profile() {
         .find(|row| row["fields"]["component"] == "compound_profile")
         .unwrap();
     assert_eq!(core["fields"]["version"], "0.80.7");
-    assert_eq!(compound["fields"]["profile_id"], "unknown");
+    assert_eq!(
+        compound["fields"]["profile_id"],
+        "pi-0-80-6-mcp-2-11-0-hooks-0-0-2"
+    );
     assert_eq!(compound["fields"]["mutation_authorized"], false);
 }
 
@@ -2833,7 +2834,7 @@ fn declaration_managed_profiles_require_exact_foreground_acknowledgment_and_daem
 }
 
 #[test]
-fn relaxed_unknown_versions_never_write_or_touch_native_state() {
+fn relaxed_profiles_install_idempotently_across_versions() {
     for (target, profile) in [
         (
             "junie",
@@ -2882,7 +2883,7 @@ fn relaxed_unknown_versions_never_write_or_touch_native_state() {
                 "--json",
             ],
         );
-        assert_code(&add, 2);
+        assert_code(&add, 0);
         assert_eq!(json(&add)["summary"]["changed"], false);
         let install = run(
             &machine,
@@ -2896,104 +2897,37 @@ fn relaxed_unknown_versions_never_write_or_touch_native_state() {
                 "--json",
             ],
         );
-        assert_code(&install, 2);
-        assert_eq!(json(&install)["summary"]["changed"], false);
+        assert_code(&install, 0);
+        assert_eq!(json(&install)["summary"]["changed"], true);
         let after = [
             machine.home().join(".junie"),
             machine.home().join(".agents"),
             machine.configuration_home().join("amp"),
         ]
         .map(|root| snapshot_native_tree(&root));
-        assert_eq!(
-            before, after,
-            "unknown {target} profile wrote a native surface"
+        assert_ne!(before, after, "newer {target} profile failed to install");
+        assert!(config_root(&machine).join("state.json").exists());
+        let repeat = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "demo@team",
+                "--yes",
+                "--target",
+                target,
+                "--json",
+            ],
         );
-        assert!(!config_root(&machine).join("state.json").exists());
+        assert_code(&repeat, 0);
+        assert_eq!(json(&repeat)["summary"]["changed"], false);
     }
 }
 
 #[test]
-fn opencode_exact_profile_manages_scoped_plugins_and_unknown_versions_do_not_write() {
-    let machine = machine();
-    let opencode = write_opencode_harness(&machine, "1.18.1");
-    let config = native_config_with_opencode(&opencode, &opencode, &opencode)
-        .replace(
-            "[harnesses.codex]\nenabled = true",
-            "[harnesses.codex]\nenabled = false",
-        )
-        .replace(
-            "[harnesses.claude]\nenabled = true",
-            "[harnesses.claude]\nenabled = false",
-        );
-    write_owned(&machine, "config.toml", &config);
-    let source = write_demo_marketplace(&machine);
-    let project = machine.home().join("opencode-project");
-    fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
-    fs::create_dir_all(project.join(".agents/skills")).unwrap();
-    fs::create_dir_all(machine.configuration_home().join("opencode")).unwrap();
-    fs::write(
-        machine.configuration_home().join("opencode/opencode.json"),
-        br#"{"model":"keep-global","plugin":["unrelated-plugin"],"future":{"preserve":true}}"#,
-    )
-    .unwrap();
-    fs::write(
-        project.join("opencode.json"),
-        br#"{"model":"keep-project","future":{"project":true}}"#,
-    )
-    .unwrap();
-
-    for scope in [None, Some(project.as_path())] {
-        let mut add = vec![
-            "marketplace",
-            "add",
-            source.to_str().unwrap(),
-            "--name",
-            "team",
-        ];
-        if let Some(project) = scope {
-            add.extend(["--project", project.to_str().unwrap()]);
-        }
-        add.extend(["--target", "opencode", "--json"]);
-        let output = run(&machine, &add);
-        assert_code(&output, 0);
-
-        let mut install = vec!["plugin", "install", "demo@team"];
-        if let Some(project) = scope {
-            install.extend(["--project", project.to_str().unwrap()]);
-        }
-        install.extend(["--target", "opencode", "--json"]);
-        let output = run(&machine, &install);
-        assert_code(&output, 0);
-        assert_eq!(json(&output)["result"], "completed");
-    }
-
-    assert!(
-        machine
-            .home()
-            .join(".agents/skills/demo/SKILL.md")
-            .is_file()
-    );
-    assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
-    let global_config = machine.configuration_home().join("opencode/opencode.json");
-    let project_config = project.join("opencode.json");
-    let global: Value = serde_json::from_slice(&fs::read(global_config).unwrap()).unwrap();
-    let project_value: Value = serde_json::from_slice(&fs::read(project_config).unwrap()).unwrap();
-    assert_eq!(global["model"], "keep-global");
-    assert_eq!(global["plugin"][0], "unrelated-plugin");
-    assert_eq!(global["future"]["preserve"], true);
-    assert_eq!(global["mcp"]["demo-docs"]["type"], "local");
-    assert_eq!(
-        global["mcp"]["demo-docs"]["command"],
-        serde_json::json!(["demo-mcp", "serve"])
-    );
-    assert_eq!(project_value["model"], "keep-project");
-    assert_eq!(project_value["future"]["project"], true);
-    assert_eq!(project_value["mcp"]["demo-docs"]["type"], "local");
-    assert!(config_root(&machine).join("state.json").is_file());
-
-    for version in ["1.18.0", "1.18.2"] {
-        let machine = IsolatedMachine::new("skilltap-compiled-opencode-unknown")
-            .expect("create isolated unknown-version machine");
+fn opencode_profiles_manage_scoped_plugins_across_versions() {
+    for version in ["1.18.0", "1.18.1", "1.18.2", "99.0.0"] {
+        let machine = machine();
         let opencode = write_opencode_harness(&machine, version);
         let config = native_config_with_opencode(&opencode, &opencode, &opencode)
             .replace(
@@ -3006,12 +2940,20 @@ fn opencode_exact_profile_manages_scoped_plugins_and_unknown_versions_do_not_wri
             );
         write_owned(&machine, "config.toml", &config);
         let source = write_demo_marketplace(&machine);
-        let project = machine.home().join("opencode-unknown-project");
+        let project = machine.home().join("opencode-project");
         fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
         fs::create_dir_all(project.join(".agents/skills")).unwrap();
-        let cache_sentinel = machine.cache_home().join("opencode/sentinel");
-        fs::create_dir_all(cache_sentinel.parent().unwrap()).unwrap();
-        fs::write(&cache_sentinel, b"native cache must remain untouched").unwrap();
+        fs::create_dir_all(machine.configuration_home().join("opencode")).unwrap();
+        fs::write(
+            machine.configuration_home().join("opencode/opencode.json"),
+            br#"{"model":"keep-global","plugin":["unrelated-plugin"],"future":{"preserve":true}}"#,
+        )
+        .unwrap();
+        fs::write(
+            project.join("opencode.json"),
+            br#"{"model":"keep-project","future":{"project":true}}"#,
+        )
+        .unwrap();
 
         for scope in [None, Some(project.as_path())] {
             let mut add = vec![
@@ -3026,43 +2968,42 @@ fn opencode_exact_profile_manages_scoped_plugins_and_unknown_versions_do_not_wri
             }
             add.extend(["--target", "opencode", "--json"]);
             let output = run(&machine, &add);
-            assert_code(&output, 2);
-        }
+            assert_code(&output, 0);
 
-        let roots = [
-            machine.home().join(".agents/skills"),
-            machine.configuration_home().join("opencode"),
-            project.join(".agents/skills"),
-            project.join(".opencode"),
-        ];
-        let before = roots
-            .iter()
-            .map(|root| snapshot_native_tree(root))
-            .collect::<Vec<_>>();
-        assert!(!config_root(&machine).join("state.json").exists());
-        for scope in [None, Some(project.as_path())] {
             let mut install = vec!["plugin", "install", "demo@team"];
             if let Some(project) = scope {
                 install.extend(["--project", project.to_str().unwrap()]);
             }
             install.extend(["--target", "opencode", "--json"]);
             let output = run(&machine, &install);
-            assert_code(&output, 2);
-            assert_eq!(json(&output)["summary"]["changed"], false);
+            assert_code(&output, 0);
+            assert_eq!(json(&output)["result"], "completed");
         }
-        let after = roots
-            .iter()
-            .map(|root| snapshot_native_tree(root))
-            .collect::<Vec<_>>();
-        assert_eq!(
-            after, before,
-            "unknown OpenCode {version} wrote a target surface"
+
+        assert!(
+            machine
+                .home()
+                .join(".agents/skills/demo/SKILL.md")
+                .is_file()
         );
+        assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
+        let global_config = machine.configuration_home().join("opencode/opencode.json");
+        let project_config = project.join("opencode.json");
+        let global: Value = serde_json::from_slice(&fs::read(global_config).unwrap()).unwrap();
+        let project_value: Value =
+            serde_json::from_slice(&fs::read(project_config).unwrap()).unwrap();
+        assert_eq!(global["model"], "keep-global");
+        assert_eq!(global["plugin"][0], "unrelated-plugin");
+        assert_eq!(global["future"]["preserve"], true);
+        assert_eq!(global["mcp"]["demo-docs"]["type"], "local");
         assert_eq!(
-            fs::read(&cache_sentinel).unwrap(),
-            b"native cache must remain untouched"
+            global["mcp"]["demo-docs"]["command"],
+            serde_json::json!(["demo-mcp", "serve"])
         );
-        assert!(!config_root(&machine).join("state.json").exists());
+        assert_eq!(project_value["model"], "keep-project");
+        assert_eq!(project_value["future"]["project"], true);
+        assert_eq!(project_value["mcp"]["demo-docs"]["type"], "local");
+        assert!(config_root(&machine).join("state.json").is_file());
     }
 }
 
@@ -3073,6 +3014,10 @@ fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_ch
         ("kimi", "kimi", "kimi, version 1.48.0"),
         ("vibe", "vibe", "vibe 2.19.1"),
         ("kilo", "kilo", "7.4.7"),
+        ("agy", "agy", "1.1.14"),
+        ("kimi", "kimi", "kimi, version 1.48.1"),
+        ("vibe", "vibe", "vibe 2.19.2"),
+        ("kilo", "kilo", "7.4.8"),
     ] {
         let machine = machine();
         let executable = write_constrained_harness(&machine, binary_name, version_output);
@@ -3285,72 +3230,6 @@ fn constrained_targets_run_compiled_global_project_repeat_remove_and_conflict_ch
                 .any(|error| error["code"] == "managed_project_mcp_conflict")
         );
 
-        let unknown_machine = IsolatedMachine::new("skilltap-compiled-constrained-unknown")
-            .expect("create constrained unknown machine");
-        let unknown_version = match target {
-            "agy" => "1.1.14",
-            "kimi" => "kimi, version 1.48.1",
-            "vibe" => "vibe 2.19.2",
-            "kilo" => "7.4.8",
-            _ => unreachable!(),
-        };
-        let unknown_executable =
-            write_constrained_harness(&unknown_machine, binary_name, unknown_version);
-        write_owned(
-            &unknown_machine,
-            "config.toml",
-            &constrained_config(target, &unknown_executable),
-        );
-        let unknown_source = write_demo_marketplace(&unknown_machine);
-        fs::create_dir_all(unknown_machine.home().join(".agents/skills")).unwrap();
-        let unknown_native_root = match target {
-            "agy" => unknown_machine.home().join(".gemini/config"),
-            "kimi" => unknown_machine.home().join(".kimi"),
-            "vibe" => unknown_machine.home().join(".vibe"),
-            "kilo" => unknown_machine.configuration_home().join("kilo"),
-            _ => unreachable!(),
-        };
-        fs::create_dir_all(&unknown_native_root).unwrap();
-        let before = [
-            snapshot_native_tree(&unknown_machine.home().join(".agents/skills")),
-            snapshot_native_tree(&unknown_native_root),
-        ];
-        let unknown_add = run(
-            &unknown_machine,
-            &[
-                "marketplace",
-                "add",
-                unknown_source.to_str().unwrap(),
-                "--name",
-                "unknown-team",
-                "--target",
-                target,
-                "--json",
-            ],
-        );
-        assert_code(&unknown_add, 2);
-        let unknown_install = run(
-            &unknown_machine,
-            &[
-                "plugin",
-                "install",
-                "demo@unknown-team",
-                "--target",
-                target,
-                "--json",
-            ],
-        );
-        assert_code(&unknown_install, 2);
-        assert_eq!(
-            [
-                snapshot_native_tree(&unknown_machine.home().join(".agents/skills")),
-                snapshot_native_tree(&unknown_native_root),
-            ],
-            before,
-            "unknown {target} profile wrote a native surface"
-        );
-        assert_version_only_invocations(&unknown_executable, &format!("unknown {target}"));
-
         // AGY, Kimi, Vibe, and Kilo have no production probe surface. Their
         // fake binaries fail every argv except exact version detection, so this
         // assertion covers every compiled operation above for each target.
@@ -3461,196 +3340,9 @@ fn vibe_compiled_cwd_is_explicitly_partial_and_never_emitted() {
 }
 
 #[test]
-fn agy_exact_profile_manages_global_declarations_and_project_skills_but_unknown_versions_only_observe()
- {
-    let machine = machine();
-    let agy = write_constrained_harness(&machine, "agy", "1.1.13");
-    let config = native_config_with_agy(&agy, &agy, &agy)
-        .replace(
-            "[harnesses.codex]\nenabled = true",
-            "[harnesses.codex]\nenabled = false",
-        )
-        .replace(
-            "[harnesses.claude]\nenabled = true",
-            "[harnesses.claude]\nenabled = false",
-        );
-    write_owned(&machine, "config.toml", &config);
-    let source = write_demo_marketplace(&machine);
-    let project = machine.home().join("agy-project");
-    fs::create_dir_all(machine.home().join(".gemini/config")).unwrap();
-    fs::write(
-        machine.home().join(".gemini/config/mcp_config.json"),
-        br#"{"future":{"keep":true},"mcpServers":{"unmanaged":{"command":"keep"}}}"#,
-    )
-    .unwrap();
-    fs::create_dir_all(project.join(".agents/skills")).unwrap();
-
-    let add = run(
-        &machine,
-        &[
-            "marketplace",
-            "add",
-            source.to_str().unwrap(),
-            "--name",
-            "team",
-            "--target",
-            "agy",
-            "--json",
-        ],
-    );
-    assert_code(&add, 0);
-    assert_eq!(json(&add)["result"], "completed");
-
-    let blocked = run(
-        &machine,
-        &[
-            "plugin",
-            "install",
-            "demo@team",
-            "--target",
-            "agy",
-            "--json",
-        ],
-    );
-    assert_code(&blocked, 2);
-    assert!(
-        json(&blocked)["errors"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|error| error["code"] == "partial_operation_requires_acknowledgment")
-    );
-    assert!(!machine.home().join(".gemini/config/skills/demo").exists());
-
-    let install = run(
-        &machine,
-        &[
-            "plugin",
-            "install",
-            "demo@team",
-            "--yes",
-            "--target",
-            "agy",
-            "--json",
-        ],
-    );
-    assert_code(&install, 0);
-    assert_eq!(json(&install)["result"], "completed");
-    assert!(
-        machine
-            .home()
-            .join(".gemini/config/skills/demo/SKILL.md")
-            .is_file()
-    );
-    let global_mcp: Value = serde_json::from_slice(
-        &fs::read(machine.home().join(".gemini/config/mcp_config.json")).unwrap(),
-    )
-    .unwrap();
-    assert_eq!(global_mcp["future"]["keep"], true);
-    assert_eq!(global_mcp["mcpServers"]["unmanaged"]["command"], "keep");
-    assert_eq!(global_mcp["mcpServers"]["demo-docs"]["command"], "demo-mcp");
-    assert_eq!(global_mcp["mcpServers"]["demo-docs"]["args"][0], "serve");
-
-    let repeat = run(
-        &machine,
-        &[
-            "plugin",
-            "install",
-            "demo@team",
-            "--yes",
-            "--target",
-            "agy",
-            "--json",
-        ],
-    );
-    assert_code(&repeat, 0);
-    assert_eq!(json(&repeat)["summary"]["changed"], false);
-
-    let add_project = run(
-        &machine,
-        &[
-            "marketplace",
-            "add",
-            source.to_str().unwrap(),
-            "--name",
-            "project-team",
-            "--project",
-            project.to_str().unwrap(),
-            "--target",
-            "agy",
-            "--json",
-        ],
-    );
-    assert_code(&add_project, 0);
-    let install_project = run(
-        &machine,
-        &[
-            "plugin",
-            "install",
-            "demo@project-team",
-            "--yes",
-            "--project",
-            project.to_str().unwrap(),
-            "--target",
-            "agy",
-            "--json",
-        ],
-    );
-    assert_code(&install_project, 0);
-    let install_project_value = json(&install_project);
-    assert_eq!(install_project_value["result"], "completed");
-    assert!(
-        install_project_value["resources"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|resource| resource["id"] == "omitted:mcp:demo-docs"),
-        "project AGY install did not report the unsupported MCP declaration: {install_project_value}"
-    );
-    assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
-    assert!(
-        !project.join(".gemini").exists(),
-        "project AGY install wrote an unsupported MCP surface"
-    );
-
-    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
-    assert!(
-        state.contains("agy"),
-        "AGY target state was not recorded: {state}"
-    );
-
-    let drifted_mcp = br#"{"future":{"keep":true},"mcpServers":{"unmanaged":{"command":"keep"},"demo-docs":{"command":"externally-changed"}}}"#;
-    fs::write(
-        machine.home().join(".gemini/config/mcp_config.json"),
-        drifted_mcp,
-    )
-    .unwrap();
-    let drifted = run(
-        &machine,
-        &[
-            "plugin",
-            "install",
-            "demo@team",
-            "--yes",
-            "--target",
-            "agy",
-            "--json",
-        ],
-    );
-    assert_code(&drifted, 2);
-    assert_eq!(
-        json(&drifted)["errors"][0]["code"],
-        "managed_project_drifted"
-    );
-    assert_eq!(
-        fs::read(machine.home().join(".gemini/config/mcp_config.json")).unwrap(),
-        drifted_mcp
-    );
-    assert_version_only_invocations(&agy, "AGY exact profile");
-
-    for version in ["1.1.14", "1.1.12"] {
-        let machine = IsolatedMachine::new("skilltap-compiled-agy-unknown")
-            .expect("create isolated unknown-version machine");
+fn agy_profiles_manage_global_declarations_and_project_skills_across_versions() {
+    for version in ["1.1.12", "1.1.13", "1.1.14", "99.0.0"] {
+        let machine = machine();
         let agy = write_constrained_harness(&machine, "agy", version);
         let config = native_config_with_agy(&agy, &agy, &agy)
             .replace(
@@ -3663,78 +3355,177 @@ fn agy_exact_profile_manages_global_declarations_and_project_skills_but_unknown_
             );
         write_owned(&machine, "config.toml", &config);
         let source = write_demo_marketplace(&machine);
-        let project = machine.home().join("agy-unknown-project");
+        let project = machine.home().join("agy-project");
         fs::create_dir_all(machine.home().join(".gemini/config")).unwrap();
+        fs::write(
+            machine.home().join(".gemini/config/mcp_config.json"),
+            br#"{"future":{"keep":true},"mcpServers":{"unmanaged":{"command":"keep"}}}"#,
+        )
+        .unwrap();
         fs::create_dir_all(project.join(".agents/skills")).unwrap();
 
-        for scope in [None, Some(project.as_path())] {
-            let mut add = vec![
+        let add = run(
+            &machine,
+            &[
                 "marketplace",
                 "add",
                 source.to_str().unwrap(),
                 "--name",
                 "team",
-            ];
-            if let Some(project) = scope {
-                add.extend(["--project", project.to_str().unwrap()]);
-            }
-            add.extend(["--target", "agy", "--json"]);
-            let output = run(&machine, &add);
-            assert_code(&output, 2);
-            let value = json(&output);
-            assert_eq!(value["result"], "attention_required");
-            assert!(
-                value["warnings"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|warning| warning["code"] == "native_capability_unverified")
-            );
-        }
-
-        let global_roots = [
-            machine.home().join(".gemini"),
-            machine.home().join(".agents"),
-        ];
-        let project_roots = [project.join(".agents/skills"), project.join(".gemini")];
-        let before = global_roots
-            .iter()
-            .chain(project_roots.iter())
-            .map(|root| snapshot_native_tree(root))
-            .collect::<Vec<_>>();
-        assert!(!config_root(&machine).join("state.json").exists());
-
-        for scope in [None, Some(project.as_path())] {
-            let mut install = vec!["plugin", "install", "demo@team", "--yes"];
-            if let Some(project) = scope {
-                install.extend(["--project", project.to_str().unwrap()]);
-            }
-            install.extend(["--target", "agy", "--json"]);
-            let output = run(&machine, &install);
-            assert_code(&output, 2);
-            let value = json(&output);
-            assert_eq!(value["result"], "attention_required");
-            assert_eq!(value["summary"]["changed"], false);
-            assert!(
-                value["warnings"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|warning| warning["code"] == "native_capability_unverified")
-            );
-        }
-
-        let after = global_roots
-            .iter()
-            .chain(project_roots.iter())
-            .map(|root| snapshot_native_tree(root))
-            .collect::<Vec<_>>();
-        assert_eq!(
-            after, before,
-            "unknown AGY {version} wrote a target surface"
+                "--target",
+                "agy",
+                "--json",
+            ],
         );
-        assert!(!config_root(&machine).join("state.json").exists());
-        assert_version_only_invocations(&agy, "unknown AGY profile");
+        assert_code(&add, 0);
+        assert_eq!(json(&add)["result"], "completed");
+
+        let blocked = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "demo@team",
+                "--target",
+                "agy",
+                "--json",
+            ],
+        );
+        assert_code(&blocked, 2);
+        assert!(
+            json(&blocked)["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|error| error["code"] == "partial_operation_requires_acknowledgment")
+        );
+        assert!(!machine.home().join(".gemini/config/skills/demo").exists());
+
+        let install = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "demo@team",
+                "--yes",
+                "--target",
+                "agy",
+                "--json",
+            ],
+        );
+        assert_code(&install, 0);
+        assert_eq!(json(&install)["result"], "completed");
+        assert!(
+            machine
+                .home()
+                .join(".gemini/config/skills/demo/SKILL.md")
+                .is_file()
+        );
+        let global_mcp: Value = serde_json::from_slice(
+            &fs::read(machine.home().join(".gemini/config/mcp_config.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(global_mcp["future"]["keep"], true);
+        assert_eq!(global_mcp["mcpServers"]["unmanaged"]["command"], "keep");
+        assert_eq!(global_mcp["mcpServers"]["demo-docs"]["command"], "demo-mcp");
+        assert_eq!(global_mcp["mcpServers"]["demo-docs"]["args"][0], "serve");
+
+        let repeat = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "demo@team",
+                "--yes",
+                "--target",
+                "agy",
+                "--json",
+            ],
+        );
+        assert_code(&repeat, 0);
+        assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+        let add_project = run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                source.to_str().unwrap(),
+                "--name",
+                "project-team",
+                "--project",
+                project.to_str().unwrap(),
+                "--target",
+                "agy",
+                "--json",
+            ],
+        );
+        assert_code(&add_project, 0);
+        let install_project = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "demo@project-team",
+                "--yes",
+                "--project",
+                project.to_str().unwrap(),
+                "--target",
+                "agy",
+                "--json",
+            ],
+        );
+        assert_code(&install_project, 0);
+        let install_project_value = json(&install_project);
+        assert_eq!(install_project_value["result"], "completed");
+        assert!(
+            install_project_value["resources"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|resource| resource["id"] == "omitted:mcp:demo-docs"),
+            "project AGY install did not report the unsupported MCP declaration: {install_project_value}"
+        );
+        assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
+        assert!(
+            !project.join(".gemini").exists(),
+            "project AGY install wrote an unsupported MCP surface"
+        );
+
+        let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+        assert!(
+            state.contains("agy"),
+            "AGY target state was not recorded: {state}"
+        );
+
+        let drifted_mcp = br#"{"future":{"keep":true},"mcpServers":{"unmanaged":{"command":"keep"},"demo-docs":{"command":"externally-changed"}}}"#;
+        fs::write(
+            machine.home().join(".gemini/config/mcp_config.json"),
+            drifted_mcp,
+        )
+        .unwrap();
+        let drifted = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "demo@team",
+                "--yes",
+                "--target",
+                "agy",
+                "--json",
+            ],
+        );
+        assert_code(&drifted, 2);
+        assert_eq!(
+            json(&drifted)["errors"][0]["code"],
+            "managed_project_drifted"
+        );
+        assert_eq!(
+            fs::read(machine.home().join(".gemini/config/mcp_config.json")).unwrap(),
+            drifted_mcp
+        );
+        assert_version_only_invocations(&agy, "AGY exact profile");
     }
 }
 
@@ -3808,186 +3599,7 @@ fn agy_omits_an_unmappable_optional_mcp_server_without_emitting_native_fields() 
 
 #[test]
 fn kiro_declaration_managed_plugin_requires_acknowledgment_and_stays_unverified() {
-    let machine = machine();
-    let kiro = write_kiro_harness(&machine, "2.12.2");
-    let config = native_config_with_kiro(&kiro)
-        .replace(
-            "[harnesses.codex]\nenabled = true",
-            "[harnesses.codex]\nenabled = false",
-        )
-        .replace(
-            "[harnesses.claude]\nenabled = true",
-            "[harnesses.claude]\nenabled = false",
-        );
-    write_owned(&machine, "config.toml", &config);
-    let source = write_demo_marketplace(&machine);
-    let project = machine.working_directory().join("kiro-project");
-    fs::create_dir_all(&project).unwrap();
-
-    for scope in [None, Some(project.as_path())] {
-        let mut add = vec![
-            "marketplace",
-            "add",
-            source.to_str().unwrap(),
-            "--name",
-            "team",
-        ];
-        if let Some(project) = scope {
-            add.extend(["--project", project.to_str().unwrap()]);
-        }
-        add.extend(["--target", "kiro", "--json"]);
-        let output = run(&machine, &add);
-        assert_code(&output, 0);
-        assert_eq!(json(&output)["result"], "completed");
-    }
-
-    let target_roots = [machine.kiro_home().to_path_buf(), project.clone()];
-    let before_blocked = target_roots
-        .iter()
-        .map(|root| snapshot_native_tree(root))
-        .collect::<Vec<_>>();
-    for scope in [None, Some(project.as_path())] {
-        let mut install = vec!["plugin", "install", "demo@team"];
-        if let Some(project) = scope {
-            install.extend(["--project", project.to_str().unwrap()]);
-        }
-        install.extend(["--target", "kiro", "--json"]);
-        let output = run(&machine, &install);
-        assert_code(&output, 2);
-        let value = json(&output);
-        assert_eq!(value["result"], "attention_required");
-        assert_eq!(value["summary"]["changed"], false);
-    }
-    assert_eq!(
-        target_roots
-            .iter()
-            .map(|root| snapshot_native_tree(root))
-            .collect::<Vec<_>>(),
-        before_blocked,
-        "unacknowledged Kiro declarations wrote a target surface"
-    );
-
-    let before_daemon = target_roots
-        .iter()
-        .map(|root| snapshot_native_tree(root))
-        .collect::<Vec<_>>();
-    let daemon = run(&machine, &["daemon", "run", "--json"]);
-    assert_code(&daemon, 2);
-    assert_eq!(json(&daemon)["result"], "attention_required");
-    assert_eq!(
-        target_roots
-            .iter()
-            .map(|root| snapshot_native_tree(root))
-            .collect::<Vec<_>>(),
-        before_daemon,
-        "the daemon acknowledged a Kiro declaration"
-    );
-
-    for scope in [None, Some(project.as_path())] {
-        let mut install = vec!["plugin", "install", "demo@team", "--yes"];
-        if let Some(project) = scope {
-            install.extend(["--project", project.to_str().unwrap()]);
-        }
-        install.extend(["--target", "kiro", "--json"]);
-        let output = run(&machine, &install);
-        assert_code(&output, 0);
-        let value = json(&output);
-        assert_eq!(value["result"], "completed");
-        assert_eq!(value["summary"]["changed"], true);
-    }
-
-    let global_skill = machine.kiro_home().join("skills/demo/SKILL.md");
-    let project_skill = project.join(".kiro/skills/demo/SKILL.md");
-    assert!(global_skill.is_file());
-    assert!(project_skill.is_file());
-    let global_settings: Value =
-        serde_json::from_slice(&fs::read(machine.kiro_home().join("settings/mcp.json")).unwrap())
-            .unwrap();
-    let project_settings: Value =
-        serde_json::from_slice(&fs::read(project.join(".kiro/settings/mcp.json")).unwrap())
-            .unwrap();
-    for settings in [&global_settings, &project_settings] {
-        assert_eq!(settings["mcpServers"]["demo-docs"]["command"], "demo-mcp");
-        assert_eq!(settings["mcpServers"]["demo-docs"]["args"][0], "serve");
-    }
-
-    let before_repeat = target_roots
-        .iter()
-        .map(|root| snapshot_native_tree(root))
-        .collect::<Vec<_>>();
-    for scope in [None, Some(project.as_path())] {
-        let mut repeat = vec!["plugin", "install", "demo@team", "--yes"];
-        if let Some(project) = scope {
-            repeat.extend(["--project", project.to_str().unwrap()]);
-        }
-        repeat.extend(["--target", "kiro", "--json"]);
-        let output = run(&machine, &repeat);
-        assert_code(&output, 0);
-        assert_eq!(json(&output)["summary"]["changed"], false);
-    }
-    assert_eq!(
-        target_roots
-            .iter()
-            .map(|root| snapshot_native_tree(root))
-            .collect::<Vec<_>>(),
-        before_repeat,
-        "repeating an acknowledged Kiro declaration rewrote a target surface"
-    );
-
-    let standalone = machine.home().join("kiro-project-skill");
-    fs::create_dir_all(standalone.join("references")).unwrap();
-    fs::write(
-        standalone.join("SKILL.md"),
-        "---\nname: kiro-project-skill\ndescription: Kiro link fixture\n---\nbody\n",
-    )
-    .unwrap();
-    fs::write(standalone.join("references/example.md"), "reference\n").unwrap();
-    let project_text = project.to_str().unwrap();
-    let install_skill = run(
-        &machine,
-        &[
-            "skill",
-            "install",
-            standalone.to_str().unwrap(),
-            "--project",
-            project_text,
-            "--target",
-            "kiro",
-            "--json",
-        ],
-    );
-    assert_code(&install_skill, 0);
-    let link = project.join(".kiro/skills/kiro-project-skill");
-    assert!(
-        fs::symlink_metadata(&link)
-            .unwrap()
-            .file_type()
-            .is_symlink()
-    );
-    assert_eq!(
-        fs::read_link(&link).unwrap(),
-        PathBuf::from("../../.agents/skills/kiro-project-skill")
-    );
-
-    let status = run(
-        &machine,
-        &["status", "--all-scopes", "--target", "kiro", "--json"],
-    );
-    assert_code(&status, 2);
-    let status_value = json(&status);
-    assert!(status_value.to_string().contains("effective_unverified"));
-
-    let invocation_log = machine.working_directory().join("kiro-cli.invocations");
-    let invocations = fs::read_to_string(invocation_log).unwrap();
-    assert!(invocations.lines().all(|line| line == "--version"));
-    assert!(!invocations.contains("mcp"));
-    assert!(!machine.kiro_home().join("cache").exists());
-    assert!(!machine.kiro_home().join("powers").exists());
-}
-
-#[test]
-fn kiro_unknown_adjacent_profiles_never_write_even_with_acknowledgment() {
-    for version in ["2.12.1", "2.12.3", "3.0.0"] {
+    for version in ["2.12.1", "2.12.2", "2.12.3", "3.0.0"] {
         let machine = machine();
         let kiro = write_kiro_harness(&machine, version);
         let config = native_config_with_kiro(&kiro)
@@ -4001,26 +3613,68 @@ fn kiro_unknown_adjacent_profiles_never_write_even_with_acknowledgment() {
             );
         write_owned(&machine, "config.toml", &config);
         let source = write_demo_marketplace(&machine);
-        let project = machine.working_directory().join("kiro-unknown-project");
+        let project = machine.working_directory().join("kiro-project");
         fs::create_dir_all(&project).unwrap();
-        let add = run(
-            &machine,
-            &[
+
+        for scope in [None, Some(project.as_path())] {
+            let mut add = vec![
                 "marketplace",
                 "add",
                 source.to_str().unwrap(),
                 "--name",
                 "team",
-                "--target",
-                "kiro",
-                "--json",
-            ],
-        );
-        assert_code(&add, 2);
-        let before = [machine.kiro_home().to_path_buf(), project.clone()]
+            ];
+            if let Some(project) = scope {
+                add.extend(["--project", project.to_str().unwrap()]);
+            }
+            add.extend(["--target", "kiro", "--json"]);
+            let output = run(&machine, &add);
+            assert_code(&output, 0);
+            assert_eq!(json(&output)["result"], "completed");
+        }
+
+        let target_roots = [machine.kiro_home().to_path_buf(), project.clone()];
+        let before_blocked = target_roots
             .iter()
             .map(|root| snapshot_native_tree(root))
             .collect::<Vec<_>>();
+        for scope in [None, Some(project.as_path())] {
+            let mut install = vec!["plugin", "install", "demo@team"];
+            if let Some(project) = scope {
+                install.extend(["--project", project.to_str().unwrap()]);
+            }
+            install.extend(["--target", "kiro", "--json"]);
+            let output = run(&machine, &install);
+            assert_code(&output, 2);
+            let value = json(&output);
+            assert_eq!(value["result"], "attention_required");
+            assert_eq!(value["summary"]["changed"], false);
+        }
+        assert_eq!(
+            target_roots
+                .iter()
+                .map(|root| snapshot_native_tree(root))
+                .collect::<Vec<_>>(),
+            before_blocked,
+            "unacknowledged Kiro declarations wrote a target surface"
+        );
+
+        let before_daemon = target_roots
+            .iter()
+            .map(|root| snapshot_native_tree(root))
+            .collect::<Vec<_>>();
+        let daemon = run(&machine, &["daemon", "run", "--json"]);
+        assert_code(&daemon, 2);
+        assert_eq!(json(&daemon)["result"], "attention_required");
+        assert_eq!(
+            target_roots
+                .iter()
+                .map(|root| snapshot_native_tree(root))
+                .collect::<Vec<_>>(),
+            before_daemon,
+            "the daemon acknowledged a Kiro declaration"
+        );
+
         for scope in [None, Some(project.as_path())] {
             let mut install = vec!["plugin", "install", "demo@team", "--yes"];
             if let Some(project) = scope {
@@ -4028,15 +3682,100 @@ fn kiro_unknown_adjacent_profiles_never_write_even_with_acknowledgment() {
             }
             install.extend(["--target", "kiro", "--json"]);
             let output = run(&machine, &install);
-            assert_code(&output, 2);
-            assert_eq!(json(&output)["summary"]["changed"], false);
+            assert_code(&output, 0);
+            let value = json(&output);
+            assert_eq!(value["result"], "completed");
+            assert_eq!(value["summary"]["changed"], true);
         }
-        let after = [machine.kiro_home().to_path_buf(), project]
+
+        let global_skill = machine.kiro_home().join("skills/demo/SKILL.md");
+        let project_skill = project.join(".kiro/skills/demo/SKILL.md");
+        assert!(global_skill.is_file());
+        assert!(project_skill.is_file());
+        let global_settings: Value = serde_json::from_slice(
+            &fs::read(machine.kiro_home().join("settings/mcp.json")).unwrap(),
+        )
+        .unwrap();
+        let project_settings: Value =
+            serde_json::from_slice(&fs::read(project.join(".kiro/settings/mcp.json")).unwrap())
+                .unwrap();
+        for settings in [&global_settings, &project_settings] {
+            assert_eq!(settings["mcpServers"]["demo-docs"]["command"], "demo-mcp");
+            assert_eq!(settings["mcpServers"]["demo-docs"]["args"][0], "serve");
+        }
+
+        let before_repeat = target_roots
             .iter()
             .map(|root| snapshot_native_tree(root))
             .collect::<Vec<_>>();
-        assert_eq!(after, before, "Kiro {version} mutated a target surface");
-        assert!(!config_root(&machine).join("state.json").exists());
+        for scope in [None, Some(project.as_path())] {
+            let mut repeat = vec!["plugin", "install", "demo@team", "--yes"];
+            if let Some(project) = scope {
+                repeat.extend(["--project", project.to_str().unwrap()]);
+            }
+            repeat.extend(["--target", "kiro", "--json"]);
+            let output = run(&machine, &repeat);
+            assert_code(&output, 0);
+            assert_eq!(json(&output)["summary"]["changed"], false);
+        }
+        assert_eq!(
+            target_roots
+                .iter()
+                .map(|root| snapshot_native_tree(root))
+                .collect::<Vec<_>>(),
+            before_repeat,
+            "repeating an acknowledged Kiro declaration rewrote a target surface"
+        );
+
+        let standalone = machine.home().join("kiro-project-skill");
+        fs::create_dir_all(standalone.join("references")).unwrap();
+        fs::write(
+            standalone.join("SKILL.md"),
+            "---\nname: kiro-project-skill\ndescription: Kiro link fixture\n---\nbody\n",
+        )
+        .unwrap();
+        fs::write(standalone.join("references/example.md"), "reference\n").unwrap();
+        let project_text = project.to_str().unwrap();
+        let install_skill = run(
+            &machine,
+            &[
+                "skill",
+                "install",
+                standalone.to_str().unwrap(),
+                "--project",
+                project_text,
+                "--target",
+                "kiro",
+                "--json",
+            ],
+        );
+        assert_code(&install_skill, 0);
+        let link = project.join(".kiro/skills/kiro-project-skill");
+        assert!(
+            fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(
+            fs::read_link(&link).unwrap(),
+            PathBuf::from("../../.agents/skills/kiro-project-skill")
+        );
+
+        let status = run(
+            &machine,
+            &["status", "--all-scopes", "--target", "kiro", "--json"],
+        );
+        assert_code(&status, 2);
+        let status_value = json(&status);
+        assert!(status_value.to_string().contains("effective_unverified"));
+
+        let invocation_log = machine.working_directory().join("kiro-cli.invocations");
+        let invocations = fs::read_to_string(invocation_log).unwrap();
+        assert!(invocations.lines().all(|line| line == "--version"));
+        assert!(!invocations.contains("mcp"));
+        assert!(!machine.kiro_home().join("cache").exists());
+        assert!(!machine.kiro_home().join("powers").exists());
     }
 }
 
@@ -4574,9 +4313,15 @@ fn copilot_compiled_standalone_skills_require_foreground_ack_and_use_canonical_r
             "--json",
         ],
     );
-    assert_code(&output, 2);
-    assert_eq!(json(&output)["summary"]["changed"], false);
-    assert_eq!(snapshot_native_tree(unknown_machine.home()), unknown_before);
+    assert_code(&output, 0);
+    assert_eq!(json(&output)["summary"]["changed"], true);
+    assert_ne!(snapshot_native_tree(unknown_machine.home()), unknown_before);
+    assert!(
+        unknown_machine
+            .home()
+            .join(".agents/skills/copilot-standalone/SKILL.md")
+            .exists()
+    );
     assert!(
         unknown
             ._fixture
@@ -4934,13 +4679,12 @@ fn whole_skill_modes_are_normalized_for_global_and_project_codex_and_claude() {
             "--json",
         ],
     );
-    assert_code(&remove, 2);
-    assert!(
-        json(&remove)["warnings"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|warning| warning["code"] == "skill_destination_drifted_requires_acknowledgment")
+    // The shared canonical tree still belongs to Claude; removing only the
+    // Codex binding must neither delete it nor demand permission to edit it.
+    assert_code(&remove, 0);
+    assert_eq!(
+        fs::metadata(&drifted).unwrap().permissions().mode() & 0o7777,
+        0o700
     );
     fs::set_permissions(&drifted, fs::Permissions::from_mode(0o600)).unwrap();
 
@@ -6154,7 +5898,7 @@ fn targeted_skill_remove_preserves_unselected_target_inventory() {
     );
     assert_code(&remove, 0);
     assert!(
-        !machine
+        machine
             .home()
             .join(".agents/skills/targeted-skill")
             .exists()
@@ -6204,8 +5948,8 @@ fn targeted_skill_update_preserves_unselected_target_and_native_ids() {
             "--json",
         ],
     );
-    assert_code(&update, 0);
-    assert_eq!(json(&update)["summary"]["changed"], true);
+    assert_code(&update, 2);
+    assert_eq!(json(&update)["summary"]["changed"], false);
     assert_eq!(
         fs::read_to_string(
             machine
@@ -6213,7 +5957,7 @@ fn targeted_skill_update_preserves_unselected_target_and_native_ids() {
                 .join(".agents/skills/targeted-update/SKILL.md")
         )
         .unwrap(),
-        "---\nname: targeted-update\ndescription: v2\n---\nv2\n"
+        "---\nname: targeted-update\ndescription: v1\n---\nv1\n"
     );
     assert_eq!(
         fs::read_to_string(
@@ -6248,7 +5992,7 @@ fn targeted_skill_update_preserves_unselected_target_and_native_ids() {
     let claude = binding("claude");
     assert_eq!(claude["native_id"], "targeted-update");
     assert_eq!(codex["native_id"], "targeted-update");
-    assert_ne!(codex["fingerprint"], claude["fingerprint"]);
+    assert_eq!(codex["fingerprint"], claude["fingerprint"]);
 }
 
 #[test]
@@ -7894,7 +7638,7 @@ fn safe_update_policy_pins_drift_and_source_failures_remain_visible() {
     let off_config = check_config.replace("mode = \"check\"", "mode = \"off\"");
     write_owned(&machine, "config.toml", &off_config);
     let off = run(&machine, &["status", "--target", "codex", "--json"]);
-    assert_code(&off, 2);
+    assert_code(&off, 0);
     let off_value = json(&off);
     assert!(
         off_value["resources"]
@@ -8912,3 +8656,6 @@ fn daemon_refresh_failure_skips_same_target_plugin_and_persists_status_evidence(
         "status omitted refresh failure: {status_value}"
     );
 }
+
+#[path = "compiled_binary/skill_lifecycle_regressions.rs"]
+mod skill_lifecycle_regressions;

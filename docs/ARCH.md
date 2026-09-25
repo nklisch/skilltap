@@ -233,7 +233,7 @@ Adapters never mutate during observation or capability detection.
 
 ## Capability Detection
 
-Harness support is runtime-versioned.
+Harness support is defined by adapter capability contracts, not version whitelists.
 
 An adapter resolves the configured binary to one canonical executable identity,
 reads its opaque version, and selects a compiled capability profile whose
@@ -245,9 +245,9 @@ load paths, lossless preservation, ownership, conflict and drift checks,
 rollback, filesystem confinement, and explicit foreground acknowledgment.
 
 Runtime probes may confirm that compiled support remains usable or narrow it to
-unsupported or unverified. They cannot add a capability or widen support. An
-unknown harness version has no verified profile and is observe-only when its
-documented state remains parseable. Registration, scope support, and component
+unsupported or unverified. They cannot add a capability or widen support. A
+new or older version uses the same adapter contract when its commands and
+documented state remain compatible. Registration, scope support, and component
 support are independent; an unsupported component does not erase a sibling
 capability.
 
@@ -373,7 +373,7 @@ The command runner captures exit status, standard output, standard error, durati
 
 Secrets from environment variables or native configuration are never copied into logs or state.
 
-Native commands use their JSON mode where documented. Human-oriented output is parsed only when no structured contract exists, and such parsing is version-gated.
+Native commands use their JSON mode where documented. Human-oriented output is parsed only when no structured contract exists, and such parsing validates the expected output shape.
 
 ## Plugin Resolution
 

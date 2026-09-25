@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.3.0
+
+- Remove exact harness and companion version whitelists. Supported commands
+  and file schemas work across versions; runtime failures remain visible.
+- Preserve shared global skills when removing only one harness binding.
+- Report failed or partial skill publication instead of claiming success.
+- Resolve relative local skill directories and retain their complete contents.
+- Update only desired harness bindings, retain sequentially added targets, and
+  preserve independent source repositories when updating across scopes.
+- Show satisfied skills as no-change plans and compare global skill status.
+- Allow declaration-managed installation into fresh configuration directories.
+
 ## v3.2.0
 
 ### Changes

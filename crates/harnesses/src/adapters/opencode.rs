@@ -23,7 +23,6 @@ use crate::{
 
 use super::opencode_managed::OpenCodeManagedProjection;
 
-const VERIFIED_VERSION: &str = "1.18.1";
 const PROFILE_ID: &str = "opencode-1-18-1";
 
 pub struct OpenCodeAdapter;
@@ -69,10 +68,8 @@ impl HarnessAdapter for OpenCodeAdapter {
         NativeVersion::new(text).map_err(|_| crate::DetectionError::InvalidVersion)
     }
 
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        adapter_helpers::select_profile(
-            version,
-            VERIFIED_VERSION,
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        adapter_helpers::capability_profile(
             PROFILE_ID,
             // OpenCode has no complete native marketplace/plugin lifecycle.
             // These capabilities authorize only skilltap-owned, file-managed
@@ -334,7 +331,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_profile_accepts_only_the_validated_version() {
+    fn opencode_contract_supports_adjacent_and_future_versions() {
         let adapter = OpenCodeAdapter;
         assert_eq!(
             adapter.decode_version(b"1.18.1\n").unwrap().as_str(),
@@ -359,8 +356,8 @@ mod tests {
                 adapter
                     .select_profile(&NativeVersion::new(version).unwrap())
                     .mutation_capabilities()
-                    .is_none(),
-                "{version} must remain observe-only"
+                    .is_some(),
+                "{version} must retain the supported contract"
             );
         }
     }

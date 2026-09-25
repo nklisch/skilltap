@@ -80,7 +80,7 @@ decision. A partial, lossy, or declaration-managed foreground operation
 requires explicit `--yes`. For declaration-managed work, the acknowledgment
 accepts that skilltap can verify owned file bytes but not harness loading or
 activation. It never overrides invalid configuration, unsupported components or
-scopes, unknown versions, authentication, trust, drift, conflicts, or native
+scopes, authentication, trust, drift, conflicts, or native
 harness policy.
 
 After verified mutation, skilltap observes the targets again. Declaration-

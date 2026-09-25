@@ -105,13 +105,8 @@ impl HarnessAdapter for JunieAdapter {
         NativeVersion::new(value).map_err(|_| crate::DetectionError::InvalidVersion)
     }
 
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        adapter_helpers::select_profile(
-            version,
-            JUNIE.verified_version,
-            JUNIE.profile_id,
-            capabilities(),
-        )
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        adapter_helpers::capability_profile(JUNIE.profile_id, capabilities())
     }
 
     fn observe(

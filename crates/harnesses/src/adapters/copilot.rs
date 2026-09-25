@@ -2,10 +2,10 @@ use std::{collections::BTreeMap, ffi::OsString, sync::LazyLock};
 
 use skilltap_core::{
     domain::{
-        AbsolutePath, CapabilityId, CapabilityProfileId, CapabilityScope, CapabilitySet,
-        CapabilitySupport, Fingerprint, HarnessId, NativeId, NativeVersion, ObservationFields,
-        ObservationFinding, ObservationFindingCode, ObservationSeverity, ObservationSubject,
-        ObservationSummary, Scope, ScopedCapabilitySets,
+        AbsolutePath, CapabilityId, CapabilityScope, CapabilitySet, CapabilitySupport, Fingerprint,
+        HarnessId, NativeId, NativeVersion, ObservationFields, ObservationFinding,
+        ObservationFindingCode, ObservationSeverity, ObservationSubject, ObservationSummary, Scope,
+        ScopedCapabilitySets,
     },
     instructions::fingerprint_contents,
     mutation_authority::{ManagedDeclarationContract, ManagedSurfaceKind},
@@ -29,6 +29,7 @@ use crate::{
 
 use super::copilot_managed::CopilotManagedProjection;
 
+#[cfg(test)]
 const VERIFIED_VERSION: &str = "1.0.70";
 const PROFILE_ID: &str = "copilot-1-0-70";
 const COPILOT_HOME: &str = ".copilot";
@@ -89,21 +90,9 @@ impl HarnessAdapter for CopilotAdapter {
 
     fn select_profile(
         &self,
-        version: &NativeVersion,
+        _version: &NativeVersion,
     ) -> skilltap_core::domain::CapabilityProfileSelection {
-        let capabilities = copilot_capabilities();
-        if version.as_str() == VERIFIED_VERSION {
-            skilltap_core::domain::CapabilityProfileSelection::verified(
-                CapabilityProfileId::new(PROFILE_ID).expect("compiled profile id is valid"),
-                capabilities,
-            )
-        } else {
-            let unknown = ScopedCapabilitySets::new(
-                unknown_set(capabilities.for_scope_kind(CapabilityScope::Global)),
-                unknown_set(capabilities.for_scope_kind(CapabilityScope::Project)),
-            );
-            skilltap_core::domain::CapabilityProfileSelection::unknown_version(unknown)
-        }
+        crate::adapter_helpers::capability_profile(PROFILE_ID, copilot_capabilities())
     }
 
     fn observe(
@@ -421,13 +410,6 @@ fn copilot_capabilities() -> ScopedCapabilitySets {
     ScopedCapabilitySets::new(make(), make())
 }
 
-fn unknown_set(set: &CapabilitySet) -> CapabilitySet {
-    CapabilitySet::new(
-        set.iter()
-            .map(|(id, _)| (id.clone(), CapabilitySupport::Unverified)),
-    )
-}
-
 fn child(root: &AbsolutePath, relative: &str) -> Option<AbsolutePath> {
     AbsolutePath::new(format!("{}/{}", root.as_str(), relative)).ok()
 }
@@ -480,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_copilot_version_is_registered_but_unknown_versions_are_observe_only() {
+    fn copilot_contract_supports_adjacent_and_future_versions() {
         let adapter = CopilotAdapter;
         assert_eq!(
             adapter
@@ -504,8 +486,8 @@ mod tests {
                 adapter
                     .select_profile(&NativeVersion::new(version).unwrap())
                     .mutation_capabilities()
-                    .is_none(),
-                "{version} must remain observe-only"
+                    .is_some(),
+                "{version} must retain the supported contract"
             );
         }
     }

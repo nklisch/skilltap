@@ -23,7 +23,6 @@ use crate::{
 
 use super::kiro_managed::KiroManagedProjection;
 
-const VERIFIED_VERSION: &str = "2.12.2";
 const PROFILE_ID: &str = "kiro-2-12-2";
 
 pub struct KiroAdapter;
@@ -97,13 +96,8 @@ impl HarnessAdapter for KiroAdapter {
         NativeVersion::new(version).map_err(|_| crate::DetectionError::InvalidVersion)
     }
 
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        adapter_helpers::select_profile(
-            version,
-            VERIFIED_VERSION,
-            PROFILE_ID,
-            declaration_capabilities(),
-        )
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        adapter_helpers::capability_profile(PROFILE_ID, declaration_capabilities())
     }
 
     fn observe(
@@ -199,7 +193,7 @@ mod tests {
     use skilltap_core::domain::{CapabilityScope, CapabilitySupport};
 
     #[test]
-    fn exact_version_profile_is_authorized_and_adjacent_versions_are_unknown() {
+    fn kiro_contract_supports_adjacent_and_future_versions() {
         let adapter = KiroAdapter;
         assert_eq!(adapter.identity().default_binary, Some("kiro-cli"));
         assert_eq!(
@@ -267,14 +261,10 @@ mod tests {
         assert!(adapter.effective_state_probe().is_none());
         for version in ["2.12.1", "2.12.3", "3.0.0", "99.0.0"] {
             let profile = adapter.select_profile(&NativeVersion::new(version).unwrap());
-            assert!(profile.profile_id().is_none(), "{version} must be unknown");
-            assert!(profile.mutation_capabilities().is_none());
+            assert_eq!(profile.profile_id(), known.profile_id());
             assert_eq!(
-                profile
-                    .observation_capabilities()
-                    .for_scope_kind(CapabilityScope::Global)
-                    .support(&CapabilityId::new("harness.observe").unwrap()),
-                Some(CapabilitySupport::Unverified)
+                profile.mutation_capabilities(),
+                known.mutation_capabilities()
             );
         }
     }

@@ -247,7 +247,7 @@ fn exact_real_versions_are_reachable_and_select_exact_profiles() {
 }
 
 #[test]
-fn factory_adjacent_version_is_observe_only_and_detection_is_zero_write() {
+fn factory_adjacent_version_retains_capabilities_and_detection_is_zero_write() {
     let profile = FakeHarnessProfile::droid_with_version("0.171.1");
     let (root, fixture) = install_profile(&profile, "droid");
     let before = fs::read_dir(root.path()).unwrap().count();
@@ -268,7 +268,7 @@ fn factory_adjacent_version_is_observe_only_and_detection_is_zero_write() {
         FactoryAdapter::static_ref()
             .select_profile(native_version)
             .mutation_capabilities()
-            .is_none()
+            .is_some()
     );
     assert_eq!(before, after);
     assert_eq!(
@@ -278,7 +278,7 @@ fn factory_adjacent_version_is_observe_only_and_detection_is_zero_write() {
 }
 
 #[test]
-fn qwen_adjacent_version_is_observe_only_and_detection_is_zero_write() {
+fn qwen_adjacent_version_retains_capabilities_and_detection_is_zero_write() {
     let profile = FakeHarnessProfile::qwen_with_version("0.19.11");
     let (root, fixture) = install_profile(&profile, "qwen");
     let before = fs::read_dir(root.path()).unwrap().count();
@@ -299,7 +299,7 @@ fn qwen_adjacent_version_is_observe_only_and_detection_is_zero_write() {
         QwenAdapter::static_ref()
             .select_profile(native_version)
             .mutation_capabilities()
-            .is_none()
+            .is_some()
     );
     assert_eq!(before, after);
     assert_eq!(
@@ -309,7 +309,7 @@ fn qwen_adjacent_version_is_observe_only_and_detection_is_zero_write() {
 }
 
 #[test]
-fn copilot_adjacent_version_is_observe_only_and_detection_is_zero_write() {
+fn copilot_adjacent_version_retains_capabilities_and_detection_is_zero_write() {
     let profile = FakeHarnessProfile::copilot_with_version(
         "GitHub Copilot CLI 1.0.71.\nRun 'copilot update' to check for updates.",
     );
@@ -332,7 +332,7 @@ fn copilot_adjacent_version_is_observe_only_and_detection_is_zero_write() {
         CopilotAdapter::static_ref()
             .select_profile(native_version)
             .mutation_capabilities()
-            .is_none()
+            .is_some()
     );
     assert_eq!(before, after);
     assert_eq!(
@@ -598,7 +598,7 @@ fn observe_only_candidate_reports_match_registry_and_first_party_bootstrap_scope
 }
 
 #[test]
-fn known_profiles_grant_mutation_and_unknown_versions_remain_observe_only() {
+fn supported_profiles_grant_the_same_capabilities_across_versions() {
     let known = skilltap_core::domain::NativeVersion::new("0.144.1").unwrap();
     let unknown = skilltap_core::domain::NativeVersion::new("99.0.0").unwrap();
     let known_profile = CodexAdapter::static_ref().select_profile(&known);
@@ -613,14 +613,14 @@ fn known_profiles_grant_mutation_and_unknown_versions_remain_observe_only() {
             CodexAdapter::static_ref()
                 .select_profile(&skilltap_core::domain::NativeVersion::new(version).unwrap())
                 .mutation_capabilities()
-                .is_none(),
-            "{version} must not select the exact Codex profile"
+                .is_some(),
+            "{version} must retain the Codex capability contract"
         );
     }
 
     let unknown_profile = CodexAdapter::static_ref().select_profile(&unknown);
-    assert!(unknown_profile.mutation_capabilities().is_none());
-    assert!(unknown_profile.profile_id().is_none());
+    assert!(unknown_profile.mutation_capabilities().is_some());
+    assert!(unknown_profile.profile_id().is_some());
 }
 
 #[test]

@@ -1133,6 +1133,44 @@ impl StatusApplication<'_> {
                 continue;
             };
             for harness in authorized_targets.iter() {
+                if kind == ResourceKind::StandaloneSkill {
+                    use super::skill_observation::{SkillCondition, compare_skill};
+                    let resource = ResourceId::new(format!("skill:{name}"))
+                        .ok()
+                        .map(|id| ResourceKey::new(id, concrete_scope.clone()))
+                        .and_then(|key| documents.inventory.as_ref()?.resources().get(&key));
+                    if let Some(resource) = resource {
+                        let state = documents
+                            .state
+                            .as_ref()
+                            .and_then(|state| state.resources().get(resource.key()));
+                        let condition =
+                            compare_skill(self.registry, &paths, resource, state, harness);
+                        if condition == SkillCondition::Satisfied {
+                            continue;
+                        }
+                        let blocked =
+                            matches!(condition, SkillCondition::Drifted | SkillCondition::Invalid);
+                        outcome = outcome.with_operation(
+                            crate::OperationOutcome::new(
+                                skill_operation_id(harness, resource.key()).to_string(),
+                                if blocked { "blocked" } else { "repair" },
+                            )
+                            .with_field("target", harness.as_str())
+                            .with_field("scope", scope_label(concrete_scope))
+                            .with_field("resource", resource.key().to_string())
+                            .with_field("fresh_state", condition.label()),
+                        );
+                        if blocked {
+                            outcome = outcome.with_warning(Warning::new(
+                                "skill.destination.conflict",
+                                "The managed skill has drift or invalid content; preserve and resolve it before synchronization.",
+                            ).with_context("resource", resource.key().to_string()));
+                        }
+                        operation_count += 1;
+                        continue;
+                    }
+                }
                 operation_count += 1;
                 let presence = lifecycle_preview_presence(
                     self.registry,
@@ -2316,6 +2354,25 @@ impl StatusApplication<'_> {
         acknowledged: bool,
         request: SkillInstallRequest<'_>,
     ) -> Outcome {
+        self.execute_skill_install_selected(
+            command,
+            requested_scope,
+            target,
+            acknowledged,
+            request,
+            None,
+        )
+    }
+
+    fn execute_skill_install_selected(
+        &self,
+        command: &'static str,
+        requested_scope: &ScopeArgs,
+        target: &TargetArgs,
+        acknowledged: bool,
+        request: SkillInstallRequest<'_>,
+        selected: Option<&HarnessSet>,
+    ) -> Outcome {
         let (documents, mut outcome) = match self.load_documents(command) {
             Ok(value) => value,
             Err(outcome) => return *outcome,
@@ -2333,7 +2390,7 @@ impl StatusApplication<'_> {
             }
         };
         outcome.scope = Some(scope.output.clone());
-        let targets = match StatusTargets::resolve(&status_args, &documents) {
+        let mut targets = match StatusTargets::resolve(&status_args, &documents) {
             Ok(targets) => targets,
             Err(StatusTargetError::NoneEnabled) => {
                 return outcome.with_error(ErrorDetail::new(
@@ -2349,6 +2406,20 @@ impl StatusApplication<'_> {
                 ));
             }
         };
+        if let Some(selected) = selected {
+            let Ok(resolved) = HarnessSet::new(
+                targets
+                    .resolved
+                    .iter()
+                    .filter(|harness| selected.contains(harness))
+                    .cloned(),
+            ) else {
+                return Outcome::new(command, ResultClass::AttentionRequired).with_error(ErrorDetail::new(
+                    "update_targets_changed", "The selected update targets are no longer enabled; retry after reviewing configuration.",
+                ));
+            };
+            targets.resolved = resolved;
+        }
         // Resolve standalone skill mutation authority before resolving the
         // source. A missing local source may otherwise trigger a Git checkout
         // into the managed source store even though every selected candidate
@@ -2552,7 +2623,36 @@ impl StatusApplication<'_> {
         } else {
             None
         };
-        let locator = match SourceLocator::new(request.source) {
+        let requested_path = if Path::new(request.source).is_absolute() {
+            Some(PathBuf::from(request.source))
+        } else {
+            self.working_directory
+                .current_directory()
+                .ok()
+                .map(|directory| Path::new(directory.as_str()).join(request.source))
+        };
+        let source_text = if Path::new(request.source).is_absolute()
+            || request.source.starts_with("./")
+            || request.source.starts_with("../")
+            || requested_path.as_ref().is_some_and(|path| path.exists())
+        {
+            match requested_path
+                .and_then(|path| std::fs::canonicalize(path).ok())
+                .and_then(|path| path.to_str().map(str::to_owned))
+            {
+                Some(path) => path,
+                None => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "invalid_skill_source",
+                        "The local skill path could not be resolved.",
+                    ));
+                }
+            }
+        } else {
+            request.source.to_owned()
+        };
+        let locator = match SourceLocator::new(source_text) {
             Ok(locator) => locator,
             Err(_) => {
                 outcome.result = ResultClass::Invalid;
@@ -2894,7 +2994,16 @@ impl StatusApplication<'_> {
             let desired_targets = inventory
                 .resources()
                 .get(&key)
-                .map(|resource| resource.targets().clone())
+                .map(|resource| {
+                    HarnessSet::new(
+                        resource
+                            .targets()
+                            .iter()
+                            .chain(mutating_targets.iter())
+                            .cloned(),
+                    )
+                    .expect("merged skill targets are valid")
+                })
                 .unwrap_or_else(|| mutating_targets.clone());
             let desired = match DesiredResource::new(
                 key.clone(),
@@ -2917,7 +3026,25 @@ impl StatusApplication<'_> {
                     ));
                 }
             };
-            inventory = match inventory.with_resource(desired) {
+            let desired = if let Some(existing) = inventory.resources().get(&key) {
+                if existing.source() != desired.source() {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_error(ErrorDetail::new(
+                        "inventory_resource_conflict",
+                        "The requested skill conflicts with an existing desired source.",
+                    ));
+                }
+                existing
+                    .with_targets(desired.targets().clone())
+                    .expect("merged desired skill targets are valid")
+            } else {
+                desired
+            };
+            inventory = match if inventory.resources().contains_key(&key) {
+                inventory.replace_resource(desired)
+            } else {
+                inventory.with_resource(desired)
+            } {
                 Ok(inventory) => inventory,
                 Err(_) => {
                     outcome.result = ResultClass::AttentionRequired;
@@ -2972,6 +3099,32 @@ impl StatusApplication<'_> {
                     },
                     Err(_) => None,
                 };
+                let shared_with_unselected =
+                    inventory.resources().get(&key).is_some_and(|resource| {
+                        resource
+                            .targets()
+                            .iter()
+                            .filter(|target| !mutating_targets.contains(target))
+                            .any(|target| {
+                                documents
+                                    .state
+                                    .as_ref()
+                                    .and_then(|state| state.resources().get(&key))
+                                    .and_then(|state| state.target(target))
+                                    .and_then(|binding| binding.fingerprint())
+                                    != Some(skill.fingerprint())
+                            })
+                    });
+                if shared_with_unselected {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_warning(Warning::new(
+                            "skill_shared_content_requires_all_targets",
+                            "This skill has a shared canonical directory; select every desired target before replacing its content.",
+                        )).with_next_action(NextAction::new(
+                            "select_shared_skill_targets",
+                            "Enable every desired target and retry with `--target all`.",
+                        )).with_summary("operations", 0_u64).with_summary("changed", false);
+                }
                 if let Some(current) = current {
                     if current.fingerprint() == skill.fingerprint() {
                         outcome = outcome.with_operation(crate::OperationOutcome::new(
@@ -3138,6 +3291,24 @@ impl StatusApplication<'_> {
                 seeds.insert(key, state);
             }
         }
+        let mut published_paths: BTreeMap<_, OperationId> = BTreeMap::new();
+        for operation in &mut operations {
+            let entry = entries
+                .get_mut(operation.id())
+                .expect("skill operation has an entry");
+            let path = (entry.root.clone(), entry.destination.clone());
+            if let Some(primary) = published_paths.get(&path) {
+                entry.action = ManagedSkillAction::Verify;
+                *operation = operation
+                    .clone()
+                    .with_added_dependencies([skilltap_core::domain::OperationDependency::new(
+                        primary.clone(),
+                    )])
+                    .expect("shared publication dependency is valid");
+            } else {
+                published_paths.insert(path, operation.id().clone());
+            }
+        }
         if !acknowledged
             && operations.iter().any(|operation| {
                 operation.class() == skilltap_core::domain::OperationClass::Partial
@@ -3265,7 +3436,15 @@ impl StatusApplication<'_> {
                 result.outcome(),
                 OperationOutcome::Applied | OperationOutcome::NoChange
             ) {
-                outcome.result = ResultClass::AttentionRequired;
+                outcome.result = ResultClass::PartialApply;
+                outcome = outcome.with_error(ErrorDetail::new(
+                    "skill_operation_failed",
+                    "A skill operation did not complete; inspect the operation results before retrying.",
+                ).with_context("operation", result.operation_id().to_string()))
+                    .with_next_action(NextAction::new(
+                        "recover_skill_operation",
+                        "Resolve the destination conflict or reported failure, then repeat the same command.",
+                    ));
             }
         }
         if report.changed && skill_install_can_complete(&outcome, acknowledged) {
@@ -3300,183 +3479,139 @@ impl StatusApplication<'_> {
             Ok(value) => value,
             Err(outcome) => return *outcome,
         };
-        let status_args = StatusArgs {
+        if skill_name.is_some_and(|name| NativeId::new(name).is_err()) {
+            return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
+                "skill_name_invalid",
+                "The skill name is not a valid managed resource identifier.",
+            ));
+        }
+        let args = StatusArgs {
             target: target.clone(),
             scope: requested_scope.clone(),
             output: OutputArgs::default(),
         };
-        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+        let scope = match StatusScope::resolve(self, &args, &documents) {
             Ok(scope) => scope,
-            Err(error) => {
-                return Outcome::new(command, ResultClass::Invalid).with_error(error);
-            }
+            Err(error) => return Outcome::new(command, ResultClass::Invalid).with_error(error),
         };
-
-        let Some(skill_name) = skill_name else {
-            let candidates = documents
-                .inventory
-                .as_ref()
-                .into_iter()
-                .flat_map(|inventory| inventory.resources().values())
-                .filter(|resource| {
-                    resource.kind() == ResourceKind::StandaloneSkill
-                        && scope
-                            .resolved
-                            .iter()
-                            .any(|selected| selected == resource.scope())
-                        && resource
-                            .targets()
-                            .iter()
-                            .any(|selected| match target.target.as_ref() {
-                                None | Some(skilltap_core::domain::TargetSelection::All) => true,
-                                Some(skilltap_core::domain::TargetSelection::Only(requested)) => {
-                                    requested == selected
-                                }
-                            })
-                })
-                .filter_map(|resource| {
-                    let name = resource
-                        .id()
-                        .as_str()
-                        .strip_prefix("skill:")
-                        .and_then(|value| NativeId::new(value).ok())?;
-                    let source = documents
-                        .state
-                        .as_ref()
-                        .and_then(|state| state.resources().get(resource.key()))
-                        .and_then(|state| {
-                            resource
-                                .targets()
-                                .iter()
-                                .find_map(|target| state.target(target))
-                        })
-                        .and_then(|target| target.source())
-                        .cloned();
-                    Some((name, resource.scope().clone(), source))
-                })
-                .collect::<Vec<_>>();
-            if candidates.is_empty() {
-                return Outcome::new(command, ResultClass::Completed)
-                    .with_scope(scope.output)
-                    .with_summary("operations", 0_u64)
-                    .with_summary("changed", false);
-            }
-            let mut aggregate = Outcome::new(command, ResultClass::Completed)
+        let resources = documents
+            .inventory
+            .as_ref()
+            .into_iter()
+            .flat_map(|inventory| inventory.resources().values())
+            .filter(|resource| {
+                resource.kind() == ResourceKind::StandaloneSkill
+                    && scope.resolved.contains(resource.scope())
+                    && skill_name.is_none_or(|name| {
+                        resource.id().as_str().strip_prefix("skill:") == Some(name)
+                    })
+            })
+            .collect::<Vec<_>>();
+        if resources.is_empty() && skill_name.is_none() {
+            return Outcome::new(command, ResultClass::Completed)
                 .with_scope(scope.output)
                 .with_summary("operations", 0_u64)
                 .with_summary("changed", false);
-            for (name, concrete_scope, source) in candidates {
-                if source.is_none() {
-                    aggregate.result =
-                        merge_result(aggregate.result, ResultClass::AttentionRequired);
-                    aggregate = aggregate.with_warning(
-                        Warning::new(
-                            "skill_source_unavailable",
-                            "A selected skill has no recorded source; adopt or install it before updating.",
-                        )
-                        .with_context("skill", name.as_str())
-                        .with_context("scope", scope_label(&concrete_scope)),
-                    );
-                    continue;
-                }
-                let child_scope = scope_args_for_scope(&concrete_scope);
-                let child = self.execute_skill_update(
-                    command,
-                    &child_scope,
-                    target,
-                    Some(name.as_str()),
-                    acknowledged,
-                );
-                let child_changed =
-                    child.summary.get("changed") == Some(&OutputValue::Boolean(true));
-                let child_operations = child.operations.len() as u64;
-                aggregate.result = merge_result(aggregate.result, child.result);
-                aggregate.summary.insert(
-                    "operations".to_owned(),
-                    OutputValue::Unsigned(
-                        aggregate
-                            .summary
-                            .get("operations")
-                            .and_then(|value| match value {
-                                OutputValue::Unsigned(value) => Some(*value),
-                                _ => None,
-                            })
-                            .unwrap_or_default()
-                            + child_operations,
-                    ),
-                );
-                if child_changed {
-                    aggregate
-                        .summary
-                        .insert("changed".to_owned(), OutputValue::Boolean(true));
-                }
-                aggregate.resources.extend(child.resources);
-                aggregate.operations.extend(child.operations);
-                aggregate.warnings.extend(child.warnings);
-                aggregate.errors.extend(child.errors);
-                aggregate.next_actions.extend(child.next_actions);
-            }
-            return aggregate;
-        };
-        let name = match NativeId::new(skill_name) {
-            Ok(name) => name,
+        }
+        let targets = match StatusTargets::resolve(&args, &documents) {
+            Ok(targets) => targets,
             Err(_) => {
                 return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
-                    "skill_name_invalid",
-                    "The skill name is not a valid managed resource identifier.",
+                    "target_not_enabled",
+                    "The requested update requires an enabled harness target.",
                 ));
             }
         };
-        let mut source = None;
-        for concrete_scope in &scope.resolved {
-            let Some(key) = ResourceId::new(format!("skill:{}", name.as_str()))
-                .ok()
-                .map(|id| ResourceKey::new(id, concrete_scope.clone()))
-            else {
-                continue;
-            };
-            if let Some(value) = documents
-                .state
-                .as_ref()
-                .and_then(|state| state.resources().get(&key))
-                .and_then(|state| {
-                    state
-                        .targets()
-                        .values()
-                        .find(|binding| match target.target.as_ref() {
-                            None | Some(skilltap_core::domain::TargetSelection::All) => true,
-                            Some(skilltap_core::domain::TargetSelection::Only(requested)) => {
-                                binding.harness() == requested
-                            }
-                        })
-                })
-                .and_then(|target| target.source())
+        let mut candidates = Vec::new();
+        for resource in resources {
+            let mut groups: Vec<(Option<&skilltap_core::domain::Source>, Vec<HarnessId>)> =
+                Vec::new();
+            for harness in resource
+                .targets()
+                .iter()
+                .filter(|harness| targets.resolved.contains(harness))
             {
-                source = Some(value.clone());
-                break;
+                let source = documents
+                    .state
+                    .as_ref()
+                    .and_then(|state| state.resources().get(resource.key()))
+                    .and_then(|state| state.target(harness))
+                    .and_then(|binding| binding.source())
+                    .or_else(|| resource.source());
+                if let Some((_, harnesses)) =
+                    groups.iter_mut().find(|(existing, _)| *existing == source)
+                {
+                    harnesses.push(harness.clone());
+                } else {
+                    groups.push((source, vec![harness.clone()]));
+                }
+            }
+            for (source, harnesses) in groups {
+                candidates.push((
+                    resource,
+                    source,
+                    HarnessSet::new(harnesses).expect("nonempty update group"),
+                ));
             }
         }
-        let Some(source) = source else {
-            return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
-                Warning::new(
-                    "skill_source_unavailable",
-                    "The selected skill has no recorded source; adopt or install it before updating.",
-                ),
+        let mut aggregate = Outcome::new(command, ResultClass::Completed)
+            .with_scope(scope.output)
+            .with_summary("operations", 0_u64)
+            .with_summary("changed", false);
+        if candidates.is_empty() && skill_name.is_some() {
+            aggregate.result = ResultClass::AttentionRequired;
+            return aggregate.with_warning(Warning::new(
+                "skill_source_unavailable",
+                "The selected skill has no desired binding for the selected scopes and targets.",
+            ));
+        }
+        let single = candidates.len() == 1;
+        let mut affected = BTreeSet::new();
+        for (resource, source, selected) in candidates {
+            let Some(source) = source else {
+                aggregate.result = merge_result(aggregate.result, ResultClass::AttentionRequired);
+                aggregate = aggregate.with_warning(Warning::new(
+                    "skill_source_unavailable", "The selected skill has no recorded source; adopt or install it before updating.",
+                ).with_context("resource", resource.key().to_string()));
+                continue;
+            };
+            let child = self.execute_skill_install_selected(
+                command,
+                &scope_args_for_scope(resource.scope()),
+                target,
+                acknowledged,
+                SkillInstallRequest {
+                    source: source.locator().as_str(),
+                    name: resource.id().as_str().strip_prefix("skill:"),
+                    preserve_name: true,
+                    requested_revision: source.requested_revision().map(|value| value.as_str()),
+                    subdirectory: source.subdirectory().map(|value| value.as_str()),
+                },
+                Some(&selected),
             );
-        };
-        self.execute_skill_install(
-            command,
-            requested_scope,
-            target,
-            acknowledged,
-            SkillInstallRequest {
-                source: source.locator().as_str(),
-                name: Some(name.as_str()),
-                preserve_name: true,
-                requested_revision: source.requested_revision().map(|value| value.as_str()),
-                subdirectory: source.subdirectory().map(|value| value.as_str()),
-            },
-        )
+            if single {
+                aggregate.summary.extend(child.summary.clone());
+            }
+            if child.summary.get("changed") == Some(&OutputValue::Boolean(true)) {
+                aggregate
+                    .summary
+                    .insert("changed".to_owned(), OutputValue::Boolean(true));
+            }
+            affected.extend(selected.iter().map(|harness| harness.as_str().to_owned()));
+            aggregate.result = merge_result(aggregate.result, child.result);
+            aggregate.resources.extend(child.resources);
+            aggregate.operations.extend(child.operations);
+            aggregate.warnings.extend(child.warnings);
+            aggregate.errors.extend(child.errors);
+            aggregate.next_actions.extend(child.next_actions);
+        }
+        let operations = aggregate.operations.len() as u64;
+        aggregate
+            .with_summary("operations", operations)
+            .with_summary(
+                "affected_targets",
+                affected.into_iter().collect::<Vec<_>>().join(","),
+            )
     }
 
     pub(crate) fn execute_skill_remove(
@@ -3708,7 +3843,26 @@ impl StatusApplication<'_> {
                     ));
                 }
             };
+            let retain_canonical = state
+                .targets()
+                .keys()
+                .any(|target| !mutating_targets.contains(target))
+                || inventory.resources().get(&key).is_some_and(|resource| {
+                    resource
+                        .targets()
+                        .iter()
+                        .any(|target| !mutating_targets.contains(target))
+                });
+            let canonical_path = canonical_skill_destination(&paths, concrete_scope, &destination)
+                .map(|(_, path)| path);
+            let mut removed_paths = BTreeSet::new();
             for destination_entry in destinations {
+                if (retain_canonical
+                    && canonical_path.as_ref() == Some(&destination_entry.full_path))
+                    || !removed_paths.insert(destination_entry.full_path.clone())
+                {
+                    continue;
+                }
                 let SkillDestination {
                     target,
                     canonical,
@@ -3942,7 +4096,15 @@ impl StatusApplication<'_> {
                 result.outcome(),
                 OperationOutcome::Applied | OperationOutcome::NoChange
             ) {
-                outcome.result = ResultClass::AttentionRequired;
+                outcome.result = ResultClass::PartialApply;
+                outcome = outcome.with_error(ErrorDetail::new(
+                    "skill_operation_failed",
+                    "A skill operation did not complete; inspect the operation results before retrying.",
+                ).with_context("operation", result.operation_id().to_string()))
+                    .with_next_action(NextAction::new(
+                        "recover_skill_operation",
+                        "Resolve the destination conflict or reported failure, then repeat the same command.",
+                    ));
             }
         }
         if report.changed && outcome.errors.is_empty() && outcome.warnings.is_empty() {

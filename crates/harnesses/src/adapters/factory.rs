@@ -2,9 +2,8 @@ use std::{collections::BTreeSet, ffi::OsString};
 
 use skilltap_core::{
     domain::{
-        AbsolutePath, CapabilityId, CapabilityProfileId, CapabilityProfileSelection,
-        CapabilityScope, CapabilitySet, CapabilitySupport, HarnessId, NativeId, NativeVersion,
-        Scope, ScopedCapabilitySets,
+        AbsolutePath, CapabilityId, CapabilityProfileSelection, CapabilityScope, CapabilitySet,
+        CapabilitySupport, HarnessId, NativeId, NativeVersion, Scope, ScopedCapabilitySets,
     },
     materialization::{MaterializationSupport, plan_materialization},
     plugin_graph::normalize,
@@ -32,7 +31,6 @@ use crate::{
 
 use super::factory_managed::{FactoryManagedProjection, read_source_plugin};
 
-const VERIFIED_VERSION: &str = "0.171.0";
 const PROFILE_ID: &str = "factory-droid-0-171-0";
 const FACTORY_HOME: &str = ".factory";
 
@@ -91,20 +89,8 @@ impl HarnessAdapter for FactoryAdapter {
         self.decode_version(stdout)
     }
 
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        let capabilities = factory_capabilities();
-        if version.as_str() == VERIFIED_VERSION {
-            CapabilityProfileSelection::verified(
-                CapabilityProfileId::new(PROFILE_ID).expect("compiled profile id is valid"),
-                capabilities,
-            )
-        } else {
-            let unknown = ScopedCapabilitySets::new(
-                unknown_set(capabilities.for_scope_kind(CapabilityScope::Global)),
-                unknown_set(capabilities.for_scope_kind(CapabilityScope::Project)),
-            );
-            CapabilityProfileSelection::unknown_version(unknown)
-        }
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        crate::adapter_helpers::capability_profile(PROFILE_ID, factory_capabilities())
     }
 
     fn observe(
@@ -467,13 +453,6 @@ fn factory_surface_labels(base: &AbsolutePath) -> Vec<&'static str> {
     .collect()
 }
 
-fn unknown_set(set: &CapabilitySet) -> CapabilitySet {
-    CapabilitySet::new(
-        set.iter()
-            .map(|(id, _)| (id.clone(), CapabilitySupport::Unverified)),
-    )
-}
-
 fn factory_capabilities() -> ScopedCapabilitySets {
     let capability = |name: &'static str, support: CapabilitySupport| {
         (
@@ -513,7 +492,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_factory_version_and_adjacent_versions_are_narrowly_authorized() {
+    fn factory_contract_supports_adjacent_and_future_versions() {
         let adapter = FactoryAdapter;
         assert_eq!(
             adapter.decode_version(b"0.171.0\n").unwrap().as_str(),
@@ -532,8 +511,8 @@ mod tests {
                 adapter
                     .select_profile(&NativeVersion::new(version).unwrap())
                     .mutation_capabilities()
-                    .is_none(),
-                "{version} must remain observe-only"
+                    .is_some(),
+                "{version} must retain the supported contract"
             );
         }
     }

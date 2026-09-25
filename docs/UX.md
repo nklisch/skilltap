@@ -129,7 +129,7 @@ No skilltap metadata is written into a project. A plan lists any native project 
 
 Only commands for which a flag is meaningful accept it. `--project` and `--all-scopes` are mutually exclusive.
 
-`--yes` acknowledges a reported partial, lossy, or effective-unverified foreground operation. For declaration-managed resources it acknowledges that skilltap can verify its owned file result but cannot verify harness loading or activation. It does not bypass invalid configuration, missing dependencies, unsupported required components or scopes, unknown versions, local drift, conflicts, authentication, trust, or native harness policy.
+`--yes` acknowledges a reported partial, lossy, or effective-unverified foreground operation. For declaration-managed resources it acknowledges that skilltap can verify its owned file result but cannot verify harness loading or activation. It does not bypass invalid configuration, missing dependencies, unsupported required components or scopes, local drift, conflicts, authentication, trust, or native harness policy.
 
 `--include` and `--exclude` are repeatable. Exclusion wins when both match the same resource or component.
 
@@ -298,9 +298,9 @@ Summary
 `sync` applies safe operations and reports blocked resources. A non-empty plan exits `2`.
 
 Native mutation is available only through a verified compiled `Supported`
-capability for the detected executable version, component, and concrete scope.
-Runtime probes may narrow that profile. Unknown versions remain observable but
-mutation is reported as blocked.
+capability for the component and concrete scope. Runtime checks may narrow that
+profile when a command or schema is incompatible. Harness version numbers are
+diagnostic information and do not block operations.
 
 A verified compiled `Unverified` capability may expose a documented managed file
 projection as declaration-managed. `plan` labels it `effective unverified`,

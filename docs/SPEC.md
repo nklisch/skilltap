@@ -129,7 +129,7 @@ A representation that omits or changes one or more source components.
 
 **Declaration-managed resource**
 
-A resource written through a documented, version-known file surface with
+A resource written through a documented file surface with
 skilltap ownership, preservation, rollback, and disk-level idempotence, but no
 safe deterministic proof that the harness loaded or activated it. Its effective
 state is unverified and foreground mutation requires explicit acknowledgment.
@@ -350,8 +350,7 @@ skilltap plan [--target <target>] [--project [<path>] | --all-scopes] [--json]
 `plan` compares desired inventory, last-applied state, fresh native
 observations, and the capabilities selected from a verified compiled profile
 for each concrete scope and component. Runtime probes may preserve or narrow
-compiled support; they never grant undocumented authority. Unknown harness
-versions remain observe-only.
+compiled support; they never grant undocumented authority. Version numbers alone never block a supported operation.
 
 A `Supported` capability may produce an effectively verified operation. An
 `Unverified` capability may authorize only a documented managed file projection
@@ -401,8 +400,7 @@ With `--yes`, partial operations may apply using the exact component set and
 verification consequences shown in the plan. For declaration-managed resources,
 this acknowledges that skilltap can verify its owned file result but cannot
 verify harness loading or activation. `--yes` does not make unsupported
-components functional, bypass drift or conflicts, approve trust, authenticate,
-or widen an unknown-version profile.
+components functional, bypass drift or conflicts, approve trust, or authenticate.
 
 `--include` and `--exclude` constrain the operation set. Input selectors may
 address a logical resource or one component within the command's selected
@@ -506,6 +504,14 @@ skilltap skill remove <skill> [--target <target>] [--project [<path>] | --all-sc
 skilltap skill update [<skill>] [--target <target>] [--project [<path>] | --all-scopes] [--yes] [--json]
 skilltap skill list [--target <target>] [--project [<path>] | --all-scopes] [--json]
 ```
+
+Updates use only the skill's desired target bindings and each scope's own source.
+A content change to a skill shared by multiple targets requires selecting all of
+its desired targets, including enabling any disabled target first. This keeps the
+canonical tree and native copies consistent without changing an unselected
+consumer. A shared native directory is written once and verified for each target.
+No-change updates and adding a target to unchanged content remain targetable.
+
 
 A standalone skill source must be an explicit local directory, Git repository URL, Git repository plus explicit subdirectory, or GitHub repository shorthand.
 

@@ -9,7 +9,7 @@ here uses the plugin defaults from `agile-workflow/ARCHITECTURE.md` and
 **Mode: `tag-based`.**
 
 A release is a semver git tag of the form `vMAJOR.MINOR.PATCH` (current line:
-`v3.0.x`). The `release_binding` frontmatter field on items references the tag
+`v3.3.x`). The `release_binding` frontmatter field on items references the tag
 string without the leading `v` (e.g. `release_binding: 3.0.2`).
 
 Release notes live at `.work/releases/<version>/release-<version>.md`. Items

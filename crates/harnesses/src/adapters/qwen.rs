@@ -39,7 +39,6 @@ use crate::{
 
 use super::qwen_managed::{QwenManagedProjection, QwenSourceFlavor, read_qwen_source_plugin};
 
-const VERIFIED_VERSION: &str = "0.19.10";
 const PROFILE_ID: &str = "qwen-0-19-10";
 const QWEN_HOME: &str = ".qwen";
 
@@ -87,10 +86,8 @@ impl HarnessAdapter for QwenAdapter {
         NativeVersion::new(text).map_err(|_| crate::DetectionError::InvalidVersion)
     }
 
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        adapter_helpers::select_profile(
-            version,
-            VERIFIED_VERSION,
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        adapter_helpers::capability_profile(
             PROFILE_ID,
             adapter_helpers::compiled_capabilities(true, true, true),
         )
@@ -726,7 +723,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_qwen_version_and_profile_are_narrow() {
+    fn qwen_contract_supports_adjacent_and_future_versions() {
         let adapter = QwenAdapter;
         assert_eq!(
             adapter.decode_version(b"0.19.10\n").unwrap().as_str(),
@@ -751,7 +748,7 @@ mod tests {
                 adapter
                     .select_profile(&NativeVersion::new(version).unwrap())
                     .mutation_capabilities()
-                    .is_none()
+                    .is_some()
             );
         }
     }

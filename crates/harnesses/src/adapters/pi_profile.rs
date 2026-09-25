@@ -21,11 +21,14 @@ use super::pi_settings::{
     package_root,
 };
 
+#[cfg(test)]
 const CORE_VERSION: &str = "0.80.6";
 const MCP_PACKAGE: &str = "pi-mcp-adapter";
+#[cfg(test)]
 const MCP_VERSION: &str = "2.11.0";
 const MCP_ENTRYPOINT: &str = "./index.ts";
 const HOOK_PACKAGE: &str = "@hsingjui/pi-hooks";
+#[cfg(test)]
 const HOOK_VERSION: &str = "0.0.2";
 const HOOK_ENTRYPOINT: &str = "./src/pi-hooks.ts";
 const CORE_PROFILE_ID: &str = "pi-0-80-6";
@@ -58,7 +61,6 @@ impl ConditionalProfilePort for PiConditionalProfile {
             ComponentSpec {
                 package: MCP_PACKAGE,
                 role: ProfileComponentRole::McpCompanion,
-                expected_version: MCP_VERSION,
                 expected_entrypoint: MCP_ENTRYPOINT,
             },
             &mut findings,
@@ -70,7 +72,6 @@ impl ConditionalProfilePort for PiConditionalProfile {
             ComponentSpec {
                 package: HOOK_PACKAGE,
                 role: ProfileComponentRole::HookCompanion,
-                expected_version: HOOK_VERSION,
                 expected_entrypoint: HOOK_ENTRYPOINT,
             },
             &mut findings,
@@ -87,10 +88,10 @@ impl ConditionalProfilePort for PiConditionalProfile {
 
     fn select_compiled_profile(
         &self,
-        runtime_version: &NativeVersion,
+        _runtime_version: &NativeVersion,
         components: &ProfileComponentSet,
     ) -> CapabilityProfileSelection {
-        if runtime_version.as_str() == CORE_VERSION && exact_components(components) {
+        if recognized_components(components) {
             CapabilityProfileSelection::verified_observe_only(
                 CapabilityProfileId::new(COMPOUND_PROFILE_ID)
                     .expect("compiled Pi profile id is valid"),
@@ -102,18 +103,14 @@ impl ConditionalProfilePort for PiConditionalProfile {
     }
 }
 
-pub(super) fn select_core_profile(version: &NativeVersion) -> CapabilityProfileSelection {
-    if version.as_str() == CORE_VERSION {
-        CapabilityProfileSelection::verified_observe_only(
-            CapabilityProfileId::new(CORE_PROFILE_ID).expect("compiled Pi profile id is valid"),
-            base_capabilities(),
-        )
-    } else {
-        CapabilityProfileSelection::unknown_version(base_capabilities())
-    }
+pub(super) fn select_core_profile(_version: &NativeVersion) -> CapabilityProfileSelection {
+    CapabilityProfileSelection::verified_observe_only(
+        CapabilityProfileId::new(CORE_PROFILE_ID).expect("compiled Pi profile id is valid"),
+        base_capabilities(),
+    )
 }
 
-fn exact_components(components: &ProfileComponentSet) -> bool {
+fn recognized_components(components: &ProfileComponentSet) -> bool {
     if components.len() != 2 {
         return false;
     }
@@ -127,19 +124,13 @@ fn exact_components(components: &ProfileComponentSet) -> bool {
         && mcp.package == native(MCP_PACKAGE)
         && mcp.declared_scope.is_some()
         && mcp.presence == ProfileComponentPresence::Present
-        && mcp
-            .version
-            .as_ref()
-            .is_some_and(|version| version.as_str() == MCP_VERSION)
+        && mcp.version.is_some()
         && mcp.compatibility == ProfileComponentCompatibility::Compatible
         && hooks.role == ProfileComponentRole::HookCompanion
         && hooks.package == native(HOOK_PACKAGE)
         && hooks.declared_scope.is_some()
         && hooks.presence == ProfileComponentPresence::Present
-        && hooks
-            .version
-            .as_ref()
-            .is_some_and(|version| version.as_str() == HOOK_VERSION)
+        && hooks.version.is_some()
         && hooks.compatibility == ProfileComponentCompatibility::Partial
 }
 
@@ -177,7 +168,6 @@ fn base_capabilities() -> ScopedCapabilitySets {
 struct ComponentSpec {
     package: &'static str,
     role: ProfileComponentRole,
-    expected_version: &'static str,
     expected_entrypoint: &'static str,
 }
 
@@ -248,10 +238,8 @@ fn observe_component(
         ),
     };
 
-    let exact_version = version
-        .as_ref()
-        .is_some_and(|version| version.as_str() == spec.expected_version);
-    if presence == ProfileComponentPresence::Present && !exact_version {
+    let valid_version = version.is_some();
+    if presence == ProfileComponentPresence::Present && !valid_version {
         findings.push(component_finding(
             target,
             ObservationFindingCode::ProfileComponentVersionUnverified,
@@ -272,7 +260,7 @@ fn observe_component(
         ProfileComponentCompatibility::Unverified
     } else if !identity_matches || !entrypoint_matches {
         ProfileComponentCompatibility::Incompatible
-    } else if !exact_version {
+    } else if !valid_version {
         ProfileComponentCompatibility::Unverified
     } else if spec.role == ProfileComponentRole::HookCompanion {
         findings.push(component_finding(
@@ -714,12 +702,11 @@ mod tests {
                     ProfileComponentCompatibility::Incompatible
                 ),
                 ConditionalFixtureCase::UnknownMcpVersion => {
-                    assert_eq!(mcp.compatibility, ProfileComponentCompatibility::Unverified)
+                    assert_eq!(mcp.compatibility, ProfileComponentCompatibility::Compatible)
                 }
-                ConditionalFixtureCase::UnknownHookVersion => assert_eq!(
-                    hooks.compatibility,
-                    ProfileComponentCompatibility::Unverified
-                ),
+                ConditionalFixtureCase::UnknownHookVersion => {
+                    assert_eq!(hooks.compatibility, ProfileComponentCompatibility::Partial)
+                }
                 ConditionalFixtureCase::MalformedSettings => assert!(report.findings().iter().any(
                     |finding| finding.code() == ObservationFindingCode::NativeShapeUnsupported
                 )),
@@ -749,6 +736,8 @@ mod tests {
                 ConditionalFixtureCase::Exact
                     | ConditionalFixtureCase::HooksConfigured
                     | ConditionalFixtureCase::ProjectTrust
+                    | ConditionalFixtureCase::UnknownMcpVersion
+                    | ConditionalFixtureCase::UnknownHookVersion
             ) {
                 assert_eq!(profile.profile_id().unwrap().as_str(), COMPOUND_PROFILE_ID);
             } else {
@@ -911,7 +900,7 @@ mod tests {
     }
 
     #[test]
-    fn mismatched_manifest_and_unknown_version_remain_unverified() {
+    fn mismatched_manifest_is_incompatible_regardless_of_version() {
         let root = TempRoot::new("pi-profile-mismatch").unwrap();
         let paths = setup_global(&root, "{}");
         write_package(
@@ -936,7 +925,7 @@ mod tests {
                 .is_some_and(|version| version.as_str() == "2.12.0")
         );
         assert!(report.findings().iter().any(|finding| {
-            finding.code() == ObservationFindingCode::ProfileComponentVersionUnverified
+            finding.code() == ObservationFindingCode::ProfileComponentIncompatible
         }));
     }
 

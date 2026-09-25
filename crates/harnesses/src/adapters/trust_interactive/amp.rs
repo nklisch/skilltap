@@ -105,13 +105,8 @@ impl HarnessAdapter for AmpAdapter {
             .map_err(|_| crate::DetectionError::InvalidVersion)
     }
 
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        adapter_helpers::select_profile(
-            version,
-            AMP.verified_version,
-            AMP.profile_id,
-            capabilities(),
-        )
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        adapter_helpers::capability_profile(AMP.profile_id, capabilities())
     }
 
     fn observe(

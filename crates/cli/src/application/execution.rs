@@ -713,6 +713,7 @@ pub(super) struct ManagedSkillEntry {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ManagedSkillAction {
+    Verify,
     Install,
     Replace,
     Remove,
@@ -965,6 +966,21 @@ impl ExecutionPort for ManagedSkillPort<'_> {
                 .expect("static evidence detail is valid"),
             ));
         };
+        if entry.action == ManagedSkillAction::Verify {
+            let (_, files) = self
+                .filesystem
+                .load_tree_no_follow(&entry.root, &entry.destination)
+                .map_err(|_| {
+                    managed_skill_apply_failure("The shared skill result could not be verified.")
+                })?;
+            return if artifact_tree_from_loaded(files).as_ref() == Some(&entry.tree) {
+                Ok(OperationOutcome::NoChange)
+            } else {
+                Err(managed_skill_apply_failure(
+                    "The shared skill result differs from the planned content.",
+                ))
+            };
+        }
         if entry.action == ManagedSkillAction::Remove {
             let Some(expected) = entry.expected_identity else {
                 return Err(managed_skill_apply_failure(

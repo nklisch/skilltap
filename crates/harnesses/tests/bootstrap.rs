@@ -179,7 +179,7 @@ fn malformed_or_unknown_native_lists_block_mutation_and_codex_stays_unsupported(
 
 #[cfg(unix)]
 #[test]
-fn malformed_version_is_invalid_and_unknown_version_narrows_capabilities() {
+fn malformed_version_is_invalid_and_newer_version_uses_supported_bootstrap() {
     let malformed_root = TempRoot::new("harness-bootstrap-version-malformed").unwrap();
     let (configured, _log) = write_fake_claude_version(
         &malformed_root,
@@ -206,13 +206,13 @@ fn malformed_version_is_invalid_and_unknown_version_narrows_capabilities() {
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
     assert!(matches!(
         skilltap_harnesses::setup_first_party_plugin(ClaudeAdapter::static_ref(), &policy),
-        HarnessSetupResult::Unsupported { .. }
+        HarnessSetupResult::Installed { .. }
     ));
     let calls = fs::read_to_string(log).unwrap();
     assert!(calls.lines().any(|line| line == "--version"));
-    assert!(!calls.contains("marketplace list"));
-    assert!(!calls.contains("marketplace add"));
-    assert!(!calls.contains("plugin install"));
+    assert!(calls.contains("marketplace list"));
+    assert!(calls.contains("marketplace add"));
+    assert!(calls.contains("plugin install"));
 }
 
 #[cfg(unix)]

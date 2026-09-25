@@ -599,8 +599,11 @@ fn read_confined_file(
     destination: &RelativeArtifactPath,
     maximum_bytes: u64,
 ) -> Result<Option<Vec<u8>>, RuntimeError> {
-    let root_directory = open_absolute_directory_preserve_mode(root, false)
-        .map_err(|source| filesystem_error(FileSystemAction::Read, root, source))?;
+    let root_directory = match open_absolute_directory_preserve_mode(root, false) {
+        Ok(directory) => directory,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => return Err(filesystem_error(FileSystemAction::Read, root, source)),
+    };
     let (parent, name) = match open_relative_parent(&root_directory, destination, false) {
         Ok(value) => value,
         Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(None),

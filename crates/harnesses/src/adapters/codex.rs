@@ -62,10 +62,8 @@ impl HarnessAdapter for CodexAdapter {
         adapter_helpers::decode_codex_version(stdout, limits)
     }
 
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        adapter_helpers::select_profile(
-            version,
-            "0.144.1",
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        adapter_helpers::capability_profile(
             "codex-0-144-1",
             adapter_helpers::compiled_capabilities(false, false, true),
         )

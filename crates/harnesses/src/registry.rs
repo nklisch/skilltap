@@ -578,7 +578,7 @@ mod tests {
             assert!(adapter.native_lifecycle().is_none());
 
             let unknown = adapter.select_profile(&NativeVersion::new("99.0.0").unwrap());
-            assert!(unknown.mutation_capabilities().is_none());
+            assert!(unknown.mutation_capabilities().is_some());
         }
 
         let kimi = registry.adapter(&HarnessId::new("kimi").unwrap()).unwrap();

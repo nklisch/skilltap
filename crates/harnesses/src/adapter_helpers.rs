@@ -61,20 +61,18 @@ fn is_single_version_token(version: &str) -> bool {
     !version.is_empty() && !version.chars().any(char::is_whitespace)
 }
 
-pub(crate) fn select_profile(
-    version: &NativeVersion,
-    verified_version: &str,
+/// Select the adapter's capability contract independently of the observed version.
+/// Baseline versions document the original attestation; runtime command/schema
+/// validation still narrows capabilities before execution.
+pub(crate) fn capability_profile(
     profile_id: &str,
     capabilities: ScopedCapabilitySets,
 ) -> CapabilityProfileSelection {
-    if version.as_str() == verified_version {
-        CapabilityProfileSelection::verified(
-            CapabilityProfileId::new(profile_id).expect("compiled profile identifier is valid"),
-            capabilities,
-        )
-    } else {
-        CapabilityProfileSelection::unknown_version(unknown_capabilities(&capabilities))
-    }
+    CapabilityProfileSelection::verified(
+        CapabilityProfileId::new(profile_id)
+            .expect("compiled capability profile identifier is valid"),
+        capabilities,
+    )
 }
 
 pub(crate) fn compiled_capabilities(
@@ -153,19 +151,6 @@ pub(crate) fn compiled_capabilities_with_components(
         component("component.mcp", component_mcp),
     ]);
     ScopedCapabilitySets::new(global, project)
-}
-
-fn unknown_capabilities(baseline: &ScopedCapabilitySets) -> ScopedCapabilitySets {
-    let unverified = |set: &CapabilitySet| {
-        CapabilitySet::new(
-            set.iter()
-                .map(|(id, _)| (id.clone(), CapabilitySupport::Unverified)),
-        )
-    };
-    ScopedCapabilitySets::new(
-        unverified(baseline.for_scope_kind(skilltap_core::domain::CapabilityScope::Global)),
-        unverified(baseline.for_scope_kind(skilltap_core::domain::CapabilityScope::Project)),
-    )
 }
 
 pub(crate) fn observe_codex(

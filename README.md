@@ -253,12 +253,12 @@ skilltap plugin install deploy@claude-tools --target codex --yes
 
 Optional `--include` and `--exclude` selectors control individual components.
 
-`--yes` acknowledges the exact reported partial or effective-unverified result. It does not claim the harness loaded a declaration and does not override unsupported components or scopes, unknown versions, authentication, trust, local drift, conflicts, or invalid configuration.
+`--yes` acknowledges the exact reported partial or effective-unverified result. It does not claim the harness loaded a declaration and does not override unsupported components or scopes, authentication, trust, local drift, conflicts, or invalid configuration.
 
 Mutation support comes only from capability profiles compiled into skilltap
-and matched to the exact observed harness executable and version. Runtime
-probes may narrow compiled support, never grant it. Unknown harness versions
-remain observable but receive no mutation authority.
+and bound to the observed harness executable. Version numbers are recorded for
+diagnostics, not checked against a whitelist. Runtime command and schema checks
+may narrow support when the installed harness no longer implements the contract.
 
 Fresh declared/effective observations and health findings are ephemeral.
 `status` and `adopt` do not persist those snapshots to `state.json`; state
@@ -291,7 +291,7 @@ The daemon updates only operations classified as fully safe across managed scope
 - **Declaration-managed:** Antigravity CLI, Kiro CLI, Kimi Code CLI, Mistral Vibe, Kilo Code, Junie, and Amp expose only their attested components and scopes. Foreground acknowledgment is required and effective state remains unverified.
 - **Observe-only:** Pi, Cursor, Zoo Code, and ZCode expose safe documented observations without mutation authority.
 
-Registration does not imply identical capabilities. Run `skilltap harness list`, `skilltap status`, and `skilltap plan` for the installed versions and selected scopes. Unknown versions never gain mutation authority.
+Registration does not imply identical capabilities. Run `skilltap harness list`, `skilltap status`, and `skilltap plan` for the installed versions and selected scopes. Harness version numbers do not gate supported operations.
 
 ## Documentation
 

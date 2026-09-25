@@ -34,7 +34,6 @@ use crate::{
     },
 };
 
-const VERIFIED_VERSION: &str = "2.19.1";
 const PROFILE_ID: &str = "vibe-2-19-1";
 const MARKETPLACE_DOCUMENTS: &[&str] = &[
     ".agents/plugins/marketplace.json",
@@ -107,8 +106,8 @@ impl HarnessAdapter for VibeAdapter {
             .ok_or(crate::DetectionError::InvalidVersion)?;
         NativeVersion::new(version).map_err(|_| crate::DetectionError::InvalidVersion)
     }
-    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection {
-        adapter_helpers::select_profile(version, VERIFIED_VERSION, PROFILE_ID, capabilities())
+    fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+        adapter_helpers::capability_profile(PROFILE_ID, capabilities())
     }
     fn observe(
         &self,

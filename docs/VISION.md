@@ -60,7 +60,7 @@ participate even when another component or scope is unsupported.
 
 When native lifecycle is absent, skilltap may own source acquisition, managed
 installation, update, declaration drift detection, and removal through a
-version-known documented file surface. If the harness has no safe deterministic
+documented file surface. If the harness has no safe deterministic
 effective-state observer, skilltap labels the result declaration-managed and
 effective-unverified. Such foreground mutations are partial, require explicit
 acknowledgment, never run from the daemon, and never claim that the harness
@@ -156,7 +156,7 @@ set includes Factory Droid, Qwen Code, GitHub Copilot CLI, Antigravity CLI,
 Junie, Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, Amp, Cursor,
 Zoo Code, ZCode, and a compound Pi profile with compatible MCP and Claude-hook
 extensions. Every adapter is admitted per component and scope. Effectively
-verified components support ordinary reconciliation; version-known documented
+verified components support ordinary reconciliation; documented
 file surfaces without a deterministic load observer may support acknowledged
 foreground declaration management; unavailable surfaces remain explicitly
 unsupported. Native marketplace and plugin lifecycle support improves an

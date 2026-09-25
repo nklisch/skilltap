@@ -72,7 +72,7 @@ mod tests {
     use crate::TargetRegistry;
 
     #[test]
-    fn canonical_adapter_profiles_preserve_verified_and_unknown_matrices() {
+    fn canonical_adapter_profiles_preserve_capabilities_across_versions() {
         let cases = [
             (
                 CodexAdapter::static_ref(),
@@ -166,27 +166,13 @@ mod tests {
                 CapabilitySupport::Supported,
             );
 
-            let unknown = adapter.select_profile(&NativeVersion::new("99.0.0").unwrap());
-            assert!(unknown.profile_id().is_none());
-            assert!(unknown.mutation_capabilities().is_none());
-            for scope in [CapabilityScope::Global, CapabilityScope::Project] {
-                for capability in [
-                    "harness.observe",
-                    "plugin.install",
-                    "plugin.remove",
-                    "plugin.update",
-                    "marketplace.register",
-                    "marketplace.remove",
-                    "marketplace.update",
-                ] {
-                    assert_support(
-                        unknown.observation_capabilities(),
-                        scope,
-                        capability,
-                        CapabilitySupport::Unverified,
-                    );
-                }
-            }
+            let newer = adapter.select_profile(&NativeVersion::new("99.0.0").unwrap());
+            assert_eq!(newer.profile_id(), known.profile_id());
+            assert_eq!(newer.mutation_capabilities(), known.mutation_capabilities());
+            assert_eq!(
+                newer.observation_capabilities(),
+                known.observation_capabilities()
+            );
         }
     }
 

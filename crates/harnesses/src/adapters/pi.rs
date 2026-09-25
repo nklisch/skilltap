@@ -225,7 +225,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_version_bytes_are_strict_and_adjacent_versions_are_unknown() {
+    fn pi_version_decoder_is_strict_and_new_versions_remain_observe_only() {
         let adapter = PiAdapter;
         assert_eq!(
             adapter.version_arguments(),
@@ -245,7 +245,7 @@ mod tests {
         assert_eq!(known.profile_id().unwrap().as_str(), "pi-0-80-6");
         assert!(known.mutation_capabilities().is_none());
         let unknown = adapter.select_profile(&NativeVersion::new("0.80.7").unwrap());
-        assert!(unknown.profile_id().is_none());
+        assert_eq!(unknown.profile_id(), known.profile_id());
         assert!(unknown.mutation_capabilities().is_none());
         assert_eq!(
             unknown
