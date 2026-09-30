@@ -97,7 +97,7 @@ validate_release_tag() {
 
 validate_effective_url() {
   case "$1" in
-    https://github.com/*|https://api.github.com/*|https://objects.githubusercontent.com/*) ;;
+    https://github.com/*|https://api.github.com/*|https://objects.githubusercontent.com/*|https://release-assets.githubusercontent.com/*) ;;
     *) err "release download redirected to an untrusted host"; exit 1 ;;
   esac
 }
